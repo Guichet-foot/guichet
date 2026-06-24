@@ -42,8 +42,7 @@ export function PoulesTab({ tournamentId, groups, zoneTeams }: PoulesTabProps) {
   const [selectedTeam, setSelectedTeam] = useState<Record<string, string>>({});
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
 
-  async function handleAddGroup(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleAddGroup() {
     if (!newGroupName.trim()) return;
     setAddingGroup(true);
     const result = await createGroup(
@@ -111,17 +110,24 @@ export function PoulesTab({ tournamentId, groups, zoneTeams }: PoulesTabProps) {
 
   return (
     <div className="space-y-6">
-      <form onSubmit={handleAddGroup} className="flex gap-2">
+      <div className="flex gap-2">
         <Input
           value={newGroupName}
           onChange={(e) => setNewGroupName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              handleAddGroup();
+            }
+          }}
           placeholder="Nom de la poule (ex: Poule A)"
           className="max-w-xs"
         />
         <Button
-          type="submit"
-          disabled={addingGroup}
+          type="button"
+          disabled={addingGroup || !newGroupName.trim()}
           className="bg-brand hover:bg-brand/90"
+          onClick={() => handleAddGroup()}
         >
           {addingGroup ? (
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -132,7 +138,7 @@ export function PoulesTab({ tournamentId, groups, zoneTeams }: PoulesTabProps) {
             </>
           )}
         </Button>
-      </form>
+      </div>
 
       {groups.length === 0 ? (
         <p className="text-muted-foreground text-center py-8">
