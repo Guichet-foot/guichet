@@ -50,18 +50,22 @@ export default function LoginPage() {
       .eq("id", user.id)
       .single();
 
-    if (!profile || !profile.active) {
+    if (!profile) {
+      await supabase.auth.signOut();
+      setError("Profil introuvable. Contactez votre administrateur.");
+      setLoading(false);
+      return;
+    }
+
+    if (!profile.active) {
       await supabase.auth.signOut();
       setError("Compte désactivé. Contactez votre administrateur.");
       setLoading(false);
       return;
     }
 
-    if (profile.role === "caissier") {
-      router.push("/vente");
-    } else {
-      router.push("/dashboard");
-    }
+    const destination = profile.role === "caissier" ? "/vente" : "/dashboard";
+    router.push(destination);
     router.refresh();
   }
 
