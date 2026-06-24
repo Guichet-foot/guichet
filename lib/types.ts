@@ -31,6 +31,16 @@ export interface Profile {
   zone?: Zone;
 }
 
+export interface Team {
+  id: string;
+  zone_id: string;
+  name: string;
+  president: string | null;
+  delegates: string[];
+  colors: string | null;
+  created_at: string;
+}
+
 export interface Match {
   id: string;
   zone_id: string;

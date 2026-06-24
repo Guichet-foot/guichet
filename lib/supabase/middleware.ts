@@ -96,6 +96,7 @@ export async function updateSession(request: NextRequest) {
 
   const adminRoutes = [
     "/dashboard",
+    "/equipes",
     "/utilisateurs",
     "/zones",
     "/matchs",

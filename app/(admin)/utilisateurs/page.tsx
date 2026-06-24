@@ -42,7 +42,7 @@ export default async function UsersPage() {
             {users?.length || 0} utilisateur(s)
           </p>
         </div>
-        {profile.role === "super_admin" && (
+        {["super_admin", "admin_zone"].includes(profile.role) && (
           <Link href="/utilisateurs/nouveau">
             <Button className="bg-brand hover:bg-brand/90">
               <Plus className="h-4 w-4 mr-2" />
@@ -104,7 +104,7 @@ export default async function UsersPage() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                      {profile.role === "super_admin" &&
+                      {["super_admin", "admin_zone"].includes(profile.role) &&
                         user.id !== profile.id && (
                           <ToggleActiveButton
                             userId={user.id}

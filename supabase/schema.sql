@@ -90,6 +90,17 @@ create table audit_log (
   created_at timestamptz default now()
 );
 
+-- TEAMS (équipes ASC par zone)
+create table teams (
+  id uuid primary key default gen_random_uuid(),
+  zone_id uuid not null references zones(id),
+  name text not null,
+  president text,
+  delegates text[] default '{}',
+  colors text,
+  created_at timestamptz default now()
+);
+
 -- =========================
 -- INDEX
 -- =========================
@@ -102,6 +113,7 @@ create index idx_matches_date on matches(match_date);
 create index idx_expenses_match on expenses(match_id);
 create index idx_expenses_zone on expenses(zone_id);
 create index idx_profiles_zone on profiles(zone_id);
+create index idx_teams_zone on teams(zone_id);
 
 -- =========================
 -- RLS
@@ -110,6 +122,7 @@ create index idx_profiles_zone on profiles(zone_id);
 alter table zones enable row level security;
 alter table profiles enable row level security;
 alter table matches enable row level security;
+alter table teams enable row level security;
 alter table ticket_categories enable row level security;
 alter table tickets enable row level security;
 alter table expenses enable row level security;
@@ -187,6 +200,15 @@ create policy "admin manages expenses in zone" on expenses for all
     (zone_id = get_user_zone() and get_user_role() = 'admin_zone')
     or get_user_role() = 'super_admin'
   );
+
+-- TEAMS
+create policy "admin manages teams in zone" on teams for all
+  using (
+    (zone_id = get_user_zone() and get_user_role() = 'admin_zone')
+    or get_user_role() = 'super_admin'
+  );
+create policy "users read teams in zone" on teams for select
+  using (zone_id = get_user_zone());
 
 -- AUDIT
 create policy "all users insert audit" on audit_log for insert with check (user_id = auth.uid());

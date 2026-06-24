@@ -36,8 +36,26 @@ export async function createUser(formData: {
     .eq("id", currentUser.id)
     .single();
 
-  if (profile?.role !== "super_admin") {
+  if (!profile || !["super_admin", "admin_zone"].includes(profile.role)) {
     return { error: "Non autorisé" };
+  }
+
+  // admin_zone can only create caissier or admin_zone in their own zone
+  if (profile.role === "admin_zone") {
+    if (!["caissier", "admin_zone"].includes(formData.role)) {
+      return { error: "Vous ne pouvez créer que des caissiers ou admins zone" };
+    }
+    const { data: currentProfile } = await supabase
+      .from("profiles")
+      .select("zone_id")
+      .eq("id", currentUser.id)
+      .single();
+
+    if (!currentProfile?.zone_id) {
+      return { error: "Votre zone est introuvable" };
+    }
+    // Force the new user to the admin's zone
+    formData.zoneId = currentProfile.zone_id;
   }
 
   const adminClient = await createAdminClient();

@@ -32,7 +32,7 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json();
-  const { startDate, endDate, reportType } = body;
+  const { startDate, endDate, reportType, matchId } = body;
 
   const zoneId =
     profile.role === "admin_zone" ? profile.zone_id : null;
@@ -46,6 +46,10 @@ export async function POST(request: Request) {
     .gte("sold_at", `${startDate}T00:00:00`)
     .lte("sold_at", `${endDate}T23:59:59`)
     .neq("status", "annule");
+
+  if (matchId) {
+    ticketsQuery = ticketsQuery.eq("match_id", matchId);
+  }
 
   const { data: tickets } = await ticketsQuery as { data: any[] | null };
 
@@ -90,6 +94,10 @@ export async function POST(request: Request) {
 
   if (zoneId) {
     expensesQuery = expensesQuery.eq("zone_id", zoneId);
+  }
+
+  if (matchId) {
+    expensesQuery = expensesQuery.eq("match_id", matchId);
   }
 
   const { data: expenses } = await expensesQuery as { data: any[] | null };

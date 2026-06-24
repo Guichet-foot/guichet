@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,8 +16,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FileText, Loader2, Download } from "lucide-react";
 import { toast } from "sonner";
 
+interface MatchOption {
+  id: string;
+  home_team: string;
+  away_team: string;
+  match_date: string;
+}
+
 export default function RapportsPage() {
   const [loading, setLoading] = useState(false);
+  const [matches, setMatches] = useState<MatchOption[]>([]);
   const [startDate, setStartDate] = useState(
     new Date(new Date().getFullYear(), new Date().getMonth(), 1)
       .toISOString()
@@ -26,6 +35,36 @@ export default function RapportsPage() {
     new Date().toISOString().split("T")[0]
   );
   const [reportType, setReportType] = useState("complet");
+  const [matchId, setMatchId] = useState("all");
+
+  useEffect(() => {
+    async function fetchMatches() {
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("zone_id")
+        .eq("id", user.id)
+        .single();
+
+      let query = supabase
+        .from("matches")
+        .select("id, home_team, away_team, match_date")
+        .order("match_date", { ascending: false });
+
+      if (profile?.zone_id) {
+        query = query.eq("zone_id", profile.zone_id);
+      }
+
+      const { data } = await query;
+      if (data) setMatches(data);
+    }
+    fetchMatches();
+  }, []);
 
   async function handleGenerate() {
     setLoading(true);
@@ -38,6 +77,7 @@ export default function RapportsPage() {
           startDate,
           endDate,
           reportType,
+          matchId: matchId === "all" ? null : matchId,
         }),
       });
 
@@ -91,6 +131,23 @@ export default function RapportsPage() {
                 onChange={(e) => setEndDate(e.target.value)}
               />
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Match (optionnel)</Label>
+            <Select value={matchId} onValueChange={(v) => setMatchId(v ?? "all")}>
+              <SelectTrigger>
+                <SelectValue placeholder="Tous les matchs" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tous les matchs</SelectItem>
+                {matches.map((m) => (
+                  <SelectItem key={m.id} value={m.id}>
+                    {m.home_team} vs {m.away_team}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-2">

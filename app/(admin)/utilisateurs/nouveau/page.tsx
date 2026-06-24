@@ -25,6 +25,7 @@ export default function NewUserPage() {
   const [loading, setLoading] = useState(false);
   const [zones, setZones] = useState<Zone[]>([]);
   const [tempPassword, setTempPassword] = useState<string | null>(null);
+  const [currentUserRole, setCurrentUserRole] = useState<string>("");
 
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
@@ -33,15 +34,35 @@ export default function NewUserPage() {
   const [zoneId, setZoneId] = useState<string>("");
 
   useEffect(() => {
-    async function fetchZones() {
+    async function init() {
       const supabase = createClient();
-      const { data } = await supabase
-        .from("zones")
-        .select("*")
-        .order("name");
-      if (data) setZones(data);
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role, zone_id")
+        .eq("id", user.id)
+        .single();
+
+      if (profile) {
+        setCurrentUserRole(profile.role);
+        if (profile.role === "admin_zone" && profile.zone_id) {
+          setZoneId(profile.zone_id);
+        }
+      }
+
+      if (profile?.role === "super_admin") {
+        const { data } = await supabase
+          .from("zones")
+          .select("*")
+          .order("name");
+        if (data) setZones(data);
+      }
     }
-    fetchZones();
+    init();
   }, []);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -177,14 +198,16 @@ export default function NewUserPage() {
                   <SelectValue placeholder="Choisir un rôle" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="admin_zone">Admin Zone</SelectItem>
                   <SelectItem value="caissier">Caissier</SelectItem>
-                  <SelectItem value="super_admin">Super Admin</SelectItem>
+                  <SelectItem value="admin_zone">Admin Zone</SelectItem>
+                  {currentUserRole === "super_admin" && (
+                    <SelectItem value="super_admin">Super Admin</SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>
 
-            {role && role !== "super_admin" && (
+            {role && role !== "super_admin" && currentUserRole === "super_admin" && (
               <div className="space-y-2">
                 <Label>Zone</Label>
                 <Select value={zoneId} onValueChange={(v) => setZoneId(v ?? "")} required>
