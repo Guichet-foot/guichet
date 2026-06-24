@@ -13,6 +13,7 @@ import {
 import { ShoppingCart } from "lucide-react";
 import { formatFCFA, formatDateTime } from "@/lib/format";
 import { TICKET_STATUS_LABELS } from "@/lib/constants";
+import { PrintButton } from "./print-button";
 
 export const metadata = { title: "Mes ventes" };
 
@@ -67,6 +68,7 @@ export default async function MesVentesPage() {
                   <TableHead className="text-right">Prix</TableHead>
                   <TableHead className="hidden sm:table-cell">Date</TableHead>
                   <TableHead>Statut</TableHead>
+                  <TableHead className="text-right">Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -95,6 +97,9 @@ export default async function MesVentesPage() {
                       >
                         {TICKET_STATUS_LABELS[ticket.status]}
                       </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <PrintButton ticketId={ticket.id} />
                     </TableCell>
                   </TableRow>
                 ))}
