@@ -1,0 +1,337 @@
+"use client";
+
+import { useState, useEffect, useCallback } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { createTicket } from "@/lib/actions/ticket-actions";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Loader2, Printer, ShoppingCart } from "lucide-react";
+import { toast } from "sonner";
+import { formatFCFA } from "@/lib/format";
+import { CATEGORY_COLORS } from "@/lib/constants";
+
+interface MatchOption {
+  id: string;
+  home_team: string;
+  away_team: string;
+  match_date: string;
+  venue: string;
+}
+
+interface CategoryOption {
+  id: string;
+  name: string;
+  price: number;
+  quantity_total: number;
+  sold_count: number;
+}
+
+export default function VentePage() {
+  const [matches, setMatches] = useState<MatchOption[]>([]);
+  const [selectedMatchId, setSelectedMatchId] = useState<string>("");
+  const [categories, setCategories] = useState<CategoryOption[]>([]);
+  const [selectedCategory, setSelectedCategory] =
+    useState<CategoryOption | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [todaySales, setTodaySales] = useState({ count: 0, total: 0 });
+  const [initialLoading, setInitialLoading] = useState(true);
+
+  const loadCategories = useCallback(
+    async (matchId: string) => {
+      const supabase = createClient();
+
+      const { data: cats } = await supabase
+        .from("ticket_categories")
+        .select("*")
+        .eq("match_id", matchId)
+        .eq("active", true)
+        .order("display_order");
+
+      if (!cats) return;
+
+      const catIds = cats.map((c) => c.id);
+      let soldMap: Record<string, number> = {};
+
+      if (catIds.length > 0) {
+        const { data: tickets } = await supabase
+          .from("tickets")
+          .select("category_id")
+          .in("category_id", catIds)
+          .neq("status", "annule");
+
+        if (tickets) {
+          soldMap = tickets.reduce(
+            (acc, t) => {
+              acc[t.category_id] = (acc[t.category_id] || 0) + 1;
+              return acc;
+            },
+            {} as Record<string, number>
+          );
+        }
+      }
+
+      setCategories(
+        cats.map((c) => ({
+          id: c.id,
+          name: c.name,
+          price: c.price,
+          quantity_total: c.quantity_total,
+          sold_count: soldMap[c.id] || 0,
+        }))
+      );
+    },
+    []
+  );
+
+  useEffect(() => {
+    async function init() {
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("zone_id")
+        .eq("id", user.id)
+        .single();
+
+      if (!profile?.zone_id) return;
+
+      const { data: matchList } = await supabase
+        .from("matches")
+        .select("id, home_team, away_team, match_date, venue")
+        .eq("zone_id", profile.zone_id)
+        .in("status", ["programme", "en_cours"])
+        .order("match_date", { ascending: true });
+
+      if (matchList && matchList.length > 0) {
+        setMatches(matchList);
+        setSelectedMatchId(matchList[0].id);
+        await loadCategories(matchList[0].id);
+      }
+
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+
+      const { data: todayTickets } = await supabase
+        .from("tickets")
+        .select("price")
+        .eq("sold_by", user.id)
+        .gte("sold_at", todayStart.toISOString())
+        .neq("status", "annule");
+
+      if (todayTickets) {
+        setTodaySales({
+          count: todayTickets.length,
+          total: todayTickets.reduce((sum, t) => sum + t.price, 0),
+        });
+      }
+      setInitialLoading(false);
+    }
+    init();
+  }, [loadCategories]);
+
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (sheetOpen && e.key === "Enter") {
+        e.preventDefault();
+        handleConfirm();
+        return;
+      }
+      const num = parseInt(e.key);
+      if (!sheetOpen && num >= 1 && num <= categories.length) {
+        const cat = categories[num - 1];
+        if (cat.sold_count < cat.quantity_total) {
+          setSelectedCategory(cat);
+          setSheetOpen(true);
+        }
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  });
+
+  async function handleMatchChange(matchId: string) {
+    setSelectedMatchId(matchId);
+    await loadCategories(matchId);
+  }
+
+  function handleCategoryClick(cat: CategoryOption) {
+    if (cat.sold_count >= cat.quantity_total) return;
+    setSelectedCategory(cat);
+    setSheetOpen(true);
+  }
+
+  async function handleConfirm() {
+    if (!selectedCategory || loading) return;
+    setLoading(true);
+
+    const result = await createTicket(selectedMatchId, selectedCategory.id);
+
+    if (result.error) {
+      toast.error(result.error);
+      setLoading(false);
+      return;
+    }
+
+    toast.success("Billet vendu !");
+    setTodaySales((prev) => ({
+      count: prev.count + 1,
+      total: prev.total + selectedCategory.price,
+    }));
+
+    setCategories((prev) =>
+      prev.map((c) =>
+        c.id === selectedCategory.id
+          ? { ...c, sold_count: c.sold_count + 1 }
+          : c
+      )
+    );
+
+    setSheetOpen(false);
+    setSelectedCategory(null);
+    setLoading(false);
+
+    if (result.ticketId) {
+      window.open(`/api/tickets/${result.ticketId}/print`, "_blank");
+    }
+  }
+
+  if (initialLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <Loader2 className="h-8 w-8 animate-spin text-brand" />
+      </div>
+    );
+  }
+
+  if (matches.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-muted-foreground">
+        <ShoppingCart className="h-16 w-16 mb-4" />
+        <p className="text-lg">Aucun match disponible</p>
+        <p className="text-sm">Contactez votre administrateur</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4 max-w-2xl mx-auto">
+      <Card className="bg-brand/5 border-brand/20">
+        <CardContent className="pt-4 pb-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-muted-foreground">Vos ventes du jour</p>
+              <p className="text-lg font-bold">
+                {todaySales.count} billets / {formatFCFA(todaySales.total)}
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Select value={selectedMatchId} onValueChange={(v) => v && handleMatchChange(v)}>
+        <SelectTrigger>
+          <SelectValue placeholder="Choisir un match" />
+        </SelectTrigger>
+        <SelectContent>
+          {matches.map((m) => (
+            <SelectItem key={m.id} value={m.id}>
+              {m.home_team} vs {m.away_team}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      {categories.length === 0 ? (
+        <div className="text-center py-8 text-muted-foreground">
+          <p>Aucune catégorie de billets configurée pour ce match</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {categories.map((cat, index) => {
+            const remaining = cat.quantity_total - cat.sold_count;
+            const soldOut = remaining <= 0;
+            const colorClass =
+              CATEGORY_COLORS[index % CATEGORY_COLORS.length];
+
+            return (
+              <button
+                key={cat.id}
+                onClick={() => handleCategoryClick(cat)}
+                disabled={soldOut}
+                className={`rounded-xl p-6 text-left transition-transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed ${colorClass} min-h-[120px]`}
+              >
+                <p className="text-lg font-bold">{cat.name}</p>
+                <p className="text-3xl font-bold mt-1">
+                  {formatFCFA(cat.price)}
+                </p>
+                <p className="text-sm mt-2 opacity-80">
+                  {soldOut
+                    ? "Épuisé"
+                    : `${remaining} restant${remaining > 1 ? "s" : ""}`}
+                </p>
+                <p className="text-xs opacity-60 mt-1">
+                  Touche {index + 1}
+                </p>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
+        <SheetContent side="bottom" className="rounded-t-2xl">
+          <SheetHeader>
+            <SheetTitle className="text-center">
+              Confirmer la vente
+            </SheetTitle>
+          </SheetHeader>
+          {selectedCategory && (
+            <div className="py-6 space-y-6">
+              <div className="text-center space-y-2">
+                <p className="text-xl font-bold">{selectedCategory.name}</p>
+                <p className="text-3xl font-bold text-brand">
+                  {formatFCFA(selectedCategory.price)}
+                </p>
+              </div>
+              <Button
+                onClick={handleConfirm}
+                disabled={loading}
+                className="w-full h-16 text-lg font-bold bg-brand hover:bg-brand/90"
+              >
+                {loading ? (
+                  <Loader2 className="h-6 w-6 animate-spin" />
+                ) : (
+                  <>
+                    <Printer className="h-6 w-6 mr-3" />
+                    IMPRIMER LE BILLET
+                  </>
+                )}
+              </Button>
+              <p className="text-center text-xs text-muted-foreground">
+                Appuyez sur Entrée pour confirmer
+              </p>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
+    </div>
+  );
+}
