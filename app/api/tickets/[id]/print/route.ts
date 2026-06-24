@@ -24,8 +24,8 @@ export async function GET(
   }
 
   const qrDataUrl = await QRCode.toDataURL(ticket.qr_token, {
-    width: 200,
-    margin: 1,
+    width: 160,
+    margin: 0,
     color: { dark: "#000000", light: "#FFFFFF" },
   });
 
@@ -35,7 +35,7 @@ export async function GET(
     { locale: fr }
   );
 
-  const soldAt = format(new Date(ticket.sold_at), "dd/MM/yyyy HH:mm", {
+  const soldAt = format(new Date(ticket.sold_at), "dd/MM HH:mm", {
     locale: fr,
   });
 
@@ -46,124 +46,60 @@ export async function GET(
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Billet ${ticket.serial_number}</title>
+<title>${ticket.serial_number}</title>
 <style>
-  @page { size: 80mm auto; margin: 0; }
+  @page { size: 72mm auto; margin: 0; }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
-    width: 80mm;
+    width: 72mm;
     font-family: 'Courier New', monospace;
-    font-size: 11pt;
+    font-size: 9pt;
     color: #000;
     background: #fff;
-    padding: 4mm;
+    padding: 2mm 3mm;
+    line-height: 1.2;
   }
-  .center { text-align: center; }
-  .bold { font-weight: bold; }
-  .separator {
-    border-top: 1px dashed #000;
-    margin: 3mm 0;
-  }
-  .logo {
-    font-size: 16pt;
-    font-weight: bold;
-    letter-spacing: 2px;
-    margin-bottom: 2mm;
-  }
-  .teams {
-    font-size: 13pt;
-    font-weight: bold;
-    line-height: 1.4;
-  }
-  .vs {
-    font-size: 10pt;
-    font-weight: normal;
-    color: #555;
-  }
-  .info {
-    font-size: 9pt;
-    line-height: 1.5;
-  }
-  .category {
-    font-size: 18pt;
-    font-weight: bold;
-  }
-  .price {
-    font-size: 16pt;
-    font-weight: bold;
-  }
-  .qr { margin: 3mm auto; }
-  .qr img { width: 35mm; height: 35mm; }
-  .serial { font-size: 9pt; }
-  .footer {
-    font-size: 7pt;
-    color: #666;
-    margin-top: 2mm;
-  }
+  .c { text-align: center; }
+  .sep { border-top: 1px dashed #000; margin: 1.5mm 0; }
+  .logo { font-size: 12pt; font-weight: bold; letter-spacing: 1px; }
+  .teams { font-size: 11pt; font-weight: bold; line-height: 1.3; }
+  .vs { font-size: 8pt; font-weight: normal; color: #555; }
+  .info { font-size: 8pt; line-height: 1.3; }
+  .cat { font-size: 14pt; font-weight: bold; }
+  .prix { font-size: 12pt; font-weight: bold; }
+  .qr { margin: 1.5mm auto; }
+  .qr img { width: 28mm; height: 28mm; }
+  .small { font-size: 7pt; }
+  .tiny { font-size: 6pt; color: #666; }
   @media print {
-    html, body { width: 80mm; margin: 0; padding: 4mm; }
+    html, body { width: 72mm; margin: 0; padding: 2mm 3mm; }
     .no-print { display: none !important; }
   }
   @media screen {
-    body {
-      max-width: 80mm;
-      margin: 20px auto;
-      border: 1px solid #ccc;
-      padding: 4mm;
-    }
+    body { max-width: 72mm; margin: 10px auto; border: 1px solid #ccc; }
   }
 </style>
 </head>
 <body>
-  <div class="center">
-    <div class="logo">GUICHET FOOT</div>
-  </div>
+<div class="c logo">GUICHET FOOT</div>
+<div class="sep"></div>
+<div class="c teams">${ticket.match.home_team}<br><span class="vs">vs</span><br>${ticket.match.away_team}</div>
+<div class="c info">${ticket.match.venue} — ${matchDate}</div>
+<div class="sep"></div>
+<div class="c"><span class="cat">${ticket.category.name}</span> — <span class="prix">${priceFmt} FCFA</span></div>
+<div class="sep"></div>
+<div class="c qr"><img src="${qrDataUrl}" alt="QR"/></div>
+<div class="c small">${ticket.serial_number} — ${ticket.seller.full_name} — ${soldAt}</div>
+<div class="sep"></div>
+<div class="c tiny">Valable uniquement ce match — Non remboursable</div>
 
-  <div class="separator"></div>
+<button class="no-print" onclick="window.print()" style="display:block;margin:5mm auto;padding:2mm 5mm;font-size:10pt;cursor:pointer;">Imprimer</button>
 
-  <div class="center teams">
-    ${ticket.match.home_team}<br>
-    <span class="vs">vs</span><br>
-    ${ticket.match.away_team}
-  </div>
-
-  <div class="center info" style="margin-top:2mm">
-    ${ticket.match.venue}<br>
-    ${matchDate}
-  </div>
-
-  <div class="separator"></div>
-
-  <div class="center">
-    <div class="category">${ticket.category.name}</div>
-    <div class="price">${priceFmt} FCFA</div>
-  </div>
-
-  <div class="separator"></div>
-
-  <div class="center qr">
-    <img src="${qrDataUrl}" alt="QR Code" />
-  </div>
-
-  <div class="center serial">
-    N° ${ticket.serial_number}<br>
-    Caissier : ${ticket.seller.full_name}<br>
-    ${soldAt}
-  </div>
-
-  <div class="separator"></div>
-
-  <div class="center footer">
-    Valable uniquement ce match<br>
-    Non remboursable
-  </div>
-
-  <script>
-    window.onload = function() {
-      window.print();
-      window.onafterprint = function() { window.close(); };
-    };
-  </script>
+<script>
+window.onload = function() {
+  setTimeout(function() { window.print(); }, 300);
+};
+</script>
 </body>
 </html>`;
 
