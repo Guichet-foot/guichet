@@ -35,7 +35,7 @@ export default async function ProgrammePage() {
             Tournois et saisons
           </p>
         </div>
-        <CreateTournamentDialog zoneId={profile.zone_id} />
+        <CreateTournamentDialog zoneId={profile.zone_id} userRole={profile.role} />
       </div>
 
       {!tournaments || tournaments.length === 0 ? (

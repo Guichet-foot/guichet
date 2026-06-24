@@ -1,10 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createTournament } from "@/lib/actions/tournament-actions";
+import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -14,23 +22,43 @@ import {
 } from "@/components/ui/dialog";
 import { Plus, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import type { UserRole } from "@/lib/types";
 
-export function CreateTournamentDialog({ zoneId }: { zoneId: string | null }) {
+interface Props {
+  zoneId: string | null;
+  userRole: UserRole;
+}
+
+export function CreateTournamentDialog({ zoneId, userRole }: Props) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [zones, setZones] = useState<{ id: string; name: string }[]>([]);
+  const [selectedZoneId, setSelectedZoneId] = useState(zoneId || "");
   const [name, setName] = useState("");
   const [season, setSeason] = useState(
     `${new Date().getFullYear()}-${new Date().getFullYear() + 1}`
   );
 
+  useEffect(() => {
+    if (userRole === "super_admin") {
+      async function fetchZones() {
+        const supabase = createClient();
+        const { data } = await supabase.from("zones").select("id, name").order("name");
+        if (data) setZones(data);
+      }
+      fetchZones();
+    }
+  }, [userRole]);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!zoneId) {
-      toast.error("Zone introuvable");
+    const finalZone = userRole === "super_admin" ? selectedZoneId : zoneId;
+    if (!finalZone) {
+      toast.error("Sélectionnez une zone");
       return;
     }
     setLoading(true);
-    const result = await createTournament({ zoneId, name, season });
+    const result = await createTournament({ zoneId: finalZone, name, season });
     if (result.error) {
       toast.error(result.error);
     } else {
@@ -52,6 +80,27 @@ export function CreateTournamentDialog({ zoneId }: { zoneId: string | null }) {
           <DialogTitle>Nouveau tournoi</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
+          {userRole === "super_admin" && (
+            <div className="space-y-2">
+              <Label>Zone</Label>
+              <Select
+                value={selectedZoneId}
+                onValueChange={(v) => setSelectedZoneId(v ?? "")}
+                required
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Choisir une zone" />
+                </SelectTrigger>
+                <SelectContent>
+                  {zones.map((z) => (
+                    <SelectItem key={z.id} value={z.id}>
+                      {z.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <div className="space-y-2">
             <Label>Nom du tournoi</Label>
             <Input
