@@ -64,7 +64,9 @@ export default function LoginPage() {
       return;
     }
 
-    const destination = profile.role === "caissier" ? "/vente" : "/dashboard";
+    let destination = "/dashboard";
+    if (profile.role === "caissier") destination = "/vente";
+    if (profile.role === "portier") destination = "/scanner";
     router.push(destination);
     router.refresh();
   }

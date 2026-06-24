@@ -42,8 +42,8 @@ export async function createUser(formData: {
 
   // admin_zone can only create caissier or admin_zone in their own zone
   if (profile.role === "admin_zone") {
-    if (!["caissier", "admin_zone"].includes(formData.role)) {
-      return { error: "Vous ne pouvez créer que des caissiers ou admins zone" };
+    if (!["caissier", "portier", "admin_zone"].includes(formData.role)) {
+      return { error: "Vous ne pouvez créer que des caissiers, portiers ou admins zone" };
     }
     const { data: currentProfile } = await supabase
       .from("profiles")

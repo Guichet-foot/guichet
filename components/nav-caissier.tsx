@@ -4,20 +4,28 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { ShoppingCart, ScanLine, List, LogOut } from "lucide-react";
+import type { UserRole } from "@/lib/types";
 
 interface NavCaissierProps {
   userName: string;
+  userRole: UserRole;
 }
 
-const links = [
+const caissierLinks = [
   { href: "/vente", label: "Vente", icon: ShoppingCart },
   { href: "/scanner", label: "Scanner", icon: ScanLine },
   { href: "/mes-ventes", label: "Mes ventes", icon: List },
 ];
 
-export function NavCaissier({ userName }: NavCaissierProps) {
+const portierLinks = [
+  { href: "/scanner", label: "Scanner", icon: ScanLine },
+];
+
+export function NavCaissier({ userName, userRole }: NavCaissierProps) {
   const pathname = usePathname();
   const router = useRouter();
+
+  const links = userRole === "portier" ? portierLinks : caissierLinks;
 
   async function handleLogout() {
     const supabase = createClient();

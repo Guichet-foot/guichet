@@ -62,8 +62,9 @@ export async function updateSession(request: NextRequest) {
         .eq("id", user.id)
         .single();
 
-      const redirectUrl =
-        profile?.role === "caissier" ? "/vente" : "/dashboard";
+      let redirectUrl = "/dashboard";
+      if (profile?.role === "caissier") redirectUrl = "/vente";
+      if (profile?.role === "portier") redirectUrl = "/scanner";
       return NextResponse.redirect(new URL(redirectUrl, request.url));
     }
     return supabaseResponse;
@@ -105,9 +106,18 @@ export async function updateSession(request: NextRequest) {
     "/rapports",
   ];
   const caissierRoutes = ["/vente", "/scanner", "/mes-ventes"];
+  const portierRoutes = ["/scanner"];
 
   const isAdminRoute = adminRoutes.some((r) => pathname.startsWith(r));
   const isCaissierRoute = caissierRoutes.some((r) => pathname.startsWith(r));
+  const isPortierRoute = portierRoutes.some((r) => pathname.startsWith(r));
+
+  if (profile.role === "portier") {
+    if (!isPortierRoute) {
+      return NextResponse.redirect(new URL("/scanner", request.url));
+    }
+    return supabaseResponse;
+  }
 
   if (isAdminRoute && profile.role === "caissier") {
     return NextResponse.redirect(new URL("/vente", request.url));
@@ -115,8 +125,7 @@ export async function updateSession(request: NextRequest) {
 
   if (
     isCaissierRoute &&
-    profile.role !== "caissier" &&
-    profile.role !== "admin_zone"
+    !["caissier", "admin_zone", "super_admin"].includes(profile.role)
   ) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }

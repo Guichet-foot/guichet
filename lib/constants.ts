@@ -37,12 +37,14 @@ export const ROLE_LABELS: Record<string, string> = {
   super_admin: "Super Admin",
   admin_zone: "Admin Zone",
   caissier: "Caissier",
+  portier: "Portier",
 };
 
 export const ROLE_COLORS: Record<string, string> = {
   super_admin: "bg-purple-100 text-purple-800",
   admin_zone: "bg-brand/10 text-brand",
   caissier: "bg-accent-gold/20 text-amber-800",
+  portier: "bg-blue-100 text-blue-800",
 };
 
 export const CATEGORY_COLORS = [

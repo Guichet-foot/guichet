@@ -199,6 +199,7 @@ export default function NewUserPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="caissier">Caissier</SelectItem>
+                  <SelectItem value="portier">Portier</SelectItem>
                   <SelectItem value="admin_zone">Admin Zone</SelectItem>
                   {currentUserRole === "super_admin" && (
                     <SelectItem value="super_admin">Super Admin</SelectItem>

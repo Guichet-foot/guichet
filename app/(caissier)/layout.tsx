@@ -10,7 +10,10 @@ export default async function CaissierLayout({
 
   return (
     <div className="min-h-screen bg-cream">
-      <NavCaissier userName={profile.full_name} />
+      <NavCaissier
+        userName={profile.full_name}
+        userRole={profile.role}
+      />
       <main className="pt-16 pb-20 px-4">{children}</main>
     </div>
   );
