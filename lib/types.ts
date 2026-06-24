@@ -124,3 +124,56 @@ export interface ScanResult {
   categoryName?: string;
   scannedAt?: string;
 }
+
+export type TournamentStatus = "en_cours" | "termine";
+export type TournamentMatchStatus = "programme" | "termine" | "annule";
+
+export interface Tournament {
+  id: string;
+  zone_id: string;
+  name: string;
+  season: string;
+  status: TournamentStatus;
+  created_at: string;
+}
+
+export interface TournamentGroup {
+  id: string;
+  tournament_id: string;
+  name: string;
+  display_order: number;
+  created_at: string;
+  teams?: { id: string; team: Team }[];
+}
+
+export interface TournamentMatch {
+  id: string;
+  tournament_id: string;
+  group_id: string;
+  home_team_id: string;
+  away_team_id: string;
+  match_date: string | null;
+  venue: string | null;
+  home_score: number | null;
+  away_score: number | null;
+  journee: number;
+  status: TournamentMatchStatus;
+  match_id: string | null;
+  created_at: string;
+  home_team?: Team;
+  away_team?: Team;
+  group?: TournamentGroup;
+}
+
+export interface Standing {
+  teamId: string;
+  teamName: string;
+  played: number;
+  won: number;
+  drawn: number;
+  lost: number;
+  goalsFor: number;
+  goalsAgainst: number;
+  goalDifference: number;
+  points: number;
+}

@@ -8,15 +8,28 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
 
+interface TeamOption {
+  id: string;
+  name: string;
+}
+
 export default function NewMatchPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [zoneId, setZoneId] = useState<string>("");
+  const [teams, setTeams] = useState<TeamOption[]>([]);
 
   const [homeTeam, setHomeTeam] = useState("");
   const [awayTeam, setAwayTeam] = useState("");
@@ -25,26 +38,42 @@ export default function NewMatchPage() {
   const [notes, setNotes] = useState("");
 
   useEffect(() => {
-    async function fetchProfile() {
+    async function init() {
       const supabase = createClient();
       const {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) return;
+
       const { data: profile } = await supabase
         .from("profiles")
         .select("zone_id")
         .eq("id", user.id)
         .single();
-      if (profile?.zone_id) setZoneId(profile.zone_id);
+
+      if (profile?.zone_id) {
+        setZoneId(profile.zone_id);
+
+        const { data: teamList } = await supabase
+          .from("teams")
+          .select("id, name")
+          .eq("zone_id", profile.zone_id)
+          .order("name");
+
+        if (teamList) setTeams(teamList);
+      }
     }
-    fetchProfile();
+    init();
   }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!zoneId) {
       toast.error("Zone non trouvée");
+      return;
+    }
+    if (homeTeam === awayTeam) {
+      toast.error("Les deux équipes doivent être différentes");
       return;
     }
     setLoading(true);
@@ -84,25 +113,63 @@ export default function NewMatchPage() {
         <CardContent className="pt-6">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="homeTeam">Équipe domicile</Label>
-              <Input
-                id="homeTeam"
-                value={homeTeam}
-                onChange={(e) => setHomeTeam(e.target.value)}
-                required
-                placeholder="ASC Ndiarème"
-              />
+              <Label>Équipe domicile</Label>
+              {teams.length > 0 ? (
+                <Select
+                  value={homeTeam}
+                  onValueChange={(v) => setHomeTeam(v ?? "")}
+                  required
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Sélectionner l'équipe" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {teams.map((t) => (
+                      <SelectItem key={t.id} value={t.name}>
+                        {t.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input
+                  value={homeTeam}
+                  onChange={(e) => setHomeTeam(e.target.value)}
+                  required
+                  placeholder="ASC Ndiarème"
+                />
+              )}
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="awayTeam">Équipe visiteur</Label>
-              <Input
-                id="awayTeam"
-                value={awayTeam}
-                onChange={(e) => setAwayTeam(e.target.value)}
-                required
-                placeholder="ASC Yeumbeul"
-              />
+              <Label>Équipe visiteur</Label>
+              {teams.length > 0 ? (
+                <Select
+                  value={awayTeam}
+                  onValueChange={(v) => setAwayTeam(v ?? "")}
+                  required
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Sélectionner l'équipe" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {teams
+                      .filter((t) => t.name !== homeTeam)
+                      .map((t) => (
+                        <SelectItem key={t.id} value={t.name}>
+                          {t.name}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input
+                  value={awayTeam}
+                  onChange={(e) => setAwayTeam(e.target.value)}
+                  required
+                  placeholder="ASC Yeumbeul"
+                />
+              )}
             </div>
 
             <div className="space-y-2">
