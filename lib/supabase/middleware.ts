@@ -62,9 +62,13 @@ export async function updateSession(request: NextRequest) {
         .eq("id", user.id)
         .single();
 
+      if (!profile) {
+        return supabaseResponse;
+      }
+
       let redirectUrl = "/dashboard";
-      if (profile?.role === "caissier") redirectUrl = "/vente";
-      if (profile?.role === "portier") redirectUrl = "/scanner";
+      if (profile.role === "caissier") redirectUrl = "/vente";
+      if (profile.role === "portier") redirectUrl = "/scanner";
       return NextResponse.redirect(new URL(redirectUrl, request.url));
     }
     return supabaseResponse;
@@ -92,7 +96,13 @@ export async function updateSession(request: NextRequest) {
 
   if (!profile || !profile.active) {
     await supabase.auth.signOut();
-    return NextResponse.redirect(new URL("/login", request.url));
+    const signOutResponse = NextResponse.redirect(new URL("/login", request.url));
+    request.cookies.getAll().forEach((cookie) => {
+      if (cookie.name.includes("supabase") || cookie.name.includes("sb-")) {
+        signOutResponse.cookies.delete(cookie.name);
+      }
+    });
+    return signOutResponse;
   }
 
   const adminRoutes = [
