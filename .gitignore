@@ -40,3 +40,7 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 public/favicon-Guichet-Foot.png
+public/imagelogin.png
+public/Guichet-Foot-Logo-login-page.png
+public/LOGIN-PAGE-MODELE.png
+public/imagelogin-opt.png
