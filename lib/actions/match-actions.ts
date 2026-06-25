@@ -38,9 +38,14 @@ export async function createMatch(formData: {
 export async function updateMatchStatus(matchId: string, status: MatchStatus) {
   const supabase = await createClient();
 
+  const updateData: Record<string, unknown> = { status };
+  if (status === "termine" || status === "annule") {
+    updateData.vente_active = false;
+  }
+
   const { error } = await supabase
     .from("matches")
-    .update({ status })
+    .update(updateData)
     .eq("id", matchId);
 
   if (error) return { error: error.message };
@@ -110,5 +115,20 @@ export async function deleteTicketCategory(categoryId: string, matchId: string) 
   if (error) return { error: error.message };
 
   revalidatePath(`/matchs/${matchId}/billets`);
+  return { success: true };
+}
+
+export async function toggleMatchVente(matchId: string, venteActive: boolean) {
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("matches")
+    .update({ vente_active: venteActive })
+    .eq("id", matchId);
+
+  if (error) return { error: error.message };
+
+  revalidatePath("/matchs");
+  revalidatePath(`/matchs/${matchId}`);
   return { success: true };
 }

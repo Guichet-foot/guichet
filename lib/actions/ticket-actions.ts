@@ -21,6 +21,20 @@ export async function createTicket(matchId: string, categoryId: string) {
 
   if (!category) return { error: "Catégorie introuvable" };
 
+  const { data: match } = await supabase
+    .from("matches")
+    .select("status, vente_active")
+    .eq("id", matchId)
+    .single();
+
+  if (!match) return { error: "Match introuvable" };
+  if (match.status === "termine" || match.status === "annule") {
+    return { error: "Ce match est terminé" };
+  }
+  if (!match.vente_active) {
+    return { error: "La vente n'est pas ouverte pour ce match" };
+  }
+
   const { count: soldCount } = await supabase
     .from("tickets")
     .select("*", { count: "exact", head: true })

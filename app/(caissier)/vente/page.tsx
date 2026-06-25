@@ -29,6 +29,7 @@ interface MatchOption {
   away_team: string;
   match_date: string;
   venue: string;
+  vente_active: boolean;
 }
 
 interface CategoryOption {
@@ -115,15 +116,18 @@ export default function VentePage() {
 
       const { data: matchList } = await supabase
         .from("matches")
-        .select("id, home_team, away_team, match_date, venue")
+        .select("id, home_team, away_team, match_date, venue, vente_active")
         .eq("zone_id", profile.zone_id)
         .in("status", ["programme", "en_cours"])
         .order("match_date", { ascending: true });
 
       if (matchList && matchList.length > 0) {
         setMatches(matchList);
-        setSelectedMatchId(matchList[0].id);
-        await loadCategories(matchList[0].id);
+        const firstActive = matchList.find((m: any) => m.vente_active) || matchList[0];
+        setSelectedMatchId(firstActive.id);
+        if (firstActive.vente_active) {
+          await loadCategories(firstActive.id);
+        }
       }
 
       const todayStart = new Date();
@@ -169,7 +173,12 @@ export default function VentePage() {
 
   async function handleMatchChange(matchId: string) {
     setSelectedMatchId(matchId);
-    await loadCategories(matchId);
+    const match = matches.find((m) => m.id === matchId);
+    if (match?.vente_active) {
+      await loadCategories(matchId);
+    } else {
+      setCategories([]);
+    }
   }
 
   function handleCategoryClick(cat: CategoryOption) {
@@ -259,11 +268,39 @@ export default function VentePage() {
         </SelectContent>
       </Select>
 
-      {categories.length === 0 ? (
-        <div className="text-center py-8 text-muted-foreground">
-          <p>Aucune catégorie de billets configurée pour ce match</p>
-        </div>
-      ) : (
+      {(() => {
+        const selectedMatch = matches.find((m) => m.id === selectedMatchId);
+        if (selectedMatch && !selectedMatch.vente_active) {
+          return (
+            <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+              <ShoppingCart className="h-16 w-16 mb-4 opacity-30" />
+              <p className="text-lg font-semibold">Match à venir</p>
+              <p className="text-sm mt-1">La vente n&apos;est pas encore ouverte pour ce match</p>
+              <p className="text-xs mt-2">Contactez votre administrateur</p>
+            </div>
+          );
+        }
+        return null;
+      })()}
+
+      {(() => {
+        const selectedMatch = matches.find((m) => m.id === selectedMatchId);
+        if (!selectedMatch?.vente_active) return null;
+
+        if (categories.length === 0) {
+          return (
+            <div className="text-center py-8 text-muted-foreground">
+              <p>Aucune catégorie de billets configurée pour ce match</p>
+            </div>
+          );
+        }
+        return null;
+      })()}
+
+      {(() => {
+        const selectedMatch = matches.find((m) => m.id === selectedMatchId);
+        if (!selectedMatch?.vente_active || categories.length === 0) return null;
+        return (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {categories.map((cat, index) => {
             const remaining = cat.quantity_total - cat.sold_count;
@@ -294,7 +331,8 @@ export default function VentePage() {
             );
           })}
         </div>
-      )}
+        );
+      })()}
 
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
         <SheetContent side="bottom" className="rounded-t-2xl">
