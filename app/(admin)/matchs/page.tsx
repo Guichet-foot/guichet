@@ -123,7 +123,7 @@ export default async function MatchsPage({
                       <TableCell className="hidden md:table-cell text-right">{formatFCFA(stats.revenue)}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center gap-1 justify-end">
-                          <MatchActionButtons matchId={match.id} status={match.status} venteActive={match.vente_active ?? false} />
+                          <MatchActionButtons matchId={match.id} status={match.status} venteActive={match.vente_active ?? false} homeTeam={match.home_team} awayTeam={match.away_team} />
                           <Link href={buildZoneUrl(`/matchs/${match.id}`, params.zone)}>
                             <Button variant="ghost" size="sm"><Eye className="h-4 w-4" /></Button>
                           </Link>
