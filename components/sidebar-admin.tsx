@@ -89,9 +89,9 @@ export function SidebarAdmin({ userName, userRole, zoneName }: SidebarProps) {
                 <Image
                   src="/logo-sidebar.png"
                   alt="Guichet Foot"
-                  width={180}
-                  height={45}
-                  className="h-11 w-auto"
+                  width={220}
+                  height={55}
+                  className="h-14 w-auto"
                   priority
                 />
                 {zoneName && (
