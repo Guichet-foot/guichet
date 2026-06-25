@@ -38,7 +38,7 @@ export default async function MesVentesPage() {
   const todayTotal = todayTickets.reduce((sum, t) => sum + t.price, 0);
 
   return (
-    <div className="space-y-4 max-w-2xl mx-auto">
+    <div className="space-y-4 max-w-5xl mx-auto">
       <h1 className="text-xl font-bold font-heading">Mes ventes</h1>
 
       <Card className="bg-brand/5 border-brand/20">
