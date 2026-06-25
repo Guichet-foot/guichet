@@ -45,19 +45,25 @@ export default function NewMatchPage() {
       } = await supabase.auth.getUser();
       if (!user) return;
 
+      // Check for ?zone= param (super_admin viewing a specific zone)
+      const urlParams = new URLSearchParams(window.location.search);
+      const zoneParam = urlParams.get("zone");
+
       const { data: profile } = await supabase
         .from("profiles")
-        .select("zone_id")
+        .select("zone_id, role")
         .eq("id", user.id)
         .single();
 
-      if (profile?.zone_id) {
-        setZoneId(profile.zone_id);
+      const effectiveZone = zoneParam || profile?.zone_id;
+
+      if (effectiveZone) {
+        setZoneId(effectiveZone);
 
         const { data: teamList } = await supabase
           .from("teams")
           .select("id, name")
-          .eq("zone_id", profile.zone_id)
+          .eq("zone_id", effectiveZone)
           .order("name");
 
         if (teamList) setTeams(teamList);

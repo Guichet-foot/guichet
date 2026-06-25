@@ -12,10 +12,22 @@ export type ExpenseCategory =
   | "transport"
   | "autre";
 
+export interface ZoneMember {
+  name: string;
+  poste: string;
+  phone: string;
+}
+
 export interface Zone {
   id: string;
   name: string;
   region: string | null;
+  created_by: string | null;
+  logo: string | null;
+  president: string | null;
+  members: ZoneMember[];
+  odcav: string | null;
+  oncav: string | null;
   created_at: string;
 }
 

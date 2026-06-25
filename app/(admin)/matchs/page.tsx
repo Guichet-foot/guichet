@@ -1,36 +1,41 @@
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { getEffectiveZone } from "@/lib/get-effective-zone";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent } from "@/components/ui/card";
 import { Plus, Trophy, Eye } from "lucide-react";
 import { MATCH_STATUS_LABELS, MATCH_STATUS_COLORS } from "@/lib/constants";
 import { formatDateShort, formatFCFA } from "@/lib/format";
+import { buildZoneUrl } from "@/lib/zone-utils";
 import { MatchActionButtons } from "./match-action-buttons";
+import { ZoneCardGrid } from "@/components/zone-card-grid";
+import { ZoneBackHeader } from "@/components/zone-back-header";
 
 export const metadata = { title: "Matchs" };
 
-export default async function MatchsPage() {
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
+export default async function MatchsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ zone?: string }>;
+}) {
   const profile = await requireRole(["super_admin", "admin_zone"]);
+  const params = await searchParams;
+  const { effectiveZoneId, selectedZone, ownedZones, needsZoneSelection } =
+    await getEffectiveZone(profile, params.zone);
+
+  if (needsZoneSelection) {
+    return <ZoneCardGrid zones={ownedZones} title="Matchs" />;
+  }
+
   const supabase = await createClient();
 
-  let query = supabase
-    .from("matches")
-    .select("*")
-    .order("match_date", { ascending: false });
-
-  if (profile.role === "admin_zone") {
-    query = query.eq("zone_id", profile.zone_id!);
-  }
+  let query = supabase.from("matches").select("*").order("match_date", { ascending: false });
+  if (effectiveZoneId) query = query.eq("zone_id", effectiveZoneId);
 
   const { data: matches } = await query;
 
@@ -59,14 +64,13 @@ export default async function MatchsPage() {
 
   return (
     <div className="space-y-6">
+      {selectedZone && <ZoneBackHeader zoneName={selectedZone.name} />}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold font-heading">Matchs</h1>
-          <p className="text-muted-foreground">
-            {matches?.length || 0} match(s)
-          </p>
+          <p className="text-muted-foreground">{matches?.length || 0} match(s)</p>
         </div>
-        <Link href="/matchs/nouveau">
+        <Link href={buildZoneUrl("/matchs/nouveau", params.zone)}>
           <Button className="bg-brand hover:bg-brand/90">
             <Plus className="h-4 w-4 mr-2" />
             Nouveau match
@@ -99,17 +103,10 @@ export default async function MatchsPage() {
                   const stats = ticketStats[match.id] || { count: 0, revenue: 0 };
                   return (
                     <TableRow key={match.id}>
-                      <TableCell className="font-medium">
-                        {match.home_team} vs {match.away_team}
-                      </TableCell>
-                      <TableCell className="hidden sm:table-cell text-sm">
-                        {formatDateShort(match.match_date)}
-                      </TableCell>
+                      <TableCell className="font-medium">{match.home_team} vs {match.away_team}</TableCell>
+                      <TableCell className="hidden sm:table-cell text-sm">{formatDateShort(match.match_date)}</TableCell>
                       <TableCell>
-                        <Badge
-                          variant="secondary"
-                          className={MATCH_STATUS_COLORS[match.status]}
-                        >
+                        <Badge variant="secondary" className={MATCH_STATUS_COLORS[match.status]}>
                           {MATCH_STATUS_LABELS[match.status]}
                         </Badge>
                       </TableCell>
@@ -117,35 +114,18 @@ export default async function MatchsPage() {
                         {match.status === "termine" || match.status === "annule" ? (
                           <span className="text-xs text-muted-foreground">—</span>
                         ) : (
-                          <Badge
-                            variant="secondary"
-                            className={
-                              match.vente_active
-                                ? "bg-green-100 text-green-800"
-                                : "bg-orange-100 text-orange-800"
-                            }
-                          >
+                          <Badge variant="secondary" className={match.vente_active ? "bg-green-100 text-green-800" : "bg-orange-100 text-orange-800"}>
                             {match.vente_active ? "Ouverte" : "Fermée"}
                           </Badge>
                         )}
                       </TableCell>
-                      <TableCell className="hidden md:table-cell text-right">
-                        {stats.count}
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell text-right">
-                        {formatFCFA(stats.revenue)}
-                      </TableCell>
+                      <TableCell className="hidden md:table-cell text-right">{stats.count}</TableCell>
+                      <TableCell className="hidden md:table-cell text-right">{formatFCFA(stats.revenue)}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center gap-1 justify-end">
-                          <MatchActionButtons
-                            matchId={match.id}
-                            status={match.status}
-                            venteActive={match.vente_active ?? false}
-                          />
-                          <Link href={`/matchs/${match.id}`}>
-                            <Button variant="ghost" size="sm">
-                              <Eye className="h-4 w-4" />
-                            </Button>
+                          <MatchActionButtons matchId={match.id} status={match.status} venteActive={match.vente_active ?? false} />
+                          <Link href={buildZoneUrl(`/matchs/${match.id}`, params.zone)}>
+                            <Button variant="ghost" size="sm"><Eye className="h-4 w-4" /></Button>
                           </Link>
                         </div>
                       </TableCell>

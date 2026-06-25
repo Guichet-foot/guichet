@@ -1,37 +1,45 @@
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { getEffectiveZone } from "@/lib/get-effective-zone";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import {
-  Banknote,
-  Ticket,
-  Trophy,
-  TrendingUp,
-} from "lucide-react";
+import { Banknote, Ticket, Trophy, TrendingUp } from "lucide-react";
 import { formatFCFA, formatDateShort } from "@/lib/format";
 import { MATCH_STATUS_LABELS, MATCH_STATUS_COLORS } from "@/lib/constants";
 import { SalesChart } from "./sales-chart";
+import { ZoneCardGrid } from "@/components/zone-card-grid";
+import { ZoneBackHeader } from "@/components/zone-back-header";
 
 export const metadata = { title: "Tableau de bord" };
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ zone?: string }>;
+}) {
   const profile = await requireRole(["super_admin", "admin_zone"]);
-  const supabase = await createClient();
+  const params = await searchParams;
+  const { effectiveZoneId, selectedZone, ownedZones, needsZoneSelection } =
+    await getEffectiveZone(profile, params.zone);
 
-  const zoneFilter =
-    profile.role === "admin_zone" ? profile.zone_id : null;
+  if (needsZoneSelection) {
+    return <ZoneCardGrid zones={ownedZones} title="Tableau de bord" />;
+  }
+
+  const supabase = await createClient();
+  const zoneFilter = effectiveZoneId;
 
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
 
-  const { data: todayTickets } = await supabase
+  const { data: todayTickets } = (await supabase
     .from("tickets")
     .select("price, sold_at, match_id, match:matches(zone_id)")
     .gte("sold_at", todayStart.toISOString())
-    .neq("status", "annule") as { data: any[] | null };
+    .neq("status", "annule")) as { data: any[] | null };
 
   const filteredTodayTickets = zoneFilter
     ? todayTickets?.filter((t: any) => t.match?.zone_id === zoneFilter)
@@ -50,9 +58,7 @@ export default async function DashboardPage() {
     .order("match_date")
     .limit(5);
 
-  if (zoneFilter) {
-    matchQuery = matchQuery.eq("zone_id", zoneFilter);
-  }
+  if (zoneFilter) matchQuery = matchQuery.eq("zone_id", zoneFilter);
 
   const { data: upcomingMatches } = await matchQuery;
 
@@ -60,11 +66,11 @@ export default async function DashboardPage() {
   monthStart.setDate(1);
   monthStart.setHours(0, 0, 0, 0);
 
-  const { data: monthTickets } = await supabase
+  const { data: monthTickets } = (await supabase
     .from("tickets")
     .select("price, match:matches(zone_id)")
     .gte("sold_at", monthStart.toISOString())
-    .neq("status", "annule") as { data: any[] | null };
+    .neq("status", "annule")) as { data: any[] | null };
 
   const filteredMonthTickets = zoneFilter
     ? monthTickets?.filter((t: any) => t.match?.zone_id === zoneFilter)
@@ -78,12 +84,9 @@ export default async function DashboardPage() {
     .select("amount")
     .gte("expense_date", monthStart.toISOString().split("T")[0]);
 
-  if (zoneFilter) {
-    expenseQuery = expenseQuery.eq("zone_id", zoneFilter);
-  }
+  if (zoneFilter) expenseQuery = expenseQuery.eq("zone_id", zoneFilter);
 
   const { data: monthExpenses } = await expenseQuery;
-
   const monthExpenseTotal =
     monthExpenses?.reduce((sum, e) => sum + (e as any).amount, 0) || 0;
   const monthBalance = monthRevenue - monthExpenseTotal;
@@ -92,11 +95,11 @@ export default async function DashboardPage() {
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
   sevenDaysAgo.setHours(0, 0, 0, 0);
 
-  const { data: weekTickets } = await supabase
+  const { data: weekTickets } = (await supabase
     .from("tickets")
     .select("price, sold_at, match:matches(zone_id)")
     .gte("sold_at", sevenDaysAgo.toISOString())
-    .neq("status", "annule") as { data: any[] | null };
+    .neq("status", "annule")) as { data: any[] | null };
 
   const filteredWeekTickets = zoneFilter
     ? weekTickets?.filter((t: any) => t.match?.zone_id === zoneFilter)
@@ -111,12 +114,8 @@ export default async function DashboardPage() {
       filteredWeekTickets
         ?.filter((t: any) => t.sold_at.startsWith(dayStr))
         .reduce((sum: number, t: any) => sum + t.price, 0) || 0;
-
     chartData.push({
-      date: d.toLocaleDateString("fr-FR", {
-        weekday: "short",
-        day: "numeric",
-      }),
+      date: d.toLocaleDateString("fr-FR", { weekday: "short", day: "numeric" }),
       ventes: dayTotal,
     });
   }
@@ -160,14 +159,13 @@ export default async function DashboardPage() {
     .order("created_at", { ascending: false })
     .limit(5);
 
-  if (zoneFilter) {
-    lastExpensesQuery = lastExpensesQuery.eq("zone_id", zoneFilter);
-  }
+  if (zoneFilter) lastExpensesQuery = lastExpensesQuery.eq("zone_id", zoneFilter);
 
   const { data: lastExpenses } = await lastExpensesQuery;
 
   return (
     <div className="space-y-6">
+      {selectedZone && <ZoneBackHeader zoneName={selectedZone.name} />}
       <h1 className="text-2xl font-bold font-heading">Tableau de bord</h1>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -176,15 +174,12 @@ export default async function DashboardPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Recettes du jour</p>
-                <p className="text-2xl font-bold text-brand">
-                  {formatFCFA(todayRevenue)}
-                </p>
+                <p className="text-2xl font-bold text-brand">{formatFCFA(todayRevenue)}</p>
               </div>
               <Banknote className="h-8 w-8 text-brand/40" />
             </div>
           </CardContent>
         </Card>
-
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
@@ -196,31 +191,23 @@ export default async function DashboardPage() {
             </div>
           </CardContent>
         </Card>
-
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Matchs à venir</p>
-                <p className="text-2xl font-bold">
-                  {upcomingMatches?.length || 0}
-                </p>
+                <p className="text-2xl font-bold">{upcomingMatches?.length || 0}</p>
               </div>
               <Trophy className="h-8 w-8 text-brand/40" />
             </div>
           </CardContent>
         </Card>
-
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Solde du mois</p>
-                <p
-                  className={`text-2xl font-bold ${
-                    monthBalance >= 0 ? "text-success" : "text-danger"
-                  }`}
-                >
+                <p className={`text-2xl font-bold ${monthBalance >= 0 ? "text-success" : "text-danger"}`}>
                   {formatFCFA(monthBalance)}
                 </p>
               </div>
@@ -231,55 +218,34 @@ export default async function DashboardPage() {
       </div>
 
       <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Ventes des 7 derniers jours</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <SalesChart data={chartData} />
-        </CardContent>
+        <CardHeader><CardTitle className="text-lg">Ventes des 7 derniers jours</CardTitle></CardHeader>
+        <CardContent><SalesChart data={chartData} /></CardContent>
       </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Prochains matchs</CardTitle>
-          </CardHeader>
+          <CardHeader><CardTitle className="text-lg">Prochains matchs</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             {!upcomingMatches || upcomingMatches.length === 0 ? (
-              <p className="text-muted-foreground text-sm">
-                Aucun match à venir
-              </p>
+              <p className="text-muted-foreground text-sm">Aucun match à venir</p>
             ) : (
               upcomingMatches.map((match: any) => {
-                const stats = matchTicketStats[match.id] || {
-                  sold: 0,
-                  total: 0,
-                };
-                const pct =
-                  stats.total > 0 ? (stats.sold / stats.total) * 100 : 0;
+                const stats = matchTicketStats[match.id] || { sold: 0, total: 0 };
+                const pct = stats.total > 0 ? (stats.sold / stats.total) * 100 : 0;
                 return (
                   <div key={match.id} className="space-y-2">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="font-medium text-sm">
-                          {match.home_team} vs {match.away_team}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {formatDateShort(match.match_date)}
-                        </p>
+                        <p className="font-medium text-sm">{match.home_team} vs {match.away_team}</p>
+                        <p className="text-xs text-muted-foreground">{formatDateShort(match.match_date)}</p>
                       </div>
-                      <Badge
-                        variant="secondary"
-                        className={MATCH_STATUS_COLORS[match.status]}
-                      >
+                      <Badge variant="secondary" className={MATCH_STATUS_COLORS[match.status]}>
                         {MATCH_STATUS_LABELS[match.status]}
                       </Badge>
                     </div>
                     <div className="flex items-center gap-2">
                       <Progress value={pct} className="flex-1" />
-                      <span className="text-xs text-muted-foreground whitespace-nowrap">
-                        {stats.sold}/{stats.total}
-                      </span>
+                      <span className="text-xs text-muted-foreground whitespace-nowrap">{stats.sold}/{stats.total}</span>
                     </div>
                   </div>
                 );
@@ -287,31 +253,19 @@ export default async function DashboardPage() {
             )}
           </CardContent>
         </Card>
-
         <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Dernières dépenses</CardTitle>
-          </CardHeader>
+          <CardHeader><CardTitle className="text-lg">Dernières dépenses</CardTitle></CardHeader>
           <CardContent className="space-y-3">
             {!lastExpenses || lastExpenses.length === 0 ? (
-              <p className="text-muted-foreground text-sm">
-                Aucune dépense enregistrée
-              </p>
+              <p className="text-muted-foreground text-sm">Aucune dépense enregistrée</p>
             ) : (
               lastExpenses.map((expense: any) => (
-                <div
-                  key={expense.id}
-                  className="flex items-center justify-between py-2 border-b last:border-0"
-                >
+                <div key={expense.id} className="flex items-center justify-between py-2 border-b last:border-0">
                   <div>
                     <p className="font-medium text-sm">{expense.label}</p>
-                    <p className="text-xs text-muted-foreground capitalize">
-                      {expense.category}
-                    </p>
+                    <p className="text-xs text-muted-foreground capitalize">{expense.category}</p>
                   </div>
-                  <span className="font-bold text-danger text-sm">
-                    -{formatFCFA(expense.amount)}
-                  </span>
+                  <span className="font-bold text-danger text-sm">-{formatFCFA(expense.amount)}</span>
                 </div>
               ))
             )}

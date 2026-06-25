@@ -50,19 +50,24 @@ export default function NewExpensePage() {
       } = await supabase.auth.getUser();
       if (!user) return;
 
+      const urlParams = new URLSearchParams(window.location.search);
+      const zoneParam = urlParams.get("zone");
+
       const { data: profile } = await supabase
         .from("profiles")
         .select("zone_id")
         .eq("id", user.id)
         .single();
 
-      if (profile?.zone_id) {
-        setZoneId(profile.zone_id);
+      const effectiveZone = zoneParam || profile?.zone_id;
+
+      if (effectiveZone) {
+        setZoneId(effectiveZone);
 
         const { data: matchList } = await supabase
           .from("matches")
           .select("id, home_team, away_team")
-          .eq("zone_id", profile.zone_id)
+          .eq("zone_id", effectiveZone)
           .order("match_date", { ascending: false });
 
         if (matchList) setMatches(matchList);

@@ -15,6 +15,7 @@ import {
   X,
   Shield,
   CalendarDays,
+  Settings,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
@@ -34,6 +35,7 @@ const adminLinks = [
   { href: "/finances", label: "Finances", icon: Wallet },
   { href: "/rapports", label: "Rapports", icon: FileText },
   { href: "/utilisateurs", label: "Utilisateurs", icon: Users },
+  { href: "/parametres", label: "Paramètres", icon: Settings },
 ];
 
 const superAdminLinks = [

@@ -1,25 +1,34 @@
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { getEffectiveZone } from "@/lib/get-effective-zone";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Card, CardContent } from "@/components/ui/card";
 import { Plus, Users } from "lucide-react";
 import { ROLE_LABELS, ROLE_COLORS } from "@/lib/constants";
+import { buildZoneUrl } from "@/lib/zone-utils";
 import { ToggleActiveButton } from "./toggle-active-button";
+import { ZoneCardGrid } from "@/components/zone-card-grid";
+import { ZoneBackHeader } from "@/components/zone-back-header";
 
 export const metadata = { title: "Utilisateurs" };
 
-export default async function UsersPage() {
+export default async function UsersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ zone?: string }>;
+}) {
   const profile = await requireRole(["super_admin", "admin_zone"]);
+  const params = await searchParams;
+  const { effectiveZoneId, selectedZone, ownedZones, needsZoneSelection } =
+    await getEffectiveZone(profile, params.zone);
+
+  if (needsZoneSelection) {
+    return <ZoneCardGrid zones={ownedZones} title="Utilisateurs" />;
+  }
+
   const supabase = await createClient();
 
   const query = supabase
@@ -27,29 +36,26 @@ export default async function UsersPage() {
     .select("*, zone:zones(name)")
     .order("created_at", { ascending: false });
 
-  if (profile.role === "admin_zone") {
-    query.eq("zone_id", profile.zone_id!);
+  if (effectiveZoneId) {
+    query.eq("zone_id", effectiveZoneId);
   }
 
   const { data: users } = await query;
 
   return (
     <div className="space-y-6">
+      {selectedZone && <ZoneBackHeader zoneName={selectedZone.name} />}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold font-heading">Utilisateurs</h1>
-          <p className="text-muted-foreground">
-            {users?.length || 0} utilisateur(s)
-          </p>
+          <p className="text-muted-foreground">{users?.length || 0} utilisateur(s)</p>
         </div>
-        {["super_admin", "admin_zone"].includes(profile.role) && (
-          <Link href="/utilisateurs/nouveau">
-            <Button className="bg-brand hover:bg-brand/90">
-              <Plus className="h-4 w-4 mr-2" />
-              Nouveau
-            </Button>
-          </Link>
-        )}
+        <Link href={buildZoneUrl("/utilisateurs/nouveau", params.zone)}>
+          <Button className="bg-brand hover:bg-brand/90">
+            <Plus className="h-4 w-4 mr-2" />
+            Nouveau
+          </Button>
+        </Link>
       </div>
 
       <Card>
@@ -66,51 +72,27 @@ export default async function UsersPage() {
                   <TableHead>Nom</TableHead>
                   <TableHead className="hidden sm:table-cell">Téléphone</TableHead>
                   <TableHead>Rôle</TableHead>
-                  <TableHead className="hidden md:table-cell">Zone</TableHead>
                   <TableHead>Statut</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {users.map((user) => (
+                {users.map((user: any) => (
                   <TableRow key={user.id}>
-                    <TableCell className="font-medium">
-                      {user.full_name}
-                    </TableCell>
-                    <TableCell className="hidden sm:table-cell">
-                      {user.phone || "—"}
+                    <TableCell className="font-medium">{user.full_name}</TableCell>
+                    <TableCell className="hidden sm:table-cell">{user.phone || "—"}</TableCell>
+                    <TableCell>
+                      <Badge variant="secondary" className={ROLE_COLORS[user.role]}>{ROLE_LABELS[user.role]}</Badge>
                     </TableCell>
                     <TableCell>
-                      <Badge
-                        variant="secondary"
-                        className={ROLE_COLORS[user.role]}
-                      >
-                        {ROLE_LABELS[user.role]}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="hidden md:table-cell">
-                      {user.zone?.name || "—"}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={user.active ? "default" : "destructive"}
-                        className={
-                          user.active
-                            ? "bg-success/10 text-success"
-                            : ""
-                        }
-                      >
+                      <Badge variant={user.active ? "default" : "destructive"} className={user.active ? "bg-success/10 text-success" : ""}>
                         {user.active ? "Actif" : "Inactif"}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                      {["super_admin", "admin_zone"].includes(profile.role) &&
-                        user.id !== profile.id && (
-                          <ToggleActiveButton
-                            userId={user.id}
-                            active={user.active}
-                          />
-                        )}
+                      {user.id !== profile.id && (
+                        <ToggleActiveButton userId={user.id} active={user.active} />
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}

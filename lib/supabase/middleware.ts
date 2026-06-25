@@ -104,6 +104,7 @@ export async function updateSession(request: NextRequest) {
     "/matchs",
     "/finances",
     "/rapports",
+    "/parametres",
   ];
   const caissierRoutes = ["/vente", "/scanner", "/mes-ventes"];
   const portierRoutes = ["/scanner"];
