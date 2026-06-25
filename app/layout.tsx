@@ -23,7 +23,8 @@ export const metadata: Metadata = {
   description: "Le guichet du Navétane — billetterie en 2 clics",
   manifest: "/manifest.json",
   icons: {
-    icon: "/icon-192.png",
+    icon: "/favicon.png",
+    shortcut: "/favicon.png",
     apple: "/icon-512.png",
   },
 };
