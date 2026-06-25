@@ -1,6 +1,6 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { format } from "date-fns";
 import type { ScanResult } from "@/lib/types";
@@ -76,6 +76,7 @@ export async function createTicket(matchId: string, categoryId: string) {
 
 export async function validateTicket(qrToken: string): Promise<ScanResult> {
   const supabase = await createClient();
+  const adminClient = await createAdminClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -88,7 +89,7 @@ export async function validateTicket(qrToken: string): Promise<ScanResult> {
     .eq("id", user.id)
     .single();
 
-  const { data: ticket } = await supabase
+  const { data: ticket } = await adminClient
     .from("tickets")
     .select(
       "*, match:matches(zone_id, home_team, away_team), category:ticket_categories(name)"
@@ -100,7 +101,7 @@ export async function validateTicket(qrToken: string): Promise<ScanResult> {
     return { status: "invalid", message: "Billet invalide" };
   }
 
-  if (ticket.match?.zone_id !== userProfile?.zone_id) {
+  if ((ticket as any).match?.zone_id !== userProfile?.zone_id) {
     return { status: "invalid", message: "Billet d'une autre zone" };
   }
 
@@ -111,13 +112,13 @@ export async function validateTicket(qrToken: string): Promise<ScanResult> {
   if (ticket.status === "scanne") {
     return {
       status: "already_scanned",
-      message: `Déjà scanné`,
+      message: "Déjà scanné",
       scannedAt: ticket.scanned_at || undefined,
-      categoryName: ticket.category?.name,
+      categoryName: (ticket as any).category?.name,
     };
   }
 
-  const { error } = await supabase
+  const { error } = await adminClient
     .from("tickets")
     .update({
       status: "scanne",
@@ -133,6 +134,6 @@ export async function validateTicket(qrToken: string): Promise<ScanResult> {
   return {
     status: "valid",
     message: "Entrée validée",
-    categoryName: ticket.category?.name,
+    categoryName: (ticket as any).category?.name,
   };
 }
