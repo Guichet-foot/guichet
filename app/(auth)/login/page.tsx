@@ -73,32 +73,33 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex">
-      {/* Left column — image */}
-      <div className="hidden lg:block lg:w-1/2 relative">
-        <Image
-          src="/imagelogin.jpg"
-          alt="Guichet Foot"
-          fill
-          className="object-cover"
-          priority
-        />
-      </div>
+    <div className="min-h-screen flex items-center justify-center bg-cream p-4 sm:p-8 lg:p-12">
+      <div className="flex w-full max-w-5xl rounded-2xl shadow-lg overflow-hidden border border-border/50">
+        {/* Left column — image */}
+        <div className="hidden lg:block lg:w-1/2 relative min-h-[600px]">
+          <Image
+            src="/imagelogin.jpg"
+            alt="Guichet Foot"
+            fill
+            className="object-cover"
+            priority
+          />
+        </div>
 
-      {/* Right column — form */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center px-6 py-12 bg-white">
-        <div className="w-full max-w-md space-y-8">
-          {/* Logo */}
-          <div className="flex justify-center">
-            <Image
-              src="/login-logo.png"
-              alt="Guichet Foot"
-              width={280}
-              height={70}
-              className="h-16 w-auto"
-              priority
-            />
-          </div>
+        {/* Right column — form */}
+        <div className="w-full lg:w-1/2 flex items-center justify-center px-8 py-12 sm:px-12 bg-white">
+          <div className="w-full max-w-md space-y-8">
+            {/* Logo */}
+            <div className="flex justify-center">
+              <Image
+                src="/login-logo.png"
+                alt="Guichet Foot"
+                width={320}
+                height={80}
+                className="h-20 w-auto"
+                priority
+              />
+            </div>
 
           {/* Header */}
           <div className="text-center space-y-2">
@@ -183,6 +184,7 @@ export default function LoginPage() {
             </Button>
           </form>
         </div>
+      </div>
       </div>
     </div>
   );
