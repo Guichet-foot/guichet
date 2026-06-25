@@ -87,11 +87,11 @@ export function SidebarAdmin({ userName, userRole, zoneName }: SidebarProps) {
             <div className="flex items-center justify-between">
               <div>
                 <Image
-                  src="/logo-sidebar.svg"
+                  src="/logo-sidebar.png"
                   alt="Guichet Foot"
-                  width={150}
-                  height={40}
-                  className="h-10 w-auto"
+                  width={180}
+                  height={45}
+                  className="h-11 w-auto"
                   priority
                 />
                 {zoneName && (
