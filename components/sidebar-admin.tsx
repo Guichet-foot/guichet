@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -77,17 +78,24 @@ export function SidebarAdmin({ userName, userRole, zoneName }: SidebarProps) {
       )}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-64 bg-brand text-white transform transition-transform duration-200 lg:translate-x-0 lg:static ${
+        className={`fixed inset-y-0 left-0 z-50 w-64 bg-brand text-white transform transition-transform duration-200 lg:translate-x-0 lg:sticky lg:top-0 lg:h-screen ${
           open ? "translate-x-0" : "-translate-x-full"
         }`}
       >
         <div className="flex flex-col h-full">
-          <div className="p-4 border-b border-white/15">
+          <div className="p-4 border-b border-white/15 shrink-0">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="font-heading font-bold text-lg">Guichet Foot</h2>
+                <Image
+                  src="/logo-sidebar.svg"
+                  alt="Guichet Foot"
+                  width={150}
+                  height={40}
+                  className="h-10 w-auto"
+                  priority
+                />
                 {zoneName && (
-                  <p className="text-sm text-white/70">{zoneName}</p>
+                  <p className="text-xs text-white/70 mt-1">{zoneName}</p>
                 )}
               </div>
               <button
@@ -100,7 +108,7 @@ export function SidebarAdmin({ userName, userRole, zoneName }: SidebarProps) {
             </div>
           </div>
 
-          <nav className="flex-1 p-3 space-y-1">
+          <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
             {links.map((link) => {
               const isActive = pathname.startsWith(link.href);
               return (
@@ -121,7 +129,7 @@ export function SidebarAdmin({ userName, userRole, zoneName }: SidebarProps) {
             })}
           </nav>
 
-          <div className="p-4 border-t border-white/15">
+          <div className="p-4 border-t border-white/15 shrink-0">
             <div className="mb-3">
               <p className="text-sm font-medium truncate">{userName}</p>
               <p className="text-xs text-white/60 capitalize">

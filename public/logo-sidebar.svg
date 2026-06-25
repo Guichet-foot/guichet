@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 50" width="200" height="50">
+  <rect x="2" y="5" width="40" height="40" rx="8" fill="rgba(255,255,255,0.15)"/>
+  <text x="22" y="22" text-anchor="middle" font-family="sans-serif" font-size="14" font-weight="bold" fill="white">G</text>
+  <text x="22" y="38" text-anchor="middle" font-family="sans-serif" font-size="14" font-weight="bold" fill="white">F</text>
+  <line x1="10" y1="40" x2="34" y2="10" stroke="#E8A53D" stroke-width="2"/>
+  <text x="50" y="24" font-family="sans-serif" font-size="16" font-weight="bold" fill="white">Guichet</text>
+  <text x="50" y="40" font-family="sans-serif" font-size="16" font-weight="bold" fill="white">Foot</text>
+</svg>
