@@ -85,15 +85,6 @@ export function ZoneSettingsForm({ zoneId, initialData }: ZoneSettingsFormProps)
             <Label>Région</Label>
             <Input value={region} onChange={(e) => setRegion(e.target.value)} placeholder="Thiès" />
           </div>
-          <div className="space-y-2">
-            <Label>Logo (URL)</Label>
-            <Input value={logo} onChange={(e) => setLogo(e.target.value)} placeholder="https://exemple.com/logo.png" />
-            {logo && (
-              <div className="mt-2">
-                <img src={logo} alt="Logo" className="w-16 h-16 rounded-lg object-cover border" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-              </div>
-            )}
-          </div>
         </CardContent>
       </Card>
 
