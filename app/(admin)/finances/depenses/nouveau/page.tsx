@@ -36,6 +36,7 @@ export default function NewExpensePage() {
   const [matchId, setMatchId] = useState<string>("none");
   const [label, setLabel] = useState("");
   const [category, setCategory] = useState("");
+  const [customCategory, setCustomCategory] = useState("");
   const [amount, setAmount] = useState("");
   const [expenseDate, setExpenseDate] = useState(
     new Date().toISOString().split("T")[0]
@@ -80,11 +81,19 @@ export default function NewExpensePage() {
     e.preventDefault();
     setLoading(true);
 
+    const finalCategory = category === "autre_custom" ? customCategory : category;
+
+    if (!finalCategory) {
+      toast.error("Choisissez une catégorie");
+      setLoading(false);
+      return;
+    }
+
     const result = await createExpense({
       zoneId,
       matchId: matchId === "none" ? null : matchId,
       label,
-      category: category as "organisation" | "arbitrage" | "securite" | "materiel" | "transport" | "autre",
+      category: finalCategory as string,
       amount: parseInt(amount),
       expenseDate,
       notes,
@@ -145,20 +154,37 @@ export default function NewExpensePage() {
 
             <div className="space-y-2">
               <Label>Catégorie</Label>
-              <Select value={category} onValueChange={(v) => setCategory(v ?? "")} required>
+              <Select
+                value={category}
+                onValueChange={(v) => {
+                  setCategory(v ?? "");
+                  if (v !== "autre_custom") setCustomCategory("");
+                }}
+                required
+              >
                 <SelectTrigger>
-                  <SelectValue placeholder="Choisir" />
+                  <SelectValue placeholder="Choisir une catégorie" />
                 </SelectTrigger>
                 <SelectContent>
-                  {Object.entries(EXPENSE_CATEGORY_LABELS).map(
-                    ([value, label]) => (
+                  {Object.entries(EXPENSE_CATEGORY_LABELS)
+                    .filter(([key]) => key !== "autre")
+                    .map(([value, lbl]) => (
                       <SelectItem key={value} value={value}>
-                        {label}
+                        {lbl}
                       </SelectItem>
-                    )
-                  )}
+                    ))}
+                  <SelectItem value="autre_custom">Autre (personnalisée)</SelectItem>
                 </SelectContent>
               </Select>
+              {category === "autre_custom" && (
+                <Input
+                  value={customCategory}
+                  onChange={(e) => setCustomCategory(e.target.value)}
+                  required
+                  placeholder="Nom de la catégorie"
+                  className="mt-2"
+                />
+              )}
             </div>
 
             <div className="space-y-2">

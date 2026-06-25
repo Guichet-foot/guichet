@@ -30,6 +30,11 @@ export const EXPENSE_CATEGORY_LABELS: Record<string, string> = {
   securite: "Sécurité",
   materiel: "Matériel",
   transport: "Transport",
+  restauration: "Restauration",
+  communication: "Communication",
+  location: "Location",
+  sante: "Santé",
+  prime: "Primes & Récompenses",
   autre: "Autre",
 };
 

@@ -2,13 +2,11 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import type { ExpenseCategory } from "@/lib/types";
-
 export async function createExpense(formData: {
   zoneId: string;
   matchId: string | null;
   label: string;
-  category: ExpenseCategory;
+  category: string;
   amount: number;
   expenseDate: string;
   notes: string;
