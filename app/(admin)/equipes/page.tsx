@@ -18,6 +18,34 @@ export const metadata = { title: "Équipes" };
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+function TeamColorSwatches({ colors }: { colors: string }) {
+  try {
+    const parsed = JSON.parse(colors);
+    const off = parsed.official || [];
+    const sub = parsed.substitute || [];
+    return (
+      <div className="flex items-center gap-2">
+        {off.length === 2 && (
+          <div
+            className="w-6 h-6 rounded border border-border shrink-0"
+            style={{ background: `linear-gradient(135deg, ${off[0]} 50%, ${off[1]} 50%)` }}
+            title="Officielle"
+          />
+        )}
+        {sub.length === 2 && (
+          <div
+            className="w-6 h-6 rounded border border-border shrink-0"
+            style={{ background: `linear-gradient(135deg, ${sub[0]} 50%, ${sub[1]} 50%)` }}
+            title="Substitution"
+          />
+        )}
+      </div>
+    );
+  } catch {
+    return <span className="text-sm">{colors}</span>;
+  }
+}
+
 export default async function EquipesPage() {
   const profile = await requireRole(["super_admin", "admin_zone"]);
   const supabase = await createClient();
@@ -95,7 +123,7 @@ export default async function EquipesPage() {
                     </TableCell>
                     <TableCell className="hidden sm:table-cell">
                       {team.colors ? (
-                        <span className="text-sm">{team.colors}</span>
+                        <TeamColorSwatches colors={team.colors} />
                       ) : (
                         "—"
                       )}

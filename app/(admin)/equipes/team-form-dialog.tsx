@@ -24,6 +24,79 @@ import { Plus, X, Loader2, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import type { UserRole } from "@/lib/types";
 
+interface TeamColors {
+  official: [string, string];
+  substitute: [string, string];
+}
+
+function parseColors(raw: string | null): TeamColors {
+  if (!raw) return { official: ["#FFFFFF", "#000000"], substitute: ["#000000", "#FFFFFF"] };
+  try {
+    const parsed = JSON.parse(raw);
+    return {
+      official: parsed.official || ["#FFFFFF", "#000000"],
+      substitute: parsed.substitute || ["#000000", "#FFFFFF"],
+    };
+  } catch {
+    return { official: ["#FFFFFF", "#000000"], substitute: ["#000000", "#FFFFFF"] };
+  }
+}
+
+function ColorPairPicker({
+  label,
+  color1,
+  color2,
+  onChange,
+}: {
+  label: string;
+  color1: string;
+  color2: string;
+  onChange: (c1: string, c2: string) => void;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <p className="text-xs font-medium text-muted-foreground">{label}</p>
+      <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 flex-1">
+          <div
+            className="w-8 h-8 rounded-lg border border-border shrink-0 cursor-pointer relative overflow-hidden"
+            style={{ backgroundColor: color1 }}
+          >
+            <input
+              type="color"
+              value={color1}
+              onChange={(e) => onChange(e.target.value, color2)}
+              className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+            />
+          </div>
+          <span className="text-xs text-muted-foreground">Couleur 1</span>
+        </div>
+        <div className="flex items-center gap-2 flex-1">
+          <div
+            className="w-8 h-8 rounded-lg border border-border shrink-0 cursor-pointer relative overflow-hidden"
+            style={{ backgroundColor: color2 }}
+          >
+            <input
+              type="color"
+              value={color2}
+              onChange={(e) => onChange(color1, e.target.value)}
+              className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+            />
+          </div>
+          <span className="text-xs text-muted-foreground">Couleur 2</span>
+        </div>
+        <div
+          className="w-12 h-8 rounded-lg border border-border shrink-0"
+          style={{
+            background: `linear-gradient(135deg, ${color1} 50%, ${color2} 50%)`,
+          }}
+          title="Aperçu"
+        />
+      </div>
+    </div>
+  );
+}
+
 interface TeamFormDialogProps {
   zoneId: string | null;
   userRole: UserRole;
@@ -56,7 +129,10 @@ export function TeamFormDialog({
   const [delegates, setDelegates] = useState<string[]>(
     editTeam?.delegates?.length ? editTeam.delegates : [""]
   );
-  const [colors, setColors] = useState(editTeam?.colors || "");
+
+  const initialColors = parseColors(editTeam?.colors || null);
+  const [officialColors, setOfficialColors] = useState<[string, string]>(initialColors.official);
+  const [substituteColors, setSubstituteColors] = useState<[string, string]>(initialColors.substitute);
 
   useEffect(() => {
     if (userRole === "super_admin") {
@@ -91,7 +167,8 @@ export function TeamFormDialog({
       setName("");
       setPresident("");
       setDelegates([""]);
-      setColors("");
+      setOfficialColors(["#FFFFFF", "#000000"]);
+      setSubstituteColors(["#000000", "#FFFFFF"]);
     }
   }
 
@@ -106,12 +183,17 @@ export function TeamFormDialog({
       return;
     }
 
+    const colorsJson = JSON.stringify({
+      official: officialColors,
+      substitute: substituteColors,
+    });
+
     if (editTeam) {
       const result = await updateTeam(editTeam.id, {
         name,
         president,
         delegates,
-        colors,
+        colors: colorsJson,
       });
       if (result.error) {
         toast.error(result.error);
@@ -125,7 +207,7 @@ export function TeamFormDialog({
         name,
         president,
         delegates,
-        colors,
+        colors: colorsJson,
       });
       if (result.error) {
         toast.error(result.error);
@@ -238,13 +320,19 @@ export function TeamFormDialog({
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="colors">Couleurs de l&apos;ASC</Label>
-            <Input
-              id="colors"
-              value={colors}
-              onChange={(e) => setColors(e.target.value)}
-              placeholder="Rouge et Blanc"
+          <div className="space-y-3">
+            <Label>Couleurs de l&apos;ASC</Label>
+            <ColorPairPicker
+              label="Tenue officielle"
+              color1={officialColors[0]}
+              color2={officialColors[1]}
+              onChange={(c1, c2) => setOfficialColors([c1, c2])}
+            />
+            <ColorPairPicker
+              label="Tenue de substitution"
+              color1={substituteColors[0]}
+              color2={substituteColors[1]}
+              onChange={(c1, c2) => setSubstituteColors([c1, c2])}
             />
           </div>
 
