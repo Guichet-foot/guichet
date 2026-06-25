@@ -20,7 +20,7 @@ export async function POST(request: Request) {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("role, zone_id, zone:zones(name)")
+    .select("role, zone_id, zone:zones!profiles_zone_id_fkey(name)")
     .eq("id", user.id)
     .single();
 

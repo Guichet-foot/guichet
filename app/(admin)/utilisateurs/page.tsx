@@ -33,7 +33,7 @@ export default async function UsersPage({
 
   const query = supabase
     .from("profiles")
-    .select("*, zone:zones(name)")
+    .select("*, zone:zones!profiles_zone_id_fkey(name)")
     .order("created_at", { ascending: false });
 
   if (effectiveZoneId) {

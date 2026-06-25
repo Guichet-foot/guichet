@@ -20,7 +20,7 @@ export async function getProfile(): Promise<Profile | null> {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("*, zone:zones(*)")
+    .select("*, zone:zones!profiles_zone_id_fkey(*)")
     .eq("id", user.id)
     .single();
 
