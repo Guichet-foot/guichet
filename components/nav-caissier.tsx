@@ -28,10 +28,19 @@ export function NavCaissier({ userName, userRole }: NavCaissierProps) {
   const links = userRole === "portier" ? portierLinks : caissierLinks;
 
   async function handleLogout() {
+    try {
+      const videoElements = document.querySelectorAll("video");
+      videoElements.forEach((video) => {
+        const stream = video.srcObject as MediaStream;
+        if (stream) {
+          stream.getTracks().forEach((track) => track.stop());
+        }
+      });
+    } catch {}
+
     const supabase = createClient();
     await supabase.auth.signOut();
-    router.push("/login");
-    router.refresh();
+    window.location.href = "/login";
   }
 
   return (
