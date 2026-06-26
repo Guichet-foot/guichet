@@ -9,6 +9,7 @@ import { formatFCFA, formatDateShort } from "@/lib/format";
 import { MATCH_STATUS_LABELS, MATCH_STATUS_COLORS } from "@/lib/constants";
 import { SalesChart } from "./sales-chart";
 import { RevenueDonut } from "./revenue-donut";
+import { DashboardFilters } from "./dashboard-filters";
 import { ZoneCardGrid } from "@/components/zone-card-grid";
 import { ZoneBackHeader } from "@/components/zone-back-header";
 
@@ -19,7 +20,7 @@ export const metadata = { title: "Tableau de bord" };
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ zone?: string }>;
+  searchParams: Promise<{ zone?: string; date?: string; year?: string; match?: string }>;
 }) {
   const profile = await requireRole(["super_admin", "admin_zone"]);
   const params = await searchParams;
@@ -199,10 +200,24 @@ export default async function DashboardPage({
     }));
   }
 
+  // Fetch all matches for filter dropdown
+  let allMatchesQuery = supabase
+    .from("matches")
+    .select("id, home_team, away_team")
+    .order("match_date", { ascending: false });
+  if (zoneFilter) allMatchesQuery = allMatchesQuery.eq("zone_id", zoneFilter);
+  const { data: allMatchesList } = await allMatchesQuery;
+  const filterMatches = (allMatchesList || []).map((m: any) => ({
+    id: m.id,
+    label: `${m.home_team} vs ${m.away_team}`,
+  }));
+
   return (
     <div className="space-y-6">
       {profile.role === "super_admin" && selectedZone && <ZoneBackHeader zoneName={selectedZone.name} />}
       <h1 className="text-2xl font-bold font-heading">Tableau de bord</h1>
+
+      <DashboardFilters matches={filterMatches} />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
