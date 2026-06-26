@@ -73,7 +73,7 @@ export default async function FinancesPage({
 
   return (
     <div className="space-y-6">
-      {selectedZone && <ZoneBackHeader zoneName={selectedZone.name} />}
+      {profile.role === "super_admin" && selectedZone && <ZoneBackHeader zoneName={selectedZone.name} />}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold font-heading">Finances</h1>

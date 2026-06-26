@@ -165,7 +165,7 @@ export default async function DashboardPage({
 
   return (
     <div className="space-y-6">
-      {selectedZone && <ZoneBackHeader zoneName={selectedZone.name} />}
+      {profile.role === "super_admin" && selectedZone && <ZoneBackHeader zoneName={selectedZone.name} />}
       <h1 className="text-2xl font-bold font-heading">Tableau de bord</h1>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
