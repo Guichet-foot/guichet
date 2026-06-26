@@ -65,7 +65,7 @@ export default async function MatchsPage({
   return (
     <div className="space-y-6">
       {profile.role === "super_admin" && selectedZone && <ZoneBackHeader zoneName={selectedZone.name} />}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold font-heading">Matchs</h1>
           <p className="text-muted-foreground">{matches?.length || 0} match(s)</p>
@@ -123,9 +123,7 @@ export default async function MatchsPage({
                       <TableCell className="hidden lg:table-cell text-right">{formatFCFA(stats.revenue)}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center gap-1 justify-end flex-wrap">
-                          <div className="hidden sm:flex gap-1">
-                            <MatchActionButtons matchId={match.id} status={match.status} venteActive={match.vente_active ?? false} homeTeam={match.home_team} awayTeam={match.away_team} />
-                          </div>
+                          <MatchActionButtons matchId={match.id} status={match.status} venteActive={match.vente_active ?? false} homeTeam={match.home_team} awayTeam={match.away_team} />
                           <Link href={buildZoneUrl(`/matchs/${match.id}`, params.zone)}>
                             <Button variant="ghost" size="sm"><Eye className="h-4 w-4" /></Button>
                           </Link>

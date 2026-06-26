@@ -72,9 +72,9 @@ export default async function FinancesPage({
   const balance = totalRevenue - totalExpenses;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 min-w-0">
       {profile.role === "super_admin" && selectedZone && <ZoneBackHeader zoneName={selectedZone.name} />}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold font-heading">Finances</h1>
           <p className="text-muted-foreground">Mois en cours</p>
