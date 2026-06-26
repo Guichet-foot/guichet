@@ -168,23 +168,23 @@ export default async function TournamentDetailPage({
             const groupMatches = (matches || []).filter((m: any) => m.group_id === group.id);
 
             return (
-              <div key={group.id} className="space-y-2">
-                <h2 className="text-lg font-bold font-heading bg-brand text-white px-4 py-2 rounded-lg">
+              <div key={group.id} className="space-y-3">
+                <h2 className="text-lg font-bold font-heading bg-brand text-white px-4 py-2 rounded-lg inline-block">
                   {group.name}
                 </h2>
 
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                  {/* LEFT: Classement */}
+                <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-4">
+                  {/* LEFT: Classement (smaller) */}
                   <Card>
                     <CardContent className="p-0">
                       <Table>
                         <TableHeader>
                           <TableRow className="bg-muted/50">
-                            <TableHead className="w-10 font-bold">Rang</TableHead>
+                            <TableHead className="w-8 font-bold">#</TableHead>
                             <TableHead className="font-bold">Équipe</TableHead>
-                            <TableHead className="text-center w-10 font-bold">MJ</TableHead>
-                            <TableHead className="text-center w-10 font-bold text-brand">Pts</TableHead>
-                            <TableHead className="text-center w-12 font-bold">Diff</TableHead>
+                            <TableHead className="text-center w-8 font-bold">MJ</TableHead>
+                            <TableHead className="text-center w-8 font-bold">Pts</TableHead>
+                            <TableHead className="text-center w-10 font-bold">Diff</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -195,17 +195,38 @@ export default async function TournamentDetailPage({
                               </TableCell>
                             </TableRow>
                           ) : (
-                            groupStandings.map((s, i) => (
-                              <TableRow key={s.teamId} className={i < 2 ? "bg-brand/5" : ""}>
-                                <TableCell className="font-bold text-muted-foreground">{i + 1}</TableCell>
-                                <TableCell className="font-semibold">{s.teamName}</TableCell>
-                                <TableCell className="text-center">{s.played}</TableCell>
-                                <TableCell className="text-center font-bold text-brand text-lg">{s.points}</TableCell>
-                                <TableCell className="text-center">
-                                  {s.goalDifference > 0 ? `+${s.goalDifference}` : s.goalDifference}
-                                </TableCell>
-                              </TableRow>
-                            ))
+                            groupStandings.map((s, i) => {
+                              const total = groupStandings.length;
+                              let rankColor = "";
+                              if (i === 0) rankColor = "bg-green-100";
+                              else if (i === 1) rankColor = "bg-green-50";
+                              else if (i >= total - 1 && total > 2) rankColor = "bg-red-50";
+                              else if (i >= total - 2 && total > 3) rankColor = "bg-orange-50";
+                              else rankColor = "bg-yellow-50";
+
+                              let rankBadge = "bg-green-600 text-white";
+                              if (i === 0) rankBadge = "bg-green-600 text-white";
+                              else if (i === 1) rankBadge = "bg-green-500 text-white";
+                              else if (i >= total - 1 && total > 2) rankBadge = "bg-red-500 text-white";
+                              else if (i >= total - 2 && total > 3) rankBadge = "bg-orange-400 text-white";
+                              else rankBadge = "bg-yellow-400 text-white";
+
+                              return (
+                                <TableRow key={s.teamId} className={rankColor}>
+                                  <TableCell>
+                                    <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold ${rankBadge}`}>
+                                      {i + 1}
+                                    </span>
+                                  </TableCell>
+                                  <TableCell className="font-semibold text-sm">{s.teamName}</TableCell>
+                                  <TableCell className="text-center text-sm">{s.played}</TableCell>
+                                  <TableCell className="text-center font-bold text-brand text-lg">{s.points}</TableCell>
+                                  <TableCell className="text-center text-sm">
+                                    {s.goalDifference > 0 ? `+${s.goalDifference}` : s.goalDifference}
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })
                           )}
                         </TableBody>
                       </Table>
