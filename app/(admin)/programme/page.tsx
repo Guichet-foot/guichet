@@ -60,12 +60,12 @@ export default async function ProgrammePage({
           {tournaments.map((t: any) => (
             <Card key={t.id}>
               <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
                     <h3 className="font-semibold text-lg">{t.name}</h3>
                     <p className="text-sm text-muted-foreground">Saison {t.season}</p>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <Badge variant="secondary" className={t.status === "en_cours" ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"}>
                       {t.status === "en_cours" ? "En cours" : "Terminé"}
                     </Badge>

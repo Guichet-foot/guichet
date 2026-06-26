@@ -125,7 +125,7 @@ export default async function FinancesPage({
 
       <Card>
         <CardHeader><CardTitle className="text-lg">Recettes par match</CardTitle></CardHeader>
-        <CardContent className="p-0">
+        <CardContent className="p-0 overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -157,11 +157,11 @@ export default async function FinancesPage({
 
       <Card>
         <CardHeader><CardTitle className="text-lg">Dépenses</CardTitle></CardHeader>
-        <CardContent className="p-0">
+        <CardContent className="p-0 overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Date</TableHead>
+                <TableHead className="hidden sm:table-cell">Date</TableHead>
                 <TableHead>Libellé</TableHead>
                 <TableHead className="hidden sm:table-cell">Catégorie</TableHead>
                 <TableHead className="hidden md:table-cell">Match</TableHead>
@@ -176,7 +176,7 @@ export default async function FinancesPage({
               ) : (
                 expenses.map((expense: any) => (
                   <TableRow key={expense.id}>
-                    <TableCell className="text-sm">{formatDate(expense.expense_date)}</TableCell>
+                    <TableCell className="hidden sm:table-cell text-sm">{formatDate(expense.expense_date)}</TableCell>
                     <TableCell className="font-medium">{expense.label}</TableCell>
                     <TableCell className="hidden sm:table-cell capitalize">{EXPENSE_CATEGORY_LABELS[expense.category] || expense.category}</TableCell>
                     <TableCell className="hidden md:table-cell">{expense.match ? `${expense.match.home_team} vs ${expense.match.away_team}` : "Global zone"}</TableCell>

@@ -176,7 +176,7 @@ export default async function TournamentDetailPage({
                 <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-4">
                   {/* LEFT: Classement (smaller) */}
                   <Card>
-                    <CardContent className="p-0">
+                    <CardContent className="p-0 overflow-x-auto">
                       <Table>
                         <TableHeader>
                           <TableRow className="bg-muted/50">
@@ -240,7 +240,7 @@ export default async function TournamentDetailPage({
                         Résultats des matchs
                       </CardTitle>
                     </CardHeader>
-                    <CardContent className="p-0">
+                    <CardContent className="p-0 overflow-x-auto">
                       <Table>
                         <TableHeader>
                           <TableRow className="bg-muted/50">

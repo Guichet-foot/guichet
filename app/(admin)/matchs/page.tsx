@@ -79,7 +79,7 @@ export default async function MatchsPage({
       </div>
 
       <Card>
-        <CardContent className="p-0">
+        <CardContent className="p-0 overflow-x-auto">
           {!matches || matches.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
               <Trophy className="h-12 w-12 mb-4" />
@@ -90,11 +90,11 @@ export default async function MatchsPage({
               <TableHeader>
                 <TableRow>
                   <TableHead>Match</TableHead>
-                  <TableHead className="hidden sm:table-cell">Date</TableHead>
-                  <TableHead>Statut</TableHead>
+                  <TableHead className="hidden md:table-cell">Date</TableHead>
+                  <TableHead className="hidden sm:table-cell">Statut</TableHead>
                   <TableHead className="text-center">Score</TableHead>
-                  <TableHead className="hidden md:table-cell text-right">Billets</TableHead>
-                  <TableHead className="hidden md:table-cell text-right">Recettes</TableHead>
+                  <TableHead className="hidden lg:table-cell text-right">Billets</TableHead>
+                  <TableHead className="hidden lg:table-cell text-right">Recettes</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -104,8 +104,8 @@ export default async function MatchsPage({
                   return (
                     <TableRow key={match.id}>
                       <TableCell className="font-medium">{match.home_team} vs {match.away_team}</TableCell>
-                      <TableCell className="hidden sm:table-cell text-sm">{formatDateShort(match.match_date)}</TableCell>
-                      <TableCell>
+                      <TableCell className="hidden md:table-cell text-sm">{formatDateShort(match.match_date)}</TableCell>
+                      <TableCell className="hidden sm:table-cell">
                         <Badge variant="secondary" className={MATCH_STATUS_COLORS[match.status]}>
                           {MATCH_STATUS_LABELS[match.status]}
                         </Badge>
@@ -119,11 +119,13 @@ export default async function MatchsPage({
                           <span className="text-muted-foreground text-xs">—</span>
                         )}
                       </TableCell>
-                      <TableCell className="hidden md:table-cell text-right">{stats.count}</TableCell>
-                      <TableCell className="hidden md:table-cell text-right">{formatFCFA(stats.revenue)}</TableCell>
+                      <TableCell className="hidden lg:table-cell text-right">{stats.count}</TableCell>
+                      <TableCell className="hidden lg:table-cell text-right">{formatFCFA(stats.revenue)}</TableCell>
                       <TableCell className="text-right">
-                        <div className="flex items-center gap-1 justify-end">
-                          <MatchActionButtons matchId={match.id} status={match.status} venteActive={match.vente_active ?? false} homeTeam={match.home_team} awayTeam={match.away_team} />
+                        <div className="flex items-center gap-1 justify-end flex-wrap">
+                          <div className="hidden sm:flex gap-1">
+                            <MatchActionButtons matchId={match.id} status={match.status} venteActive={match.vente_active ?? false} homeTeam={match.home_team} awayTeam={match.away_team} />
+                          </div>
                           <Link href={buildZoneUrl(`/matchs/${match.id}`, params.zone)}>
                             <Button variant="ghost" size="sm"><Eye className="h-4 w-4" /></Button>
                           </Link>
