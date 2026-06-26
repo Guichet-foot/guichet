@@ -5,6 +5,9 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { CategoryManager } from "./category-manager";
+import { ApplyTemplatesButton } from "./apply-templates-button";
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 export default async function BilletsPage({
   params,
@@ -17,7 +20,7 @@ export default async function BilletsPage({
 
   const { data: match } = await supabase
     .from("matches")
-    .select("id, home_team, away_team")
+    .select("id, home_team, away_team, zone_id")
     .eq("id", id)
     .single();
 
@@ -50,6 +53,13 @@ export default async function BilletsPage({
     }
   }
 
+  // Fetch ticket templates for the zone
+  const { data: templates } = await supabase
+    .from("ticket_templates")
+    .select("*")
+    .eq("zone_id", match.zone_id)
+    .order("price");
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
@@ -68,6 +78,15 @@ export default async function BilletsPage({
           </p>
         </div>
       </div>
+
+      {/* Apply templates button */}
+      {templates && templates.length > 0 && (
+        <ApplyTemplatesButton
+          matchId={id}
+          templates={templates as any[]}
+          hasExistingCategories={(categories?.length || 0) > 0}
+        />
+      )}
 
       <CategoryManager
         matchId={id}

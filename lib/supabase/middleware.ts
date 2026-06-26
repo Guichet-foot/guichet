@@ -111,6 +111,7 @@ export async function updateSession(request: NextRequest) {
     "/programme",
     "/utilisateurs",
     "/zones",
+    "/billets",
     "/matchs",
     "/finances",
     "/rapports",

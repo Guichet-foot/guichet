@@ -1,0 +1,151 @@
+"use client";
+
+import { useState } from "react";
+import { createTicketTemplate, updateTicketTemplate } from "@/lib/actions/ticket-template-actions";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Plus, Loader2 } from "lucide-react";
+import { toast } from "sonner";
+
+interface TicketTemplateFormProps {
+  zoneId: string;
+  editTemplate?: {
+    id: string;
+    name: string;
+    price: number;
+    default_quantity: number;
+    color: string;
+  };
+  trigger?: React.ReactNode;
+}
+
+export function TicketTemplateForm({ zoneId, editTemplate, trigger }: TicketTemplateFormProps) {
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [name, setName] = useState(editTemplate?.name || "");
+  const [price, setPrice] = useState(editTemplate?.price?.toString() || "");
+  const [quantity, setQuantity] = useState(editTemplate?.default_quantity?.toString() || "100");
+  const [color, setColor] = useState(editTemplate?.color || "#0D5C3F");
+
+  function resetForm() {
+    if (!editTemplate) {
+      setName("");
+      setPrice("");
+      setQuantity("100");
+      setColor("#0D5C3F");
+    }
+  }
+
+  async function handleSubmit() {
+    if (!name.trim() || !price) {
+      toast.error("Remplissez le nom et le prix");
+      return;
+    }
+    setLoading(true);
+
+    if (editTemplate) {
+      const result = await updateTicketTemplate(editTemplate.id, {
+        name,
+        price: parseInt(price),
+        defaultQuantity: parseInt(quantity),
+        color,
+      });
+      if (result.error) toast.error(result.error);
+      else { toast.success("Modèle modifié"); setOpen(false); }
+    } else {
+      const result = await createTicketTemplate({
+        zoneId,
+        name,
+        price: parseInt(price),
+        defaultQuantity: parseInt(quantity),
+        color,
+      });
+      if (result.error) toast.error(result.error);
+      else { toast.success("Modèle créé"); resetForm(); setOpen(false); }
+    }
+    setLoading(false);
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      {trigger ? (
+        <DialogTrigger render={<span />}>{trigger}</DialogTrigger>
+      ) : (
+        <DialogTrigger render={<Button className="bg-brand hover:bg-brand/90" />}>
+          <Plus className="h-4 w-4 mr-2" />
+          Nouveau billet
+        </DialogTrigger>
+      )}
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{editTemplate ? "Modifier le billet" : "Nouveau modèle de billet"}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label>Nom du billet</Label>
+            <Input value={name} onChange={(e) => setName(e.target.value)} required placeholder="Tribune, Pelouse, VIP..." />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Prix (FCFA)</Label>
+              <Input type="number" min="0" step="100" value={price} onChange={(e) => setPrice(e.target.value)} required placeholder="1500" />
+            </div>
+            <div className="space-y-2">
+              <Label>Quantité par défaut</Label>
+              <Input type="number" min="1" value={quantity} onChange={(e) => setQuantity(e.target.value)} placeholder="100" />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Couleur du billet</Label>
+            <div className="flex items-center gap-3">
+              <div
+                className="w-10 h-10 rounded-lg border border-border cursor-pointer relative overflow-hidden shrink-0"
+                style={{ backgroundColor: color }}
+              >
+                <input
+                  type="color"
+                  value={color}
+                  onChange={(e) => setColor(e.target.value)}
+                  className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                />
+              </div>
+              <Input value={color} onChange={(e) => setColor(e.target.value)} className="font-mono text-sm" />
+            </div>
+          </div>
+
+          {/* Preview */}
+          <div className="border rounded-xl overflow-hidden">
+            <div className="h-2" style={{ backgroundColor: color }} />
+            <div className="p-4 text-center space-y-1">
+              <p className="text-xs text-muted-foreground uppercase">Aperçu</p>
+              <p className="font-bold text-lg">{name || "Nom du billet"}</p>
+              <p className="text-2xl font-bold" style={{ color }}>
+                {price ? new Intl.NumberFormat("fr-FR").format(parseInt(price)) + " FCFA" : "— FCFA"}
+              </p>
+              <p className="text-xs text-muted-foreground">Qté : {quantity || "—"}</p>
+            </div>
+          </div>
+
+          <Button
+            type="button"
+            onClick={handleSubmit}
+            disabled={loading}
+            className="w-full bg-brand hover:bg-brand/90"
+          >
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : editTemplate ? "Modifier" : "Créer le billet"}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}

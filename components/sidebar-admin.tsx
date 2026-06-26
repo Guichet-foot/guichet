@@ -17,6 +17,7 @@ import {
   Shield,
   CalendarDays,
   Settings,
+  Ticket,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
@@ -32,6 +33,7 @@ const adminLinks = [
   { href: "/dashboard", label: "Tableau de bord", icon: LayoutDashboard },
   { href: "/equipes", label: "Équipes", icon: Shield },
   { href: "/programme", label: "Programme", icon: CalendarDays },
+  { href: "/billets", label: "Billets", icon: Ticket },
   { href: "/matchs", label: "Matchs", icon: Trophy },
   { href: "/finances", label: "Finances", icon: Wallet },
   { href: "/rapports", label: "Rapports", icon: FileText },
