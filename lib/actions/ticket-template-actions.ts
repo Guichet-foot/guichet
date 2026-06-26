@@ -9,6 +9,7 @@ export async function createTicketTemplate(formData: {
   price: number;
   defaultQuantity: number;
   color: string;
+  description?: string;
 }) {
   const supabase = await createClient();
   const { error } = await supabase.from("ticket_templates").insert({
@@ -17,6 +18,7 @@ export async function createTicketTemplate(formData: {
     price: formData.price,
     default_quantity: formData.defaultQuantity,
     color: formData.color,
+    description: formData.description || null,
   });
   if (error) return { error: error.message };
   revalidatePath("/billets");
@@ -30,6 +32,7 @@ export async function updateTicketTemplate(
     price: number;
     defaultQuantity: number;
     color: string;
+    description?: string;
   }
 ) {
   const supabase = await createClient();
@@ -40,6 +43,7 @@ export async function updateTicketTemplate(
       price: formData.price,
       default_quantity: formData.defaultQuantity,
       color: formData.color,
+      description: formData.description || null,
     })
     .eq("id", id);
   if (error) return { error: error.message };

@@ -14,6 +14,7 @@ interface TicketTemplateActionsProps {
     price: number;
     default_quantity: number;
     color: string;
+    description?: string;
   };
   zoneId: string;
 }

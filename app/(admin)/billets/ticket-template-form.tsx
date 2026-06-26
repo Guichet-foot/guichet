@@ -23,6 +23,7 @@ interface TicketTemplateFormProps {
     price: number;
     default_quantity: number;
     color: string;
+    description?: string;
   };
   trigger?: React.ReactNode;
 }
@@ -31,6 +32,7 @@ export function TicketTemplateForm({ zoneId, editTemplate, trigger }: TicketTemp
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [name, setName] = useState(editTemplate?.name || "");
+  const [description, setDescription] = useState(editTemplate?.description || "");
   const [price, setPrice] = useState(editTemplate?.price?.toString() || "");
   const [quantity, setQuantity] = useState(editTemplate?.default_quantity?.toString() || "100");
   const [color, setColor] = useState(editTemplate?.color || "#0D5C3F");
@@ -38,6 +40,7 @@ export function TicketTemplateForm({ zoneId, editTemplate, trigger }: TicketTemp
   function resetForm() {
     if (!editTemplate) {
       setName("");
+      setDescription("");
       setPrice("");
       setQuantity("100");
       setColor("#0D5C3F");
@@ -57,9 +60,10 @@ export function TicketTemplateForm({ zoneId, editTemplate, trigger }: TicketTemp
         price: parseInt(price),
         defaultQuantity: parseInt(quantity),
         color,
+        description,
       });
       if (result.error) toast.error(result.error);
-      else { toast.success("Modèle modifié"); setOpen(false); }
+      else { toast.success("Catégorie modifiée"); setOpen(false); }
     } else {
       const result = await createTicketTemplate({
         zoneId,
@@ -67,9 +71,10 @@ export function TicketTemplateForm({ zoneId, editTemplate, trigger }: TicketTemp
         price: parseInt(price),
         defaultQuantity: parseInt(quantity),
         color,
+        description,
       });
       if (result.error) toast.error(result.error);
-      else { toast.success("Modèle créé"); resetForm(); setOpen(false); }
+      else { toast.success("Catégorie créée"); resetForm(); setOpen(false); }
     }
     setLoading(false);
   }
@@ -81,23 +86,28 @@ export function TicketTemplateForm({ zoneId, editTemplate, trigger }: TicketTemp
       ) : (
         <DialogTrigger render={<Button className="bg-brand hover:bg-brand/90" />}>
           <Plus className="h-4 w-4 mr-2" />
-          Nouveau billet
+          Ajouter une catégorie
         </DialogTrigger>
       )}
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{editTemplate ? "Modifier le billet" : "Nouveau modèle de billet"}</DialogTitle>
+          <DialogTitle>{editTemplate ? "Modifier la catégorie" : "Nouvelle catégorie de billet"}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label>Nom du billet</Label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} required placeholder="Tribune, Pelouse, VIP..." />
+            <Label>Nom de la catégorie</Label>
+            <Input value={name} onChange={(e) => setName(e.target.value)} required placeholder="Tribune Centrale, VIP, Pelouse..." />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Description (optionnel)</Label>
+            <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Meilleure vue du match, Accès salon VIP..." />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Prix (FCFA)</Label>
-              <Input type="number" min="0" step="100" value={price} onChange={(e) => setPrice(e.target.value)} required placeholder="1500" />
+              <Input type="number" min="0" step="100" value={price} onChange={(e) => setPrice(e.target.value)} required placeholder="5000" />
             </div>
             <div className="space-y-2">
               <Label>Quantité par défaut</Label>
@@ -106,7 +116,7 @@ export function TicketTemplateForm({ zoneId, editTemplate, trigger }: TicketTemp
           </div>
 
           <div className="space-y-2">
-            <Label>Couleur du billet</Label>
+            <Label>Couleur</Label>
             <div className="flex items-center gap-3">
               <div
                 className="w-10 h-10 rounded-lg border border-border cursor-pointer relative overflow-hidden shrink-0"
@@ -123,26 +133,13 @@ export function TicketTemplateForm({ zoneId, editTemplate, trigger }: TicketTemp
             </div>
           </div>
 
-          {/* Preview */}
-          <div className="border rounded-xl overflow-hidden">
-            <div className="h-2" style={{ backgroundColor: color }} />
-            <div className="p-4 text-center space-y-1">
-              <p className="text-xs text-muted-foreground uppercase">Aperçu</p>
-              <p className="font-bold text-lg">{name || "Nom du billet"}</p>
-              <p className="text-2xl font-bold" style={{ color }}>
-                {price ? new Intl.NumberFormat("fr-FR").format(parseInt(price)) + " FCFA" : "— FCFA"}
-              </p>
-              <p className="text-xs text-muted-foreground">Qté : {quantity || "—"}</p>
-            </div>
-          </div>
-
           <Button
             type="button"
             onClick={handleSubmit}
             disabled={loading}
             className="w-full bg-brand hover:bg-brand/90"
           >
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : editTemplate ? "Modifier" : "Créer le billet"}
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : editTemplate ? "Modifier" : "Créer la catégorie"}
           </Button>
         </div>
       </DialogContent>
