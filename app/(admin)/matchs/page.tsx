@@ -11,6 +11,7 @@ import { MATCH_STATUS_LABELS, MATCH_STATUS_COLORS } from "@/lib/constants";
 import { formatDateShort, formatFCFA } from "@/lib/format";
 import { buildZoneUrl } from "@/lib/zone-utils";
 import { MatchActionButtons } from "./match-action-buttons";
+import { MatchMobileActions } from "./match-mobile-actions";
 import { ZoneCardGrid } from "@/components/zone-card-grid";
 import { ZoneBackHeader } from "@/components/zone-back-header";
 
@@ -122,11 +123,20 @@ export default async function MatchsPage({
                       <TableCell className="hidden lg:table-cell text-right">{stats.count}</TableCell>
                       <TableCell className="hidden lg:table-cell text-right">{formatFCFA(stats.revenue)}</TableCell>
                       <TableCell className="text-right">
-                        <div className="flex items-center gap-1 justify-end flex-wrap">
+                        {/* Desktop: inline buttons */}
+                        <div className="hidden sm:flex items-center gap-1 justify-end">
                           <MatchActionButtons matchId={match.id} status={match.status} venteActive={match.vente_active ?? false} homeTeam={match.home_team} awayTeam={match.away_team} />
                           <Link href={buildZoneUrl(`/matchs/${match.id}`, params.zone)}>
                             <Button variant="ghost" size="sm"><Eye className="h-4 w-4" /></Button>
                           </Link>
+                        </div>
+                        {/* Mobile: single button → popup */}
+                        <div className="sm:hidden">
+                          <MatchMobileActions
+                            match={{ id: match.id, home_team: match.home_team, away_team: match.away_team, venue: match.venue || "", match_date: match.match_date, status: match.status, vente_active: match.vente_active ?? false, home_score: match.home_score, away_score: match.away_score }}
+                            stats={stats}
+                            detailUrl={buildZoneUrl(`/matchs/${match.id}`, params.zone)}
+                          />
                         </div>
                       </TableCell>
                     </TableRow>
