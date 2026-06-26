@@ -8,6 +8,7 @@ import { Banknote, Ticket, Trophy, TrendingUp } from "lucide-react";
 import { formatFCFA, formatDateShort } from "@/lib/format";
 import { MATCH_STATUS_LABELS, MATCH_STATUS_COLORS } from "@/lib/constants";
 import { SalesChart } from "./sales-chart";
+import { RevenueDonut } from "./revenue-donut";
 import { ZoneCardGrid } from "@/components/zone-card-grid";
 import { ZoneBackHeader } from "@/components/zone-back-header";
 
@@ -163,6 +164,41 @@ export default async function DashboardPage({
 
   const { data: lastExpenses } = await lastExpensesQuery;
 
+  // Last 5 terminated matches with revenue
+  let last5Query = supabase
+    .from("matches")
+    .select("id, home_team, away_team, match_date")
+    .eq("status", "termine")
+    .order("match_date", { ascending: false })
+    .limit(5);
+
+  if (zoneFilter) last5Query = last5Query.eq("zone_id", zoneFilter);
+
+  const { data: last5Matches } = await last5Query;
+
+  const last5MatchIds = last5Matches?.map((m: any) => m.id) || [];
+  let last5Revenue: { id: string; teams: string; date: string; revenue: number }[] = [];
+
+  if (last5MatchIds.length > 0) {
+    const { data: l5Tickets } = (await supabase
+      .from("tickets")
+      .select("match_id, price")
+      .in("match_id", last5MatchIds)
+      .neq("status", "annule")) as { data: any[] | null };
+
+    const revMap: Record<string, number> = {};
+    l5Tickets?.forEach((t: any) => {
+      revMap[t.match_id] = (revMap[t.match_id] || 0) + t.price;
+    });
+
+    last5Revenue = (last5Matches || []).map((m: any) => ({
+      id: m.id,
+      teams: `${m.home_team} vs ${m.away_team}`,
+      date: m.match_date,
+      revenue: revMap[m.id] || 0,
+    }));
+  }
+
   return (
     <div className="space-y-6">
       {profile.role === "super_admin" && selectedZone && <ZoneBackHeader zoneName={selectedZone.name} />}
@@ -221,6 +257,27 @@ export default async function DashboardPage({
         <CardHeader><CardTitle className="text-lg">Ventes des 7 derniers jours</CardTitle></CardHeader>
         <CardContent><SalesChart data={chartData} /></CardContent>
       </Card>
+
+      {last5Revenue.length > 0 && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-brand/10 flex items-center justify-center">
+                <svg className="h-5 w-5 text-brand" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
+                </svg>
+              </div>
+              <div>
+                <CardTitle className="text-lg">Recettes — 5 derniers matchs</CardTitle>
+                <p className="text-sm text-muted-foreground">Vue d&apos;ensemble des recettes générées</p>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <RevenueDonut matches={last5Revenue} />
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
