@@ -94,7 +94,7 @@ const styles = StyleSheet.create({
 });
 
 function formatAmount(amount: number) {
-  return new Intl.NumberFormat("fr-FR").format(amount) + " FCFA";
+  return amount.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ") + " FCFA";
 }
 
 interface ReportData {
