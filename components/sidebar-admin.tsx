@@ -18,6 +18,7 @@ import {
   CalendarDays,
   Settings,
   Ticket,
+  User,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
@@ -49,6 +50,7 @@ export function SidebarAdmin({ userName, userRole, zoneName }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
 
   const links =
     userRole === "super_admin"
@@ -58,20 +60,70 @@ export function SidebarAdmin({ userName, userRole, zoneName }: SidebarProps) {
   async function handleLogout() {
     const supabase = createClient();
     await supabase.auth.signOut();
-    router.push("/login");
-    router.refresh();
+    window.location.href = "/login";
   }
 
   return (
     <>
-      <button
-        onClick={() => setOpen(true)}
-        className="fixed top-4 left-4 z-50 lg:hidden bg-brand text-white p-2 rounded-lg"
-        aria-label="Menu"
-      >
-        <Menu className="h-6 w-6" />
-      </button>
+      {/* Mobile/Tablet top header bar */}
+      <header className="fixed top-0 left-0 right-0 z-40 lg:hidden">
+        <div className="mx-3 mt-2 flex items-center justify-between bg-white/80 backdrop-blur-xl border border-brand/10 rounded-2xl px-3 py-2 shadow-sm">
+          <div className="flex items-center gap-2">
+            <Image
+              src="/login-logo.png"
+              alt="Guichet Foot"
+              width={140}
+              height={35}
+              className="h-9 w-auto"
+              priority
+            />
+          </div>
+          <div className="flex items-center gap-1">
+            {/* Profile button — tablet+ */}
+            <button
+              onClick={() => setProfileOpen(!profileOpen)}
+              className="hidden sm:flex items-center justify-center w-9 h-9 rounded-xl bg-brand/5 text-brand hover:bg-brand/10 transition-colors"
+              aria-label="Profil"
+            >
+              <User className="h-5 w-5" />
+            </button>
+            {/* Menu toggle */}
+            <button
+              onClick={() => setOpen(true)}
+              className="flex items-center justify-center w-9 h-9 rounded-xl bg-brand/5 text-brand hover:bg-brand/10 transition-colors"
+              aria-label="Menu"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
 
+        {/* Profile dropdown — tablet */}
+        {profileOpen && (
+          <>
+            <div className="fixed inset-0 z-30" onClick={() => setProfileOpen(false)} />
+            <div className="absolute right-3 top-16 z-40 bg-white rounded-xl shadow-lg border p-4 w-56">
+              <div className="mb-3">
+                <p className="font-semibold text-sm">{userName}</p>
+                <p className="text-xs text-muted-foreground capitalize">{userRole.replace("_", " ")}</p>
+                {zoneName && <p className="text-xs text-muted-foreground">{zoneName}</p>}
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleLogout}
+                className="w-full justify-start text-danger border-danger"
+              >
+                <LogOut className="h-4 w-4 mr-2" />
+                Déconnexion
+              </Button>
+            </div>
+          </>
+        )}
+      </header>
+
+      {/* Sidebar overlay */}
       {open && (
         <div
           className="fixed inset-0 bg-black/50 z-40 lg:hidden"
@@ -79,6 +131,7 @@ export function SidebarAdmin({ userName, userRole, zoneName }: SidebarProps) {
         />
       )}
 
+      {/* Sidebar */}
       <aside
         className={`fixed inset-y-0 left-0 z-50 w-64 bg-brand text-white transform transition-transform duration-200 lg:translate-x-0 lg:sticky lg:top-0 lg:h-screen ${
           open ? "translate-x-0" : "-translate-x-full"
