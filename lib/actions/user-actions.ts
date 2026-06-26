@@ -107,3 +107,60 @@ export async function toggleUserActive(userId: string, active: boolean) {
   revalidatePath("/utilisateurs");
   return { success: true };
 }
+
+export async function updateUserInfo(userId: string, formData: {
+  fullName: string;
+  phone: string;
+  role: string;
+}) {
+  const adminClient = await createAdminClient();
+
+  const { error } = await adminClient
+    .from("profiles")
+    .update({
+      full_name: formData.fullName,
+      phone: formData.phone || null,
+      role: formData.role,
+    })
+    .eq("id", userId);
+
+  if (error) return { error: error.message };
+
+  revalidatePath("/utilisateurs");
+  return { success: true };
+}
+
+export async function resetUserPassword(userId: string) {
+  const adminClient = await createAdminClient();
+
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+  let newPassword = "";
+  for (let i = 0; i < 8; i++) {
+    newPassword += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+
+  const { error } = await adminClient.auth.admin.updateUserById(userId, {
+    password: newPassword,
+  });
+
+  if (error) return { error: error.message };
+
+  return { password: newPassword };
+}
+
+export async function deleteUser(userId: string) {
+  const adminClient = await createAdminClient();
+
+  const { error: profileError } = await adminClient
+    .from("profiles")
+    .delete()
+    .eq("id", userId);
+
+  if (profileError) return { error: profileError.message };
+
+  const { error: authError } = await adminClient.auth.admin.deleteUser(userId);
+  if (authError) return { error: authError.message };
+
+  revalidatePath("/utilisateurs");
+  return { success: true };
+}

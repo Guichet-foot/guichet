@@ -9,7 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Plus, Users } from "lucide-react";
 import { ROLE_LABELS, ROLE_COLORS } from "@/lib/constants";
 import { buildZoneUrl } from "@/lib/zone-utils";
-import { ToggleActiveButton } from "./toggle-active-button";
+import { UserActions } from "./user-actions";
 import { ZoneCardGrid } from "@/components/zone-card-grid";
 import { ZoneBackHeader } from "@/components/zone-back-header";
 
@@ -90,9 +90,11 @@ export default async function UsersPage({
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                      {user.id !== profile.id && (
-                        <ToggleActiveButton userId={user.id} active={user.active} />
-                      )}
+                      <UserActions
+                        user={{ id: user.id, full_name: user.full_name, phone: user.phone, role: user.role, active: user.active }}
+                        currentUserId={profile.id}
+                        currentUserRole={profile.role}
+                      />
                     </TableCell>
                   </TableRow>
                 ))}
