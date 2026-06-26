@@ -35,12 +35,20 @@ export async function createMatch(formData: {
   return { success: true };
 }
 
-export async function updateMatchStatus(matchId: string, status: MatchStatus) {
+export async function updateMatchStatus(
+  matchId: string,
+  status: MatchStatus,
+  scores?: { homeScore: number; awayScore: number }
+) {
   const supabase = await createClient();
 
   const updateData: Record<string, unknown> = { status };
   if (status === "termine" || status === "annule") {
     updateData.vente_active = false;
+  }
+  if (scores) {
+    updateData.home_score = scores.homeScore;
+    updateData.away_score = scores.awayScore;
   }
 
   const { error } = await supabase

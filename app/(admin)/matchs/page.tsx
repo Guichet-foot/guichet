@@ -92,7 +92,7 @@ export default async function MatchsPage({
                   <TableHead>Match</TableHead>
                   <TableHead className="hidden sm:table-cell">Date</TableHead>
                   <TableHead>Statut</TableHead>
-                  <TableHead className="hidden sm:table-cell">Vente</TableHead>
+                  <TableHead className="text-center">Score</TableHead>
                   <TableHead className="hidden md:table-cell text-right">Billets</TableHead>
                   <TableHead className="hidden md:table-cell text-right">Recettes</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -110,13 +110,13 @@ export default async function MatchsPage({
                           {MATCH_STATUS_LABELS[match.status]}
                         </Badge>
                       </TableCell>
-                      <TableCell className="hidden sm:table-cell">
-                        {match.status === "termine" || match.status === "annule" ? (
-                          <span className="text-xs text-muted-foreground">—</span>
+                      <TableCell className="text-center">
+                        {match.status === "termine" && match.home_score !== null ? (
+                          <span className="inline-block bg-brand text-white text-xs font-bold px-2 py-0.5 rounded">
+                            {match.home_score} - {match.away_score}
+                          </span>
                         ) : (
-                          <Badge variant="secondary" className={match.vente_active ? "bg-green-100 text-green-800" : "bg-orange-100 text-orange-800"}>
-                            {match.vente_active ? "Ouverte" : "Fermée"}
-                          </Badge>
+                          <span className="text-muted-foreground text-xs">—</span>
                         )}
                       </TableCell>
                       <TableCell className="hidden md:table-cell text-right">{stats.count}</TableCell>

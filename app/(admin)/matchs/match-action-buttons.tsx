@@ -49,7 +49,10 @@ export function MatchActionButtons({ matchId, status, venteActive, homeTeam, awa
     }
     setLoading("terminer");
 
-    const result = await updateMatchStatus(matchId, "termine");
+    const result = await updateMatchStatus(matchId, "termine", {
+      homeScore: parseInt(homeScore),
+      awayScore: parseInt(awayScore),
+    });
     if (result.error) {
       toast.error(result.error);
       setLoading(null);

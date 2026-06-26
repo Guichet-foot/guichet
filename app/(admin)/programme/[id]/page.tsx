@@ -221,15 +221,16 @@ export default async function TournamentDetailPage({
                         <TableHeader>
                           <TableRow className="bg-muted/50">
                             <TableHead className="w-8 text-center font-bold">N°</TableHead>
-                            <TableHead className="font-bold">Équipes</TableHead>
+                            <TableHead className="text-right font-bold">Domicile</TableHead>
                             <TableHead className="text-center w-16 font-bold">Score</TableHead>
+                            <TableHead className="font-bold">Visiteur</TableHead>
                             <TableHead className="hidden sm:table-cell font-bold">Date</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {groupMatches.length === 0 ? (
                             <TableRow>
-                              <TableCell colSpan={4} className="text-center text-muted-foreground py-4">
+                              <TableCell colSpan={5} className="text-center text-muted-foreground py-4">
                                 Aucun match
                               </TableCell>
                             </TableRow>
@@ -237,11 +238,7 @@ export default async function TournamentDetailPage({
                             groupMatches.map((m: any, i: number) => (
                               <TableRow key={m.id}>
                                 <TableCell className="text-center text-muted-foreground text-xs">{i + 1}</TableCell>
-                                <TableCell className="text-sm">
-                                  <span className="font-semibold">{m.home_team?.name}</span>
-                                  <span className="text-muted-foreground mx-1">vs</span>
-                                  <span className="font-semibold">{m.away_team?.name}</span>
-                                </TableCell>
+                                <TableCell className="text-right text-sm font-semibold">{m.home_team?.name}</TableCell>
                                 <TableCell className="text-center">
                                   {m.status === "termine" ? (
                                     <span className="inline-block bg-brand text-white text-xs font-bold px-2 py-0.5 rounded">
@@ -251,6 +248,7 @@ export default async function TournamentDetailPage({
                                     <span className="text-muted-foreground text-xs">—</span>
                                   )}
                                 </TableCell>
+                                <TableCell className="text-sm font-semibold">{m.away_team?.name}</TableCell>
                                 <TableCell className="hidden sm:table-cell text-xs text-muted-foreground">
                                   {m.match_date ? formatDateShort(m.match_date) : "—"}
                                 </TableCell>
