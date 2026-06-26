@@ -78,43 +78,73 @@ export async function removeTeamFromGroup(id: string, tournamentId: string) {
   return { success: true };
 }
 
-export async function generateGroupMatches(
-  tournamentId: string,
-  groupId: string,
-  teamIds: string[]
-) {
+export async function createTournamentMatch(formData: {
+  tournamentId: string;
+  groupId: string;
+  homeTeamId: string;
+  awayTeamId: string;
+  journee: number;
+  matchDate: string;
+  venue: string;
+  zoneId: string;
+}) {
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  // Generate round-robin matches
-  const matches: {
-    tournament_id: string;
-    group_id: string;
-    home_team_id: string;
-    away_team_id: string;
-    journee: number;
-  }[] = [];
+  if (!user) return { error: "Non authentifié" };
 
-  let journee = 1;
-  for (let i = 0; i < teamIds.length; i++) {
-    for (let j = i + 1; j < teamIds.length; j++) {
-      matches.push({
-        tournament_id: tournamentId,
-        group_id: groupId,
-        home_team_id: teamIds[i],
-        away_team_id: teamIds[j],
-        journee,
-      });
-      journee++;
-    }
-  }
+  // Get team names for the billetterie match
+  const { data: homeTeam } = await supabase
+    .from("teams")
+    .select("name")
+    .eq("id", formData.homeTeamId)
+    .single();
 
-  if (matches.length === 0) return { error: "Pas assez d'équipes" };
+  const { data: awayTeam } = await supabase
+    .from("teams")
+    .select("name")
+    .eq("id", formData.awayTeamId)
+    .single();
 
-  const { error } = await supabase.from("tournament_matches").insert(matches);
-  if (error) return { error: error.message };
+  if (!homeTeam || !awayTeam) return { error: "Équipe introuvable" };
 
-  revalidatePath(`/programme/${tournamentId}`);
-  return { success: true, count: matches.length };
+  // 1. Create match in billetterie (matches table)
+  const { data: billetterieMatch, error: matchError } = await supabase
+    .from("matches")
+    .insert({
+      zone_id: formData.zoneId,
+      home_team: homeTeam.name,
+      away_team: awayTeam.name,
+      venue: formData.venue,
+      match_date: formData.matchDate,
+      created_by: user.id,
+    })
+    .select("id")
+    .single();
+
+  if (matchError) return { error: matchError.message };
+
+  // 2. Create match in tournament (tournament_matches table) linked to billetterie
+  const { error: tmError } = await supabase
+    .from("tournament_matches")
+    .insert({
+      tournament_id: formData.tournamentId,
+      group_id: formData.groupId,
+      home_team_id: formData.homeTeamId,
+      away_team_id: formData.awayTeamId,
+      journee: formData.journee,
+      match_date: formData.matchDate,
+      venue: formData.venue,
+      match_id: billetterieMatch.id,
+    });
+
+  if (tmError) return { error: tmError.message };
+
+  revalidatePath(`/programme/${formData.tournamentId}`);
+  revalidatePath("/matchs");
+  return { success: true };
 }
 
 export async function updateMatchResult(
@@ -124,31 +154,69 @@ export async function updateMatchResult(
   tournamentId: string
 ) {
   const supabase = await createClient();
-  const { error } = await supabase
+
+  // Update tournament_match
+  const { data: tm, error } = await supabase
     .from("tournament_matches")
     .update({
       home_score: homeScore,
       away_score: awayScore,
       status: "termine",
     })
-    .eq("id", matchId);
+    .eq("id", matchId)
+    .select("match_id")
+    .single();
 
   if (error) return { error: error.message };
+
+  // Also update the linked billetterie match if it exists
+  if (tm?.match_id) {
+    await supabase
+      .from("matches")
+      .update({
+        status: "termine",
+        vente_active: false,
+        home_score: homeScore,
+        away_score: awayScore,
+      })
+      .eq("id", tm.match_id);
+  }
+
   revalidatePath(`/programme/${tournamentId}`);
+  revalidatePath("/matchs");
   return { success: true };
 }
 
-export async function updateTournamentMatch(
-  matchId: string,
-  data: { match_date?: string; venue?: string },
-  tournamentId: string
-) {
+export async function deleteTournamentMatch(matchId: string, tournamentId: string) {
   const supabase = await createClient();
+
+  // Get linked match_id before deleting
+  const { data: tm } = await supabase
+    .from("tournament_matches")
+    .select("match_id")
+    .eq("id", matchId)
+    .single();
+
   const { error } = await supabase
     .from("tournament_matches")
-    .update(data)
+    .delete()
     .eq("id", matchId);
+
   if (error) return { error: error.message };
+
+  // Also delete the linked billetterie match if no tickets sold
+  if (tm?.match_id) {
+    const { count } = await supabase
+      .from("tickets")
+      .select("*", { count: "exact", head: true })
+      .eq("match_id", tm.match_id);
+
+    if (!count || count === 0) {
+      await supabase.from("matches").delete().eq("id", tm.match_id);
+    }
+  }
+
   revalidatePath(`/programme/${tournamentId}`);
+  revalidatePath("/matchs");
   return { success: true };
 }

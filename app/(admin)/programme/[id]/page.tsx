@@ -13,10 +13,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ArrowLeft, Plus, CalendarPlus, Shield } from "lucide-react";
+import { ArrowLeft, Shield } from "lucide-react";
 import { formatDateShort } from "@/lib/format";
 import type { Standing } from "@/lib/types";
 import { ProgrammeManager } from "./programme-manager";
+import { MatchResultActions } from "./match-result-actions";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -143,6 +144,7 @@ export default async function TournamentDetailPage({
             </p>
             <ProgrammeManager
               tournamentId={id}
+              tournamentZoneId={tournament.zone_id}
               groups={[]}
               zoneTeams={zoneTeams || []}
               mode="setup"
@@ -154,6 +156,7 @@ export default async function TournamentDetailPage({
           {/* Management bar */}
           <ProgrammeManager
             tournamentId={id}
+            tournamentZoneId={tournament.zone_id}
             groups={groups || []}
             zoneTeams={zoneTeams || []}
             mode="bar"
@@ -220,24 +223,25 @@ export default async function TournamentDetailPage({
                       <Table>
                         <TableHeader>
                           <TableRow className="bg-muted/50">
-                            <TableHead className="w-8 text-center font-bold">N°</TableHead>
+                            <TableHead className="w-8 text-center font-bold">J</TableHead>
                             <TableHead className="text-right font-bold">Domicile</TableHead>
                             <TableHead className="text-center w-16 font-bold">Score</TableHead>
                             <TableHead className="font-bold">Visiteur</TableHead>
                             <TableHead className="hidden sm:table-cell font-bold">Date</TableHead>
+                            <TableHead className="w-16"></TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {groupMatches.length === 0 ? (
                             <TableRow>
-                              <TableCell colSpan={5} className="text-center text-muted-foreground py-4">
+                              <TableCell colSpan={6} className="text-center text-muted-foreground py-4">
                                 Aucun match
                               </TableCell>
                             </TableRow>
                           ) : (
-                            groupMatches.map((m: any, i: number) => (
+                            groupMatches.map((m: any) => (
                               <TableRow key={m.id}>
-                                <TableCell className="text-center text-muted-foreground text-xs">{i + 1}</TableCell>
+                                <TableCell className="text-center text-muted-foreground text-xs">J{m.journee}</TableCell>
                                 <TableCell className="text-right text-sm font-semibold">{m.home_team?.name}</TableCell>
                                 <TableCell className="text-center">
                                   {m.status === "termine" ? (
@@ -251,6 +255,17 @@ export default async function TournamentDetailPage({
                                 <TableCell className="text-sm font-semibold">{m.away_team?.name}</TableCell>
                                 <TableCell className="hidden sm:table-cell text-xs text-muted-foreground">
                                   {m.match_date ? formatDateShort(m.match_date) : "—"}
+                                </TableCell>
+                                <TableCell>
+                                  <MatchResultActions
+                                    matchId={m.id}
+                                    tournamentId={id}
+                                    homeTeamName={m.home_team?.name || ""}
+                                    awayTeamName={m.away_team?.name || ""}
+                                    status={m.status}
+                                    currentHomeScore={m.home_score}
+                                    currentAwayScore={m.away_score}
+                                  />
                                 </TableCell>
                               </TableRow>
                             ))
