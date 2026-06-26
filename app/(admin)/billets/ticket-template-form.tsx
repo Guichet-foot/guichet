@@ -104,15 +104,9 @@ export function TicketTemplateForm({ zoneId, editTemplate, trigger }: TicketTemp
             <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Meilleure vue du match, Accès salon VIP..." />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Prix (FCFA)</Label>
-              <Input type="number" min="0" step="100" value={price} onChange={(e) => setPrice(e.target.value)} required placeholder="5000" />
-            </div>
-            <div className="space-y-2">
-              <Label>Quantité par défaut</Label>
-              <Input type="number" min="1" value={quantity} onChange={(e) => setQuantity(e.target.value)} placeholder="100" />
-            </div>
+          <div className="space-y-2">
+            <Label>Prix (FCFA)</Label>
+            <Input type="number" min="0" step="100" value={price} onChange={(e) => setPrice(e.target.value)} required placeholder="5000" />
           </div>
 
           <div className="space-y-2">

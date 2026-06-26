@@ -2,7 +2,7 @@ import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { getEffectiveZone } from "@/lib/get-effective-zone";
 import { Card, CardContent } from "@/components/ui/card";
-import { Ticket, Tag } from "lucide-react";
+import { Ticket } from "lucide-react";
 import { ZoneCardGrid } from "@/components/zone-card-grid";
 import { ZoneBackHeader } from "@/components/zone-back-header";
 import { TicketTemplateForm } from "./ticket-template-form";
@@ -111,11 +111,7 @@ export default async function BilletsPage({
                   </div>
 
                   {/* Footer */}
-                  <div className="flex items-center justify-between pt-2 border-t border-border/50">
-                    <div className="flex items-center gap-1.5 text-muted-foreground">
-                      <Tag className="h-3.5 w-3.5" />
-                      <span className="text-xs">Qté : {t.default_quantity}</span>
-                    </div>
+                  <div className="flex items-center justify-end pt-2 border-t border-border/50">
                     <TicketTemplateActions
                       template={t}
                       zoneId={effectiveZoneId!}
