@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { CalendarDays, Eye } from "lucide-react";
 import { buildZoneUrl } from "@/lib/zone-utils";
 import { CreateTournamentDialog } from "./create-tournament-dialog";
+import { TournamentActions } from "./tournament-actions";
 import { ZoneCardGrid } from "@/components/zone-card-grid";
 import { ZoneBackHeader } from "@/components/zone-back-header";
 
@@ -64,10 +65,11 @@ export default async function ProgrammePage({
                     <h3 className="font-semibold text-lg">{t.name}</h3>
                     <p className="text-sm text-muted-foreground">Saison {t.season}</p>
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
                     <Badge variant="secondary" className={t.status === "en_cours" ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"}>
                       {t.status === "en_cours" ? "En cours" : "Terminé"}
                     </Badge>
+                    <TournamentActions tournamentId={t.id} status={t.status} />
                     <Link href={buildZoneUrl(`/programme/${t.id}`, params.zone)}>
                       <Button variant="outline" size="sm">
                         <Eye className="h-4 w-4 mr-1" />
