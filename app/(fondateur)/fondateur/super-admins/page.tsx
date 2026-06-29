@@ -26,6 +26,15 @@ export default async function SuperAdminsPage() {
     .eq("created_by_admin", profile.id)
     .order("created_at", { ascending: false });
 
+  // Get emails from auth
+  const emails: Record<string, string> = {};
+  if (superAdmins) {
+    for (const sa of superAdmins) {
+      const { data: authUser } = await supabase.auth.admin.getUserById(sa.id);
+      if (authUser?.user?.email) emails[sa.id] = authUser.user.email;
+    }
+  }
+
   // Get zones count and revenue per super_admin
   const stats: Record<string, { zones: number; revenue: number }> = {};
   if (superAdmins) {
@@ -99,7 +108,7 @@ export default async function SuperAdminsPage() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex gap-1 justify-end">
-                          <SuperAdminActions userId={sa.id} active={sa.active} name={sa.full_name} />
+                          <SuperAdminActions userId={sa.id} active={sa.active} name={sa.full_name} phone={sa.phone} email={emails[sa.id]} />
                           <Link href={`/fondateur/super-admins/${sa.id}`}>
                             <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
                               <Eye className="h-3 w-3" />

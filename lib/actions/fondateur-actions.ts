@@ -70,3 +70,48 @@ export async function deleteSuperAdmin(userId: string) {
   revalidatePath("/fondateur/super-admins");
   return { success: true };
 }
+
+export async function updateSuperAdminInfo(userId: string, formData: {
+  fullName: string;
+  phone: string;
+  email: string;
+}) {
+  const adminClient = await createAdminClient();
+
+  const { error: profileError } = await adminClient
+    .from("profiles")
+    .update({
+      full_name: formData.fullName,
+      phone: formData.phone || null,
+    })
+    .eq("id", userId);
+
+  if (profileError) return { error: profileError.message };
+
+  if (formData.email) {
+    const { error: authError } = await adminClient.auth.admin.updateUserById(userId, {
+      email: formData.email,
+    });
+    if (authError) return { error: authError.message };
+  }
+
+  revalidatePath("/fondateur/super-admins");
+  return { success: true };
+}
+
+export async function resetSuperAdminPassword(userId: string) {
+  const adminClient = await createAdminClient();
+
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+  let newPassword = "";
+  for (let i = 0; i < 8; i++) {
+    newPassword += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+
+  const { error } = await adminClient.auth.admin.updateUserById(userId, {
+    password: newPassword,
+  });
+
+  if (error) return { error: error.message };
+  return { password: newPassword };
+}
