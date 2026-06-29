@@ -15,7 +15,7 @@ interface SidebarFondateurProps {
 const links = [
   { href: "/fondateur/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/fondateur/super-admins", label: "Super Admins", icon: Users },
-  { href: "#", label: "Abonnements", icon: CreditCard, disabled: true },
+  { href: "/fondateur/abonnements", label: "Abonnements", icon: CreditCard },
 ];
 
 export function SidebarFondateur({ userName }: SidebarFondateurProps) {
@@ -57,23 +57,20 @@ export function SidebarFondateur({ userName }: SidebarFondateurProps) {
 
           <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
             {links.map((link) => {
-              const isActive = pathname.startsWith(link.href) && link.href !== "#";
+              const isActive = pathname.startsWith(link.href);
               return (
                 <Link
                   key={link.href}
-                  href={link.disabled ? "#" : link.href}
+                  href={link.href}
                   onClick={() => setOpen(false)}
                   className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                    link.disabled
-                      ? "text-white/30 cursor-not-allowed"
-                      : isActive
-                        ? "bg-amber-600/30 text-amber-400"
-                        : "text-white/70 hover:bg-white/10 hover:text-white"
+                    isActive
+                      ? "bg-amber-600/30 text-amber-400"
+                      : "text-white/70 hover:bg-white/10 hover:text-white"
                   }`}
                 >
                   <link.icon className="h-5 w-5" />
                   {link.label}
-                  {link.disabled && <span className="text-xs bg-white/10 px-1.5 py-0.5 rounded ml-auto">Bientôt</span>}
                 </Link>
               );
             })}

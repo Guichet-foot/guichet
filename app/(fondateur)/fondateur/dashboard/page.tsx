@@ -1,9 +1,10 @@
 import { requireRole } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/server";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, MapPin, Banknote, Trophy, Wallet, Ticket } from "lucide-react";
+import { Users, MapPin, Trophy, Wallet, Ticket } from "lucide-react";
 import { formatFCFA } from "@/lib/format";
 import { RevenueLineChart } from "./revenue-line-chart";
+import { RecettesDepensesChart } from "./recettes-depenses-chart";
 import { FondateurFilters } from "./fondateur-filters";
 import Link from "next/link";
 
@@ -30,75 +31,75 @@ export default async function FondateurDashboardPage({
     .from("zones")
     .select("*", { count: "exact", head: true });
 
-  // Recettes totales des zones (billetterie)
   const { data: allTickets } = await supabase
     .from("tickets")
     .select("price, sold_at, match:matches(zone_id)")
     .neq("status", "annule") as { data: any[] | null };
 
+  const { data: allExpenses } = await supabase
+    .from("expenses")
+    .select("amount, expense_date") as { data: any[] | null };
+
   let filteredTickets = allTickets || [];
 
-  // Filter by year
   if (params.year) {
-    filteredTickets = filteredTickets.filter((t: any) =>
-      t.sold_at?.startsWith(params.year)
-    );
+    filteredTickets = filteredTickets.filter((t: any) => t.sold_at?.startsWith(params.year));
   }
 
-  // Filter by super admin (via their zones)
   if (params.sa) {
     const { data: saZones } = await supabase.from("zones").select("id").eq("created_by", params.sa);
     const saZoneIds = new Set(saZones?.map((z: any) => z.id) || []);
     filteredTickets = filteredTickets.filter((t: any) => saZoneIds.has(t.match?.zone_id));
   }
 
-  const totalZoneRevenue = filteredTickets.reduce((sum: number, t: any) => sum + t.price, 0);
   const totalTicketsSold = filteredTickets.length;
+  const totalSubscriptionRevenue = 0;
 
   const { count: matchesCount } = await supabase
     .from("matches")
     .select("*", { count: "exact", head: true });
 
-  // Revenus abonnements (placeholder — structure prête mais pas d'interface paiement)
-  const totalSubscriptionRevenue = 0;
-
-  // Revenue line chart — 12 derniers mois
+  // Revenue line chart — 12 derniers mois (abonnements placeholder)
   const monthNames = ["Jan", "Fév", "Mar", "Avr", "Mai", "Jun", "Jul", "Aoû", "Sep", "Oct", "Nov", "Déc"];
-  const chartData: { month: string; revenue: number }[] = [];
+  const revenueChartData: { month: string; revenue: number }[] = [];
   const now = new Date();
 
   for (let i = 11; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
     const monthLabel = `${monthNames[d.getMonth()]} ${d.getFullYear().toString().slice(2)}`;
+    revenueChartData.push({ month: monthLabel, revenue: 0 });
+  }
 
-    const monthRevenue = (allTickets || [])
+  // Recettes & Dépenses chart — par mois de l'année en cours
+  const currentYear = params.year ? parseInt(params.year) : now.getFullYear();
+  const barChartData: { month: string; recettes: number; depenses: number }[] = [];
+
+  for (let m = 0; m < 12; m++) {
+    const monthKey = `${currentYear}-${String(m + 1).padStart(2, "0")}`;
+
+    const recettes = (allTickets || [])
       .filter((t: any) => t.sold_at?.startsWith(monthKey))
       .reduce((sum: number, t: any) => sum + t.price, 0);
 
-    chartData.push({ month: monthLabel, revenue: monthRevenue });
+    const depenses = (allExpenses || [])
+      .filter((e: any) => e.expense_date?.startsWith(monthKey))
+      .reduce((sum: number, e: any) => sum + e.amount, 0);
+
+    barChartData.push({ month: monthNames[m], recettes, depenses });
   }
 
   // Stats par super_admin
   const superAdminStats: { id: string; name: string; zones: number; revenue: number }[] = [];
   if (superAdmins) {
     for (const sa of superAdmins) {
-      const { data: zones } = await supabase
-        .from("zones")
-        .select("id")
-        .eq("created_by", sa.id);
-
+      const { data: zones } = await supabase.from("zones").select("id").eq("created_by", sa.id);
       const zoneIds = zones?.map((z: any) => z.id) || [];
       const revenue = (allTickets || [])
         .filter((t: any) => zoneIds.includes(t.match?.zone_id))
         .reduce((sum: number, t: any) => sum + t.price, 0);
 
-      superAdminStats.push({
-        id: sa.id,
-        name: sa.full_name,
-        zones: zoneIds.length,
-        revenue,
-      });
+      superAdminStats.push({ id: sa.id, name: sa.full_name, zones: zoneIds.length, revenue });
     }
   }
 
@@ -110,7 +111,7 @@ export default async function FondateurDashboardPage({
 
       <FondateurFilters superAdmins={filterSAList} />
 
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
@@ -130,17 +131,6 @@ export default async function FondateurDashboardPage({
                 <p className="text-2xl font-bold">{zonesCount || 0}</p>
               </div>
               <MapPin className="h-7 w-7 text-brand/40" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground">Recettes zones</p>
-                <p className="text-xl font-bold text-brand">{formatFCFA(totalZoneRevenue)}</p>
-              </div>
-              <Banknote className="h-7 w-7 text-brand/40" />
             </div>
           </CardContent>
         </Card>
@@ -171,12 +161,20 @@ export default async function FondateurDashboardPage({
       {/* Revenue line chart */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-lg">Revenus — 12 derniers mois</CardTitle>
-          </div>
+          <CardTitle className="text-lg">Revenus abonnements — 12 derniers mois</CardTitle>
         </CardHeader>
         <CardContent>
-          <RevenueLineChart data={chartData} />
+          <RevenueLineChart data={revenueChartData} />
+        </CardContent>
+      </Card>
+
+      {/* Recettes & Dépenses bar chart */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Recettes & Dépenses — {currentYear}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <RecettesDepensesChart data={barChartData} year={currentYear} />
         </CardContent>
       </Card>
 
