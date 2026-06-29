@@ -39,6 +39,7 @@ export const EXPENSE_CATEGORY_LABELS: Record<string, string> = {
 };
 
 export const ROLE_LABELS: Record<string, string> = {
+  fondateur: "Fondateur",
   super_admin: "Super Admin",
   admin_zone: "Admin Zone",
   caissier: "Caissier",
@@ -46,6 +47,7 @@ export const ROLE_LABELS: Record<string, string> = {
 };
 
 export const ROLE_COLORS: Record<string, string> = {
+  fondateur: "bg-amber-100 text-amber-800",
   super_admin: "bg-purple-100 text-purple-800",
   admin_zone: "bg-brand/10 text-brand",
   caissier: "bg-accent-gold/20 text-amber-800",

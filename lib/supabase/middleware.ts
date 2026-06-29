@@ -8,7 +8,6 @@ export async function updateSession(request: NextRequest) {
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   const pathname = request.nextUrl.pathname;
 
-  // If Supabase is not configured, allow login page and static assets only
   if (
     !supabaseUrl ||
     !supabaseKey ||
@@ -16,6 +15,7 @@ export async function updateSession(request: NextRequest) {
   ) {
     if (
       pathname === "/login" ||
+      pathname === "/fondateur" ||
       pathname.startsWith("/api/") ||
       pathname.startsWith("/_next/") ||
       pathname.startsWith("/manifest.json") ||
@@ -49,11 +49,27 @@ export async function updateSession(request: NextRequest) {
     const { data } = await supabase.auth.getUser();
     user = data.user;
   } catch {
-    // Supabase unreachable — let through to login
-    if (pathname === "/login") return supabaseResponse;
+    if (pathname === "/login" || pathname === "/fondateur") return supabaseResponse;
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
+  // Fondateur login page
+  if (pathname === "/fondateur") {
+    if (user) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .single();
+
+      if (profile?.role === "fondateur") {
+        return NextResponse.redirect(new URL("/fondateur/dashboard", request.url));
+      }
+    }
+    return supabaseResponse;
+  }
+
+  // Regular login page
   if (pathname === "/login") {
     if (user) {
       const { data: profile } = await supabase
@@ -62,13 +78,12 @@ export async function updateSession(request: NextRequest) {
         .eq("id", user.id)
         .single();
 
-      if (!profile) {
-        return supabaseResponse;
-      }
+      if (!profile) return supabaseResponse;
 
       let redirectUrl = "/dashboard";
       if (profile.role === "caissier") redirectUrl = "/vente";
       if (profile.role === "portier") redirectUrl = "/scanner";
+      if (profile.role === "fondateur") redirectUrl = "/fondateur/dashboard";
       return NextResponse.redirect(new URL(redirectUrl, request.url));
     }
     return supabaseResponse;
@@ -85,7 +100,8 @@ export async function updateSession(request: NextRequest) {
   }
 
   if (!user) {
-    return NextResponse.redirect(new URL("/login", request.url));
+    const loginUrl = pathname.startsWith("/fondateur/") ? "/fondateur" : "/login";
+    return NextResponse.redirect(new URL(loginUrl, request.url));
   }
 
   const { data: profile } = await supabase
@@ -105,17 +121,18 @@ export async function updateSession(request: NextRequest) {
     return signOutResponse;
   }
 
+  // Fondateur routes
+  const isFondateurRoute = pathname.startsWith("/fondateur/");
+  if (isFondateurRoute && profile.role !== "fondateur") {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
+  }
+  if (profile.role === "fondateur" && !isFondateurRoute) {
+    return NextResponse.redirect(new URL("/fondateur/dashboard", request.url));
+  }
+
   const adminRoutes = [
-    "/dashboard",
-    "/equipes",
-    "/programme",
-    "/utilisateurs",
-    "/zones",
-    "/billets",
-    "/matchs",
-    "/finances",
-    "/rapports",
-    "/parametres",
+    "/dashboard", "/equipes", "/programme", "/utilisateurs",
+    "/zones", "/billets", "/matchs", "/finances", "/rapports", "/parametres",
   ];
   const caissierRoutes = ["/vente", "/scanner", "/mes-ventes"];
   const portierRoutes = ["/scanner"];

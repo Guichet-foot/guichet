@@ -1,4 +1,4 @@
-export type UserRole = "super_admin" | "admin_zone" | "caissier" | "portier";
+export type UserRole = "fondateur" | "super_admin" | "admin_zone" | "caissier" | "portier";
 
 export type MatchStatus = "programme" | "en_cours" | "termine" | "annule";
 

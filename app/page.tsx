@@ -8,6 +8,7 @@ export default async function HomePage() {
     redirect("/login");
   }
 
+  if (profile.role === "fondateur") redirect("/fondateur/dashboard");
   if (profile.role === "caissier") redirect("/vente");
   if (profile.role === "portier") redirect("/scanner");
 
