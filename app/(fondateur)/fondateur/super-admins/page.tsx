@@ -7,6 +7,7 @@ import { Users } from "lucide-react";
 import { formatFCFA } from "@/lib/format";
 import { CreateSuperAdminForm } from "./create-super-admin-form";
 import { SuperAdminActions } from "./super-admin-actions";
+import { SAFilters } from "./sa-filters";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Eye } from "lucide-react";
@@ -15,7 +16,12 @@ export const metadata = { title: "Super Admins" };
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-export default async function SuperAdminsPage() {
+export default async function SuperAdminsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string }>;
+}) {
+  const params = await searchParams;
   const profile = await requireRole(["fondateur"]);
   const supabase = await createAdminClient();
 
@@ -73,9 +79,16 @@ export default async function SuperAdminsPage() {
         <CreateSuperAdminForm />
       </div>
 
+      <SAFilters />
+
       <Card>
         <CardContent className="p-0 overflow-x-auto">
-          {!superAdmins || superAdmins.length === 0 ? (
+          {(() => {
+            const searchQ = params.q?.toLowerCase() || "";
+            const filtered = searchQ
+              ? superAdmins?.filter((sa: any) => sa.full_name.toLowerCase().includes(searchQ))
+              : superAdmins;
+            return !filtered || filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
               <Users className="h-12 w-12 mb-4" />
               <p>Aucun super admin créé</p>
@@ -93,7 +106,7 @@ export default async function SuperAdminsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {superAdmins.map((sa: any) => {
+                {filtered.map((sa: any) => {
                   const s = stats[sa.id] || { zones: 0, revenue: 0 };
                   return (
                     <TableRow key={sa.id}>
@@ -121,7 +134,8 @@ export default async function SuperAdminsPage() {
                 })}
               </TableBody>
             </Table>
-          )}
+          );
+          })()}
         </CardContent>
       </Card>
     </div>
