@@ -131,7 +131,7 @@ export async function updateSession(request: NextRequest) {
   }
 
   const adminRoutes = [
-    "/dashboard", "/equipes", "/programme", "/utilisateurs",
+    "/dashboard", "/equipes", "/utilisateurs",
     "/zones", "/billets", "/matchs", "/finances", "/rapports", "/parametres",
   ];
   const caissierRoutes = ["/vente", "/scanner", "/mes-ventes"];
