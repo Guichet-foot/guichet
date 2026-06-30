@@ -1,7 +1,7 @@
 import { requireRole } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/server";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, MapPin, Trophy, Wallet, Ticket } from "lucide-react";
+import { Users, MapPin, Wallet, Ticket, CalendarDays } from "lucide-react";
 import { formatFCFA } from "@/lib/format";
 import { RevenueLineChart } from "./revenue-line-chart";
 import { RecettesDepensesChart } from "./recettes-depenses-chart";
@@ -15,7 +15,7 @@ export const metadata = { title: "Dashboard Fondateur" };
 export default async function FondateurDashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ year?: string; sa?: string }>;
+  searchParams: Promise<{ year?: string; sa?: string; date?: string }>;
 }) {
   const profile = await requireRole(["fondateur"]);
   const params = await searchParams;
@@ -53,26 +53,71 @@ export default async function FondateurDashboardPage({
   }
 
   const totalTicketsSold = filteredTickets.length;
-  const totalSubscriptionRevenue = 0;
 
   const { count: matchesCount } = await supabase
     .from("matches")
     .select("*", { count: "exact", head: true });
 
-  // Revenue line chart — 12 derniers mois (abonnements placeholder)
+  // Frais de plateforme — paramètre effectif à la date sélectionnée (ou aujourd'hui)
+  const now = new Date();
+  const today = now.toISOString().split("T")[0];
+  const selectedDate = params.date || today;
+
+  const { data: platformData } = await supabase
+    .from("platform_settings")
+    .select("frais_plateforme")
+    .lte("effective_date", selectedDate)
+    .order("effective_date", { ascending: false })
+    .limit(1)
+    .single();
+  const fraisPlateforme = platformData?.frais_plateforme ?? 5000;
+
+  // Tickets filtrés par super admin uniquement (sans le filtre date/année) pour les calculs de revenus plateforme
+  let saFilteredTickets = allTickets || [];
+  if (params.sa) {
+    const { data: saZones } = await supabase.from("zones").select("id").eq("created_by", params.sa);
+    const saZoneIds = new Set(saZones?.map((z: any) => z.id) || []);
+    saFilteredTickets = saFilteredTickets.filter((t: any) => saZoneIds.has(t.match?.zone_id));
+  }
+
+  // Revenus journaliers = nombre de zones actives ce jour-là × frais plateforme
+  const dailyActiveZones = new Set(
+    saFilteredTickets
+      .filter((t: any) => t.sold_at?.startsWith(selectedDate))
+      .map((t: any) => t.match?.zone_id)
+      .filter(Boolean)
+  );
+  const revenusJournaliers = dailyActiveZones.size * fraisPlateforme;
+
+  // Revenus mensuel = nombre de paires (zone, jour) actives ce mois-là × frais plateforme
+  const selectedMonth = selectedDate.substring(0, 7);
+  const monthlyActivePairs = new Set(
+    saFilteredTickets
+      .filter((t: any) => t.sold_at?.startsWith(selectedMonth) && t.match?.zone_id)
+      .map((t: any) => `${t.match.zone_id}|${t.sold_at.split("T")[0]}`)
+  );
+  const revenusMensuel = monthlyActivePairs.size * fraisPlateforme;
+
+  // Revenue line chart — frais plateforme réels sur 12 derniers mois
   const monthNames = ["Jan", "Fév", "Mar", "Avr", "Mai", "Jun", "Jul", "Aoû", "Sep", "Oct", "Nov", "Déc"];
   const revenueChartData: { month: string; revenue: number }[] = [];
-  const now = new Date();
 
   for (let i = 11; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
     const monthLabel = `${monthNames[d.getMonth()]} ${d.getFullYear().toString().slice(2)}`;
-    revenueChartData.push({ month: monthLabel, revenue: 0 });
+    const pairs = new Set(
+      saFilteredTickets
+        .filter((t: any) => t.sold_at?.startsWith(monthKey) && t.match?.zone_id)
+        .map((t: any) => `${t.match.zone_id}|${t.sold_at.split("T")[0]}`)
+    );
+    revenueChartData.push({ month: monthLabel, revenue: pairs.size * fraisPlateforme });
   }
 
   // Recettes & Dépenses chart — par mois de l'année en cours
-  const currentYear = params.year ? parseInt(params.year) : now.getFullYear();
+  const currentYear = params.date
+    ? new Date(params.date).getFullYear()
+    : params.year ? parseInt(params.year) : now.getFullYear();
   const barChartData: { month: string; recettes: number; depenses: number }[] = [];
 
   for (let m = 0; m < 12; m++) {
@@ -112,14 +157,17 @@ export default async function FondateurDashboardPage({
       <FondateurFilters superAdmins={filterSAList} />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
+        <Card className="bg-blue-50 border-blue-200">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-muted-foreground">Super Admins</p>
-                <p className="text-2xl font-bold">{superAdmins?.length || 0}</p>
+                <p className="text-xs text-blue-700">Revenus journaliers</p>
+                <p className="text-xl font-bold text-blue-700">{formatFCFA(revenusJournaliers)}</p>
+                <p className="text-[10px] text-blue-600 mt-0.5">
+                  {new Date(selectedDate + "T12:00:00").toLocaleDateString("fr-FR", { day: "2-digit", month: "short" })} · {dailyActiveZones.size} zone(s) active(s)
+                </p>
               </div>
-              <Users className="h-7 w-7 text-amber-400" />
+              <CalendarDays className="h-7 w-7 text-blue-400" />
             </div>
           </CardContent>
         </Card>
@@ -138,8 +186,9 @@ export default async function FondateurDashboardPage({
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-amber-700">Revenus abonnements</p>
-                <p className="text-xl font-bold text-amber-700">{formatFCFA(totalSubscriptionRevenue)}</p>
+                <p className="text-xs text-amber-700">Revenus mensuel</p>
+                <p className="text-xl font-bold text-amber-700">{formatFCFA(revenusMensuel)}</p>
+                <p className="text-[10px] text-amber-600 mt-0.5">Frais plateforme — {monthNames[parseInt(selectedMonth.split("-")[1]) - 1]} {selectedMonth.split("-")[0]}</p>
               </div>
               <Wallet className="h-7 w-7 text-amber-400" />
             </div>
@@ -161,7 +210,7 @@ export default async function FondateurDashboardPage({
       {/* Revenue line chart */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Revenus abonnements — 12 derniers mois</CardTitle>
+          <CardTitle className="text-lg">Revenus frais plateforme — 12 derniers mois</CardTitle>
         </CardHeader>
         <CardContent>
           <RevenueLineChart data={revenueChartData} />
