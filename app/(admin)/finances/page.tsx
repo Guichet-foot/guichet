@@ -1,11 +1,12 @@
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
 import { getEffectiveZone } from "@/lib/get-effective-zone";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Banknote, TrendingDown, TrendingUp } from "lucide-react";
+import { Plus, Banknote, TrendingDown, TrendingUp, Building2, Landmark } from "lucide-react";
 import { formatFCFA, formatDate } from "@/lib/format";
 import { EXPENSE_CATEGORY_LABELS } from "@/lib/constants";
 import { buildZoneUrl } from "@/lib/zone-utils";
@@ -31,15 +32,29 @@ export default async function FinancesPage({
   }
 
   const supabase = await createClient();
+  const adminSupabase = await createAdminClient();
   const zoneId = effectiveZoneId;
 
   const monthStart = new Date();
   monthStart.setDate(1);
   monthStart.setHours(0, 0, 0, 0);
 
+  const today = new Date().toISOString().split("T")[0];
+
+  // Paramètres plateforme effectifs aujourd'hui
+  const { data: platformData } = await adminSupabase
+    .from("platform_settings")
+    .select("frais_plateforme, odcav_rate")
+    .lte("effective_date", today)
+    .order("effective_date", { ascending: false })
+    .limit(1)
+    .single();
+  const fraisPlateforme = platformData?.frais_plateforme ?? 5000;
+  const odcavRate = platformData?.odcav_rate ?? 0.05;
+
   const { data: tickets } = (await supabase
     .from("tickets")
-    .select("price, match_id, match:matches(home_team, away_team, match_date, zone_id)")
+    .select("price, match_id, sold_at, match:matches(home_team, away_team, match_date, zone_id)")
     .gte("sold_at", monthStart.toISOString())
     .neq("status", "annule")) as { data: any[] | null };
 
@@ -47,7 +62,14 @@ export default async function FinancesPage({
     ? tickets?.filter((t: any) => t.match?.zone_id === zoneId)
     : tickets;
 
+  // Jours d'activité ce mois (jours avec au moins une vente)
+  const activeDays = new Set(
+    filteredTickets?.map((t: any) => (t.sold_at as string)?.split("T")[0]).filter(Boolean) || []
+  ).size;
+
   const totalRevenue = filteredTickets?.reduce((sum: number, t: any) => sum + t.price, 0) || 0;
+  const odcavCommission = Math.round(totalRevenue * odcavRate);
+  const fraisPlatformeMois = fraisPlateforme * activeDays;
 
   const revenueByMatch: Record<string, { homeTeam: string; awayTeam: string; date: string; sold: number; revenue: number }> = {};
   filteredTickets?.forEach((t: any) => {
@@ -69,7 +91,7 @@ export default async function FinancesPage({
 
   const { data: expenses } = (await expensesQuery) as { data: any[] | null };
   const totalExpenses = expenses?.reduce((sum: number, e: any) => sum + e.amount, 0) || 0;
-  const balance = totalRevenue - totalExpenses;
+  const balance = totalRevenue - totalExpenses - odcavCommission - fraisPlatformeMois;
 
   return (
     <div className="space-y-6 min-w-0">
@@ -87,13 +109,15 @@ export default async function FinancesPage({
         </Link>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      {/* Ligne 1 : Recettes + Dépenses */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Recettes</p>
+                <p className="text-sm text-muted-foreground">Recettes brutes</p>
                 <p className="text-2xl font-bold text-brand">{formatFCFA(totalRevenue)}</p>
+                <p className="text-xs text-muted-foreground mt-1">{activeDays} jour(s) d&apos;activité</p>
               </div>
               <Banknote className="h-8 w-8 text-brand/40" />
             </div>
@@ -110,18 +134,49 @@ export default async function FinancesPage({
             </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="pt-6">
+      </div>
+
+      {/* Ligne 2 : Déductions obligatoires */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Card className="border-blue-200 bg-blue-50/40">
+          <CardContent className="pt-5">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Solde net</p>
-                <p className={`text-2xl font-bold ${balance >= 0 ? "text-success" : "text-danger"}`}>{formatFCFA(balance)}</p>
+                <p className="text-sm text-blue-700 font-medium">Commission ODCAV ({(odcavRate * 100).toFixed(0)}%)</p>
+                <p className="text-xl font-bold text-blue-800">{formatFCFA(odcavCommission)}</p>
+                <p className="text-xs text-blue-600 mt-0.5">À reverser à l&apos;ODCAV</p>
               </div>
-              <TrendingUp className="h-8 w-8 text-muted-foreground/30" />
+              <Landmark className="h-7 w-7 text-blue-400" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-orange-200 bg-orange-50/40">
+          <CardContent className="pt-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-orange-700 font-medium">Frais plateforme</p>
+                <p className="text-xl font-bold text-orange-800">{formatFCFA(fraisPlatformeMois)}</p>
+                <p className="text-xs text-orange-600 mt-0.5">{formatFCFA(fraisPlateforme)} × {activeDays} jour(s)</p>
+              </div>
+              <Building2 className="h-7 w-7 text-orange-400" />
             </div>
           </CardContent>
         </Card>
       </div>
+
+      {/* Solde net */}
+      <Card className={`border-2 ${balance >= 0 ? "border-success/30 bg-success/5" : "border-danger/30 bg-danger/5"}`}>
+        <CardContent className="pt-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-muted-foreground">Net à reverser à la zone</p>
+              <p className={`text-3xl font-bold ${balance >= 0 ? "text-success" : "text-danger"}`}>{formatFCFA(Math.max(0, balance))}</p>
+              <p className="text-xs text-muted-foreground mt-1">Recettes − Dépenses − ODCAV − Frais plateforme</p>
+            </div>
+            <TrendingUp className="h-10 w-10 text-muted-foreground/20" />
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader><CardTitle className="text-lg">Recettes par match</CardTitle></CardHeader>
