@@ -191,3 +191,57 @@ export async function getPaymentByRef(refCommand: string): Promise<{ status: str
   if (!data) return null;
   return { status: data.status, validUntil: data.valid_until };
 }
+
+export interface PaymentHistoryItem {
+  id: string;
+  refCommand: string;
+  amount: number;
+  status: string;
+  paymentMethod: string | null;
+  paidAt: string | null;
+  validUntil: string | null;
+  createdAt: string;
+}
+
+export async function getZonePaymentHistory(): Promise<{ items: PaymentHistoryItem[]; zoneId: string | null; zoneName: string; userRole: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { items: [], zoneId: null, zoneName: "", userRole: "" };
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role, zone_id, zone:zones!profiles_zone_id_fkey(name)")
+    .eq("id", user.id)
+    .single();
+
+  if (!profile) return { items: [], zoneId: null, zoneName: "", userRole: "" };
+
+  const zoneId = profile.zone_id;
+  const zoneName = (profile as any).zone?.name || "";
+
+  if (!zoneId) return { items: [], zoneId: null, zoneName, userRole: profile.role };
+
+  const adminClient = await createAdminClient();
+  const { data } = await adminClient
+    .from("zone_daily_payments")
+    .select("id, ref_command, amount, status, payment_method, paid_at, valid_until, created_at")
+    .eq("zone_id", zoneId)
+    .order("created_at", { ascending: false })
+    .limit(30);
+
+  return {
+    items: (data || []).map((r: any) => ({
+      id: r.id,
+      refCommand: r.ref_command,
+      amount: r.amount,
+      status: r.status,
+      paymentMethod: r.payment_method,
+      paidAt: r.paid_at,
+      validUntil: r.valid_until,
+      createdAt: r.created_at,
+    })),
+    zoneId,
+    zoneName,
+    userRole: profile.role,
+  };
+}
