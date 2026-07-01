@@ -1,5 +1,6 @@
 import { requireAuth } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -11,7 +12,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ShoppingCart } from "lucide-react";
-import { formatFCFA, formatDateTime } from "@/lib/format";
+import { formatFCFA, formatTime } from "@/lib/format";
 import { TICKET_STATUS_LABELS } from "@/lib/constants";
 import { PrintButton } from "./print-button";
 
@@ -23,18 +24,27 @@ export default async function MesVentesPage() {
   const profile = await requireAuth();
   const supabase = await createClient();
 
+  // Nettoyage automatique des tickets de plus de 24h (à chaque visite)
+  try {
+    const adminSupabase = await createAdminClient();
+    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    await adminSupabase.from("tickets").delete().lt("sold_at", cutoff);
+  } catch {}
+
+  // Afficher uniquement les billets du jour en cours
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+
   const { data: tickets } = await supabase
     .from("tickets")
     .select("id, price, sold_at, status, sale_batch_id, match:matches(home_team, away_team), category:ticket_categories(name)")
     .eq("sold_by", profile.id)
+    .gte("sold_at", todayStart.toISOString())
     .order("sold_at", { ascending: false })
-    .limit(500);
-
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
+    .limit(200);
 
   const todayTickets =
-    tickets?.filter((t) => new Date(t.sold_at) >= todayStart && t.status !== "annule") || [];
+    tickets?.filter((t) => t.status !== "annule") || [];
   const todayTotal = todayTickets.reduce((sum, t) => sum + t.price, 0);
 
   // Grouper par sale_batch_id. Les anciens billets (sans batch_id) → chacun est sa propre ligne
@@ -76,11 +86,14 @@ export default async function MesVentesPage() {
 
   return (
     <div className="space-y-4 max-w-5xl mx-auto">
-      <h1 className="text-xl font-bold font-heading">Mes ventes</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-bold font-heading">Mes ventes</h1>
+        <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">Aujourd&apos;hui uniquement</span>
+      </div>
 
       <Card className="bg-brand/5 border-brand/20">
         <CardContent className="pt-4 pb-4">
-          <p className="text-sm text-muted-foreground">Aujourd&apos;hui</p>
+          <p className="text-sm text-muted-foreground">Total du jour</p>
           <p className="text-lg font-bold">
             {todayTickets.length} billet(s) / {formatFCFA(todayTotal)}
           </p>
@@ -102,7 +115,7 @@ export default async function MesVentesPage() {
                   <TableHead>Catégorie</TableHead>
                   <TableHead className="text-center">Nbre</TableHead>
                   <TableHead className="text-right">Total</TableHead>
-                  <TableHead className="hidden sm:table-cell">Date</TableHead>
+                  <TableHead className="hidden sm:table-cell">Heure</TableHead>
                   <TableHead>Statut</TableHead>
                   <TableHead className="text-right">Action</TableHead>
                 </TableRow>
@@ -127,7 +140,7 @@ export default async function MesVentesPage() {
                       {formatFCFA(sale.totalPrice)}
                     </TableCell>
                     <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">
-                      {formatDateTime(sale.sold_at)}
+                      {formatTime(sale.sold_at)}
                     </TableCell>
                     <TableCell>
                       <Badge

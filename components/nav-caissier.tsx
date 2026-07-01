@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { ShoppingCart, ScanLine, List, LogOut } from "lucide-react";
@@ -46,7 +47,7 @@ export function NavCaissier({ userName, userRole }: NavCaissierProps) {
   return (
     <>
       <header className="fixed top-0 left-0 right-0 z-40 bg-brand text-white px-4 py-3 flex items-center justify-between">
-        <h1 className="font-heading font-bold text-lg">Guichet Foot</h1>
+        <Image src="/logo-sidebar.png" alt="Guichet Foot" width={160} height={40} className="h-9 w-auto" priority />
         <div className="flex items-center gap-3">
           <span className="text-sm text-white/70 hidden sm:block">
             {userName}
