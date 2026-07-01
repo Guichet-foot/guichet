@@ -54,19 +54,28 @@ export default async function FondateurDashboardPage({
     .from("matches")
     .select("*", { count: "exact", head: true });
 
-  // Frais de plateforme — paramètre effectif à la date sélectionnée (ou aujourd'hui)
   const now = new Date();
   const today = now.toISOString().split("T")[0];
   const selectedDate = params.date || today;
 
-  const { data: platformData } = await supabase
+  // Charger tout l'historique des frais plateforme pour appliquer le bon tarif par jour
+  const { data: allPlatformSettings } = await supabase
     .from("platform_settings")
-    .select("frais_plateforme")
-    .lte("effective_date", selectedDate)
-    .order("effective_date", { ascending: false })
-    .limit(1)
-    .single();
-  const fraisPlateforme = platformData?.frais_plateforme ?? 5000;
+    .select("frais_plateforme, effective_date")
+    .order("effective_date", { ascending: true });
+  const platformHistory = (allPlatformSettings || []) as { frais_plateforme: number; effective_date: string }[];
+
+  // Retourne le frais en vigueur à une date donnée (évite la rétroactivité)
+  function getFraisForDate(dateStr: string): number {
+    let frais = 5000;
+    for (const row of platformHistory) {
+      if (row.effective_date <= dateStr) frais = row.frais_plateforme;
+      else break;
+    }
+    return frais;
+  }
+
+  const fraisPlateforme = getFraisForDate(selectedDate);
 
   // Tickets filtrés par super admin uniquement (sans le filtre date/année) pour les calculs de revenus plateforme
   let saFilteredTickets = allTickets || [];
@@ -76,7 +85,7 @@ export default async function FondateurDashboardPage({
     saFilteredTickets = saFilteredTickets.filter((t: any) => saZoneIds.has(t.match?.zone_id));
   }
 
-  // Revenus journaliers = nombre de zones actives ce jour-là × frais plateforme
+  // Revenus journaliers = zones actives ce jour-là × frais en vigueur ce jour-là
   const dailyActiveZones = new Set(
     saFilteredTickets
       .filter((t: any) => t.sold_at?.startsWith(selectedDate))
@@ -85,16 +94,23 @@ export default async function FondateurDashboardPage({
   );
   const revenusJournaliers = dailyActiveZones.size * fraisPlateforme;
 
-  // Revenus mensuel = nombre de paires (zone, jour) actives ce mois-là × frais plateforme
+  // Revenus mensuel = somme par (zone, jour) × frais en vigueur ce jour-là
   const selectedMonth = selectedDate.substring(0, 7);
-  const monthlyActivePairs = new Set(
-    saFilteredTickets
-      .filter((t: any) => t.sold_at?.startsWith(selectedMonth) && t.match?.zone_id)
-      .map((t: any) => `${t.match.zone_id}|${t.sold_at.split("T")[0]}`)
-  );
-  const revenusMensuel = monthlyActivePairs.size * fraisPlateforme;
+  let revenusMensuel = 0;
+  {
+    const seenPairs = new Set<string>();
+    for (const t of saFilteredTickets) {
+      if (!t.sold_at?.startsWith(selectedMonth) || !t.match?.zone_id) continue;
+      const dayStr = t.sold_at.split("T")[0];
+      const key = `${t.match.zone_id}|${dayStr}`;
+      if (!seenPairs.has(key)) {
+        seenPairs.add(key);
+        revenusMensuel += getFraisForDate(dayStr);
+      }
+    }
+  }
 
-  // Revenue line chart — frais plateforme réels sur 12 derniers mois
+  // Revenue line chart — 12 derniers mois, frais historiques par jour
   const monthNames = ["Jan", "Fév", "Mar", "Avr", "Mai", "Jun", "Jul", "Aoû", "Sep", "Oct", "Nov", "Déc"];
   const revenueChartData: { month: string; revenue: number }[] = [];
 
@@ -102,12 +118,18 @@ export default async function FondateurDashboardPage({
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
     const monthLabel = `${monthNames[d.getMonth()]} ${d.getFullYear().toString().slice(2)}`;
-    const pairs = new Set(
-      saFilteredTickets
-        .filter((t: any) => t.sold_at?.startsWith(monthKey) && t.match?.zone_id)
-        .map((t: any) => `${t.match.zone_id}|${t.sold_at.split("T")[0]}`)
-    );
-    revenueChartData.push({ month: monthLabel, revenue: pairs.size * fraisPlateforme });
+    const activePairsByDay = new Map<string, Set<string>>();
+    for (const t of saFilteredTickets) {
+      if (!t.sold_at?.startsWith(monthKey) || !t.match?.zone_id) continue;
+      const dayStr = t.sold_at.split("T")[0];
+      if (!activePairsByDay.has(dayStr)) activePairsByDay.set(dayStr, new Set());
+      activePairsByDay.get(dayStr)!.add(t.match.zone_id);
+    }
+    let monthRevenue = 0;
+    for (const [dayStr, zones] of activePairsByDay) {
+      monthRevenue += zones.size * getFraisForDate(dayStr);
+    }
+    revenueChartData.push({ month: monthLabel, revenue: monthRevenue });
   }
 
   // Graphique journalier frais plateforme
@@ -120,15 +142,6 @@ export default async function FondateurDashboardPage({
   const chartFrom = params.chartFrom || defaultChartFrom;
   const chartTo = params.chartTo || defaultChartTo;
 
-  const { data: platformForChart } = await supabase
-    .from("platform_settings")
-    .select("frais_plateforme")
-    .lte("effective_date", chartFrom)
-    .order("effective_date", { ascending: false })
-    .limit(1)
-    .single();
-  const chartFrais = platformForChart?.frais_plateforme ?? fraisPlateforme;
-
   const dailyPlatformData: { date: string; label: string; revenue: number }[] = [];
   const chartCursor = new Date(chartFrom + "T12:00:00");
   const chartEnd = new Date(chartTo + "T12:00:00");
@@ -140,7 +153,7 @@ export default async function FondateurDashboardPage({
         .filter((t: any) => t.sold_at?.startsWith(dayStr) && t.match?.zone_id)
         .map((t: any) => t.match.zone_id)
     );
-    dailyPlatformData.push({ date: dayStr, label, revenue: activeZones.size * chartFrais });
+    dailyPlatformData.push({ date: dayStr, label, revenue: activeZones.size * getFraisForDate(dayStr) });
     chartCursor.setDate(chartCursor.getDate() + 1);
   }
 
@@ -236,8 +249,7 @@ export default async function FondateurDashboardPage({
               {new Date(chartFrom + "T12:00:00").toLocaleDateString("fr-FR", { day: "2-digit", month: "short" })}
               {" → "}
               {new Date(chartTo + "T12:00:00").toLocaleDateString("fr-FR", { day: "2-digit", month: "short" })}
-              {" · "}
-              {chartFrais.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ")} FCFA/zone/jour
+              {" · tarifs historiques"}
             </p>
           </div>
         </CardHeader>
