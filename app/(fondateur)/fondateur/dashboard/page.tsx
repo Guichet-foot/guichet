@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Users, MapPin, Wallet, Ticket, CalendarDays } from "lucide-react";
 import { formatFCFA } from "@/lib/format";
 import { RevenueLineChart } from "./revenue-line-chart";
-import { RecettesDepensesChart } from "./recettes-depenses-chart";
+import { FraisPlateformeChart } from "./frais-plateforme-chart";
 import { FondateurFilters } from "./fondateur-filters";
 import Link from "next/link";
 
@@ -15,7 +15,7 @@ export const metadata = { title: "Dashboard Fondateur" };
 export default async function FondateurDashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ year?: string; sa?: string; date?: string }>;
+  searchParams: Promise<{ year?: string; sa?: string; date?: string; chartFrom?: string; chartTo?: string }>;
 }) {
   const profile = await requireRole(["fondateur"]);
   const params = await searchParams;
@@ -35,10 +35,6 @@ export default async function FondateurDashboardPage({
     .from("tickets")
     .select("price, sold_at, match:matches(zone_id)")
     .neq("status", "annule") as { data: any[] | null };
-
-  const { data: allExpenses } = await supabase
-    .from("expenses")
-    .select("amount, expense_date") as { data: any[] | null };
 
   let filteredTickets = allTickets || [];
 
@@ -114,24 +110,38 @@ export default async function FondateurDashboardPage({
     revenueChartData.push({ month: monthLabel, revenue: pairs.size * fraisPlateforme });
   }
 
-  // Recettes & Dépenses chart — par mois de l'année en cours
-  const currentYear = params.date
-    ? new Date(params.date).getFullYear()
-    : params.year ? parseInt(params.year) : now.getFullYear();
-  const barChartData: { month: string; recettes: number; depenses: number }[] = [];
+  // Graphique journalier frais plateforme
+  const defaultChartTo = today;
+  const defaultChartFrom = (() => {
+    const d = new Date(now);
+    d.setDate(d.getDate() - 14);
+    return d.toISOString().split("T")[0];
+  })();
+  const chartFrom = params.chartFrom || defaultChartFrom;
+  const chartTo = params.chartTo || defaultChartTo;
 
-  for (let m = 0; m < 12; m++) {
-    const monthKey = `${currentYear}-${String(m + 1).padStart(2, "0")}`;
+  const { data: platformForChart } = await supabase
+    .from("platform_settings")
+    .select("frais_plateforme")
+    .lte("effective_date", chartFrom)
+    .order("effective_date", { ascending: false })
+    .limit(1)
+    .single();
+  const chartFrais = platformForChart?.frais_plateforme ?? fraisPlateforme;
 
-    const recettes = (allTickets || [])
-      .filter((t: any) => t.sold_at?.startsWith(monthKey))
-      .reduce((sum: number, t: any) => sum + t.price, 0);
-
-    const depenses = (allExpenses || [])
-      .filter((e: any) => e.expense_date?.startsWith(monthKey))
-      .reduce((sum: number, e: any) => sum + e.amount, 0);
-
-    barChartData.push({ month: monthNames[m], recettes, depenses });
+  const dailyPlatformData: { date: string; label: string; revenue: number }[] = [];
+  const chartCursor = new Date(chartFrom + "T12:00:00");
+  const chartEnd = new Date(chartTo + "T12:00:00");
+  while (chartCursor <= chartEnd) {
+    const dayStr = chartCursor.toISOString().split("T")[0];
+    const label = chartCursor.toLocaleDateString("fr-FR", { day: "2-digit", month: "short" });
+    const activeZones = new Set(
+      saFilteredTickets
+        .filter((t: any) => t.sold_at?.startsWith(dayStr) && t.match?.zone_id)
+        .map((t: any) => t.match.zone_id)
+    );
+    dailyPlatformData.push({ date: dayStr, label, revenue: activeZones.size * chartFrais });
+    chartCursor.setDate(chartCursor.getDate() + 1);
   }
 
   // Stats par super_admin
@@ -217,13 +227,22 @@ export default async function FondateurDashboardPage({
         </CardContent>
       </Card>
 
-      {/* Recettes & Dépenses bar chart */}
+      {/* Graphique frais plateforme journaliers */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Recettes & Dépenses — {currentYear}</CardTitle>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+            <CardTitle className="text-lg">Recettes Journalières — Frais Plateforme</CardTitle>
+            <p className="text-xs text-muted-foreground">
+              {new Date(chartFrom + "T12:00:00").toLocaleDateString("fr-FR", { day: "2-digit", month: "short" })}
+              {" → "}
+              {new Date(chartTo + "T12:00:00").toLocaleDateString("fr-FR", { day: "2-digit", month: "short" })}
+              {" · "}
+              {chartFrais.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ")} FCFA/zone/jour
+            </p>
+          </div>
         </CardHeader>
         <CardContent>
-          <RecettesDepensesChart data={barChartData} year={currentYear} />
+          <FraisPlateformeChart data={dailyPlatformData} />
         </CardContent>
       </Card>
 

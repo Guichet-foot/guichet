@@ -26,37 +26,43 @@ export function FondateurFilters({ superAdmins }: FondateurFiltersProps) {
   const currentYear = searchParams.get("year") || "";
   const currentSA = searchParams.get("sa") || "";
   const currentDate = searchParams.get("date") || "";
+  const currentChartFrom = searchParams.get("chartFrom") || "";
+  const currentChartTo = searchParams.get("chartTo") || "";
 
   const [year, setYear] = useState(currentYear);
   const [sa, setSa] = useState(currentSA);
   const [date, setDate] = useState(currentDate);
-  const [showFilters, setShowFilters] = useState(!!(currentYear || currentSA || currentDate));
+  const [chartFrom, setChartFrom] = useState(currentChartFrom);
+  const [chartTo, setChartTo] = useState(currentChartTo);
+  const [showFilters, setShowFilters] = useState(
+    !!(currentYear || currentSA || currentDate || currentChartFrom || currentChartTo)
+  );
 
   const currentYearNum = new Date().getFullYear();
   const years = Array.from({ length: 5 }, (_, i) => String(currentYearNum - i));
 
-  const hasActiveFilters = !!(currentYear || currentSA || currentDate);
+  const hasActiveFilters = !!(currentYear || currentSA || currentDate || currentChartFrom || currentChartTo);
 
   function applyFilters() {
     const params = new URLSearchParams();
     if (date) params.set("date", date);
     else if (year) params.set("year", year);
     if (sa) params.set("sa", sa);
+    if (chartFrom) params.set("chartFrom", chartFrom);
+    if (chartTo) params.set("chartTo", chartTo);
     router.push(`${pathname}?${params.toString()}`);
   }
 
   function clearFilters() {
-    setYear(""); setSa(""); setDate("");
+    setYear(""); setSa(""); setDate(""); setChartFrom(""); setChartTo("");
     router.push(pathname);
   }
 
-  // Quand on sélectionne une date, on vide l'année (la date est plus précise)
   function handleDateChange(val: string) {
     setDate(val);
     if (val) setYear("");
   }
 
-  // Quand on sélectionne une année, on vide la date
   function handleYearChange(val: string | null) {
     setYear(val ?? "");
     if (val) setDate("");
@@ -65,9 +71,13 @@ export function FondateurFilters({ superAdmins }: FondateurFiltersProps) {
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2">
-        <Button type="button" variant={showFilters ? "default" : "outline"} size="sm"
+        <Button
+          type="button"
+          variant={showFilters ? "default" : "outline"}
+          size="sm"
           onClick={() => setShowFilters(!showFilters)}
-          className={showFilters ? "bg-amber-600 hover:bg-amber-700" : ""}>
+          className={showFilters ? "bg-amber-600 hover:bg-amber-700" : ""}
+        >
           <Filter className="h-4 w-4 mr-1" />
           Filtres
         </Button>
@@ -85,50 +95,88 @@ export function FondateurFilters({ superAdmins }: FondateurFiltersProps) {
         {currentYear && !currentDate && (
           <span className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-medium">{currentYear}</span>
         )}
+        {(currentChartFrom || currentChartTo) && (
+          <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full font-medium">
+            Graphique : {currentChartFrom || "..."} → {currentChartTo || "..."}
+          </span>
+        )}
       </div>
 
       {showFilters && (
-        <div className="flex flex-wrap gap-3 items-end bg-muted/30 p-3 rounded-lg border">
-          {/* Filtre par date précise */}
-          <div className="space-y-1">
-            <Label className="text-xs">Date précise</Label>
-            <Input
-              type="date"
-              value={date}
-              onChange={(e) => handleDateChange(e.target.value)}
-              className="w-44"
-            />
-          </div>
+        <div className="flex flex-col gap-4 bg-muted/30 p-3 rounded-lg border">
+          {/* Filtres KPIs */}
+          <div>
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Filtres statistiques</p>
+            <div className="flex flex-wrap gap-3 items-end">
+              <div className="space-y-1">
+                <Label className="text-xs">Date précise</Label>
+                <Input
+                  type="date"
+                  value={date}
+                  onChange={(e) => handleDateChange(e.target.value)}
+                  className="w-44"
+                />
+              </div>
 
-          {/* OU filtre par année */}
-          <div className="space-y-1">
-            <Label className="text-xs">Année (si pas de date)</Label>
-            <Select value={year} onValueChange={handleYearChange}>
-              <SelectTrigger className="w-32"><SelectValue placeholder="Toutes" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="">Toutes</SelectItem>
-                {years.map((y) => (<SelectItem key={y} value={y}>{y}</SelectItem>))}
-              </SelectContent>
-            </Select>
-          </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Année (si pas de date)</Label>
+                <Select value={year} onValueChange={handleYearChange}>
+                  <SelectTrigger className="w-32"><SelectValue placeholder="Toutes" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Toutes</SelectItem>
+                    {years.map((y) => (<SelectItem key={y} value={y}>{y}</SelectItem>))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-          {/* Filtre par super admin */}
-          {superAdmins.length > 0 && (
-            <div className="space-y-1 flex-1 min-w-[180px]">
-              <Label className="text-xs">Super Admin</Label>
-              <Select value={sa} onValueChange={(v) => setSa(v ?? "")}>
-                <SelectTrigger><SelectValue placeholder="Tous" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">Tous</SelectItem>
-                  {superAdmins.map((s) => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}
-                </SelectContent>
-              </Select>
+              {superAdmins.length > 0 && (
+                <div className="space-y-1 flex-1 min-w-[180px]">
+                  <Label className="text-xs">Super Admin</Label>
+                  <Select value={sa} onValueChange={(v) => setSa(v ?? "")}>
+                    <SelectTrigger><SelectValue placeholder="Tous" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">Tous</SelectItem>
+                      {superAdmins.map((s) => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
-          )}
+          </div>
 
-          <Button type="button" size="sm" onClick={applyFilters} className="bg-amber-600 hover:bg-amber-700 h-8">
-            Appliquer
-          </Button>
+          {/* Filtres graphique frais plateforme */}
+          <div>
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Période du graphique (frais plateforme)</p>
+            <div className="flex flex-wrap gap-3 items-end">
+              <div className="space-y-1">
+                <Label className="text-xs">Du</Label>
+                <Input
+                  type="date"
+                  value={chartFrom}
+                  onChange={(e) => setChartFrom(e.target.value)}
+                  className="w-44"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Au</Label>
+                <Input
+                  type="date"
+                  value={chartTo}
+                  onChange={(e) => setChartTo(e.target.value)}
+                  className="w-44"
+                />
+              </div>
+              <p className="text-xs text-muted-foreground self-end pb-2">
+                Par défaut : 15 derniers jours
+              </p>
+            </div>
+          </div>
+
+          <div className="flex justify-end">
+            <Button type="button" size="sm" onClick={applyFilters} className="bg-amber-600 hover:bg-amber-700 h-8">
+              Appliquer
+            </Button>
+          </div>
         </div>
       )}
     </div>
