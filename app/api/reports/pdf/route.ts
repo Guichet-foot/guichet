@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { renderToBuffer } from "@react-pdf/renderer";
 import { FinancialReport } from "@/lib/pdf/financial-report";
@@ -36,6 +37,24 @@ export async function POST(request: Request) {
 
   const zoneId =
     profile.role === "admin_zone" ? profile.zone_id : null;
+
+  // Infos ODCAV pour le PDF
+  const adminSupabase = await createAdminClient();
+  const { data: odcavData } = await adminSupabase
+    .from("odcav_settings")
+    .select("logo_url, nom, adresse, president, telephone, email")
+    .eq("id", "global")
+    .single();
+  const odcavInfo = odcavData
+    ? {
+        logoUrl: odcavData.logo_url || undefined,
+        nom: odcavData.nom || undefined,
+        adresse: odcavData.adresse || undefined,
+        president: odcavData.president || undefined,
+        telephone: odcavData.telephone || undefined,
+        email: odcavData.email || undefined,
+      }
+    : undefined;
 
   // Fetch tickets
   let ticketsQuery = supabase
@@ -114,6 +133,7 @@ export async function POST(request: Request) {
     totalRevenue,
     totalExpenses,
     revenueByMatch: Object.values(revenueMap),
+    odcavInfo,
     expenses:
       expenses?.map((e) => ({
         date: format(new Date(e.expense_date), "dd/MM/yyyy", { locale: fr }),

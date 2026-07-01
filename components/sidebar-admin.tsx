@@ -18,6 +18,7 @@ import {
   Settings,
   Ticket,
   User,
+  Building2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
@@ -37,11 +38,12 @@ const adminLinks = [
   { href: "/finances", label: "Finances", icon: Wallet },
   { href: "/rapports", label: "Rapports", icon: FileText },
   { href: "/utilisateurs", label: "Utilisateurs", icon: Users },
-  { href: "/parametres", label: "Paramètres", icon: Settings },
+  { href: "/parametres", label: "Paramètres Zone", icon: Settings },
 ];
 
 const superAdminLinks = [
   { href: "/zones", label: "Zones", icon: MapPin },
+  { href: "/parametres-odcav", label: "Paramètre ODCAV", icon: Building2 },
 ];
 
 export function SidebarAdmin({ userName, userRole, zoneName }: SidebarProps) {

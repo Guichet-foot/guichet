@@ -1,5 +1,6 @@
 import React from "react";
-import { Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
+import { Document, Page, Text, View, StyleSheet, Image } from "@react-pdf/renderer";
+import type { OdcavInfo } from "./financial-report";
 
 function fmtAmt(amount: number) {
   return amount.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ") + " FCFA";
@@ -14,6 +15,10 @@ const styles = StyleSheet.create({
   title: { fontSize: 20, fontFamily: "Helvetica-Bold", color: "#0D5C3F" },
   subtitle: { fontSize: 12, fontFamily: "Helvetica-Bold", marginTop: 3 },
   meta: { fontSize: 8, color: "#6B7280", marginTop: 2 },
+  odcavBlock: { alignItems: "flex-end" },
+  odcavLogo: { width: 40, height: 40, objectFit: "contain", marginBottom: 4 },
+  odcavName: { fontSize: 9, fontFamily: "Helvetica-Bold", color: "#1D4ED8", textAlign: "right" },
+  odcavMeta: { fontSize: 7, color: "#6B7280", textAlign: "right", marginTop: 1 },
   sectionTitle: {
     fontSize: 11, fontFamily: "Helvetica-Bold", color: "#0D5C3F",
     marginBottom: 6, marginTop: 16,
@@ -59,9 +64,13 @@ export interface DailyReportData {
   netZone: number;
   revenueByMatch: { teams: string; sold: number; revenue: number }[];
   expenses: { label: string; category: string; amount: number }[];
+  odcavInfo?: OdcavInfo;
 }
 
 export function DailyReport({ data }: { data: DailyReportData }) {
+  const odcav = data.odcavInfo;
+  const hasOdcav = odcav && (odcav.nom || odcav.adresse || odcav.president);
+
   return (
     <Document>
       <Page size="A4" style={styles.page}>
@@ -70,12 +79,33 @@ export function DailyReport({ data }: { data: DailyReportData }) {
           <View>
             <Text style={styles.title}>GUICHET FOOT</Text>
             <Text style={styles.subtitle}>{data.zoneName}</Text>
-          </View>
-          <View style={{ alignItems: "flex-end" }}>
-            <Text style={{ fontSize: 13, fontFamily: "Helvetica-Bold" }}>BILAN JOURNALIER</Text>
+            <Text style={{ fontSize: 13, fontFamily: "Helvetica-Bold", marginTop: 8 }}>BILAN JOURNALIER</Text>
             <Text style={styles.meta}>Date : {data.date}</Text>
             <Text style={styles.meta}>Généré le {data.generatedAt}</Text>
           </View>
+
+          {hasOdcav && (
+            <View style={styles.odcavBlock}>
+              {odcav.logoUrl ? (
+                <Image src={odcav.logoUrl} style={styles.odcavLogo} />
+              ) : null}
+              {odcav.nom ? (
+                <Text style={styles.odcavName}>{odcav.nom}</Text>
+              ) : null}
+              {odcav.adresse ? (
+                <Text style={styles.odcavMeta}>{odcav.adresse}</Text>
+              ) : null}
+              {odcav.president ? (
+                <Text style={styles.odcavMeta}>Président : {odcav.president}</Text>
+              ) : null}
+              {odcav.telephone ? (
+                <Text style={styles.odcavMeta}>Tél : {odcav.telephone}</Text>
+              ) : null}
+              {odcav.email ? (
+                <Text style={styles.odcavMeta}>{odcav.email}</Text>
+              ) : null}
+            </View>
+          )}
         </View>
 
         {/* Récapitulatif */}
@@ -94,7 +124,9 @@ export function DailyReport({ data }: { data: DailyReportData }) {
               <Text style={[styles.summaryLabel, { color: "#1D4ED8", fontFamily: "Helvetica-Bold" }]}>
                 Commission ODCAV ({(data.odcavRate * 100).toFixed(0)}% des recettes)
               </Text>
-              <Text style={{ fontSize: 7, color: "#6B7280" }}>À reverser à l&apos;ODCAV</Text>
+              <Text style={{ fontSize: 7, color: "#6B7280" }}>
+                {odcav?.nom ? `À reverser à : ${odcav.nom}` : "À reverser à l'ODCAV"}
+              </Text>
             </View>
             <Text style={[styles.summaryValue, { color: "#1D4ED8" }]}>- {fmtAmt(data.odcavCommission)}</Text>
           </View>

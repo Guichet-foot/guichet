@@ -5,6 +5,7 @@ import {
   Text,
   View,
   StyleSheet,
+  Image,
 } from "@react-pdf/renderer";
 
 const styles = StyleSheet.create({
@@ -17,14 +18,15 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    marginBottom: 20,
-    paddingBottom: 15,
+    marginBottom: 14,
+    paddingBottom: 14,
     borderBottomWidth: 2,
     borderBottomColor: "#0D5C3F",
   },
   headerLeft: {},
   headerRight: {
-    textAlign: "right",
+    alignItems: "flex-end",
+    maxWidth: 200,
   },
   title: {
     fontSize: 20,
@@ -40,6 +42,27 @@ const styles = StyleSheet.create({
     fontSize: 8,
     color: "#6B7280",
     marginTop: 2,
+  },
+  odcavBlock: {
+    alignItems: "flex-end",
+  },
+  odcavLogo: {
+    width: 40,
+    height: 40,
+    objectFit: "contain",
+    marginBottom: 4,
+  },
+  odcavName: {
+    fontSize: 9,
+    fontFamily: "Helvetica-Bold",
+    color: "#1D4ED8",
+    textAlign: "right",
+  },
+  odcavMeta: {
+    fontSize: 7,
+    color: "#6B7280",
+    textAlign: "right",
+    marginTop: 1,
   },
   sectionTitle: {
     fontSize: 12,
@@ -97,6 +120,15 @@ function formatAmount(amount: number) {
   return amount.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ") + " FCFA";
 }
 
+export interface OdcavInfo {
+  logoUrl?: string;
+  nom?: string;
+  adresse?: string;
+  president?: string;
+  telephone?: string;
+  email?: string;
+}
+
 interface ReportData {
   zoneName: string;
   startDate: string;
@@ -118,6 +150,7 @@ interface ReportData {
     match: string;
     amount: number;
   }[];
+  odcavInfo?: OdcavInfo;
 }
 
 export function FinancialReport({ data }: { data: ReportData }) {
@@ -129,20 +162,44 @@ export function FinancialReport({ data }: { data: ReportData }) {
         ? "Rapport recettes"
         : "Rapport dépenses";
 
+  const odcav = data.odcavInfo;
+  const hasOdcav = odcav && (odcav.nom || odcav.adresse || odcav.president);
+
   return (
     <Document>
       <Page size="A4" style={styles.page}>
-        {/* Header compact */}
+        {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             <Text style={styles.title}>GUICHET FOOT</Text>
             <Text style={styles.zoneName}>{data.zoneName}</Text>
-          </View>
-          <View style={styles.headerRight}>
-            <Text style={{ fontSize: 11, fontFamily: "Helvetica-Bold" }}>{typeLabel}</Text>
+            <Text style={[styles.headerMeta, { marginTop: 6 }]}>{typeLabel}</Text>
             <Text style={styles.headerMeta}>Du {data.startDate} au {data.endDate}</Text>
             <Text style={styles.headerMeta}>Généré le {data.generatedAt}</Text>
           </View>
+
+          {hasOdcav && (
+            <View style={styles.odcavBlock}>
+              {odcav.logoUrl ? (
+                <Image src={odcav.logoUrl} style={styles.odcavLogo} />
+              ) : null}
+              {odcav.nom ? (
+                <Text style={styles.odcavName}>{odcav.nom}</Text>
+              ) : null}
+              {odcav.adresse ? (
+                <Text style={styles.odcavMeta}>{odcav.adresse}</Text>
+              ) : null}
+              {odcav.president ? (
+                <Text style={styles.odcavMeta}>Président : {odcav.president}</Text>
+              ) : null}
+              {odcav.telephone ? (
+                <Text style={styles.odcavMeta}>Tél : {odcav.telephone}</Text>
+              ) : null}
+              {odcav.email ? (
+                <Text style={styles.odcavMeta}>{odcav.email}</Text>
+              ) : null}
+            </View>
+          )}
         </View>
 
         {/* Synthèse */}

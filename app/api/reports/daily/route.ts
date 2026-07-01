@@ -91,6 +91,23 @@ export async function POST(request: Request) {
     if (zone) zoneName = zone.name;
   }
 
+  // Infos ODCAV pour le PDF
+  const { data: odcavData } = await adminSupabase
+    .from("odcav_settings")
+    .select("logo_url, nom, adresse, president, telephone, email")
+    .eq("id", "global")
+    .single();
+  const odcavInfo = odcavData
+    ? {
+        logoUrl: odcavData.logo_url || undefined,
+        nom: odcavData.nom || undefined,
+        adresse: odcavData.adresse || undefined,
+        president: odcavData.president || undefined,
+        telephone: odcavData.telephone || undefined,
+        email: odcavData.email || undefined,
+      }
+    : undefined;
+
   const odcavCommission = Math.round(totalRevenue * odcavRate);
   const netZone = totalRevenue - totalExpenses - odcavCommission - fraisPlateforme;
 
@@ -105,6 +122,7 @@ export async function POST(request: Request) {
     fraisPlateforme,
     netZone,
     revenueByMatch: Object.values(revenueMap),
+    odcavInfo,
     expenses: (expenses || []).map((e: any) => ({
       label: e.label,
       category: EXPENSE_CATEGORY_LABELS[e.category as string] || e.category,
