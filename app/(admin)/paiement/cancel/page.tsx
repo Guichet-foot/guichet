@@ -21,7 +21,7 @@ export default function PaymentCancelPage() {
         </div>
         <div className="space-y-2">
           <Button
-            onClick={() => router.push("/vente")}
+            onClick={() => router.push("/abonnements")}
             className="w-full h-12 bg-amber-600 hover:bg-amber-700"
           >
             <CreditCard className="h-5 w-5 mr-2" />

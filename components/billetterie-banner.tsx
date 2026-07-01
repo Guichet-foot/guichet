@@ -13,7 +13,11 @@ interface BilletterieBannerProps {
 
 function formatUntil(iso: string) {
   const d = new Date(iso);
-  return d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+  return (
+    d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }) +
+    " le " +
+    d.toLocaleDateString("fr-FR", { day: "2-digit", month: "short" })
+  );
 }
 
 export function BilletterieBanner({ canPay }: BilletterieBannerProps) {

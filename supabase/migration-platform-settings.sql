@@ -19,6 +19,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS platform_settings_date_idx
 -- RLS
 ALTER TABLE platform_settings ENABLE ROW LEVEL SECURITY;
 
+-- Supprime les policies existantes si elles existent déjà
+DROP POLICY IF EXISTS "fondateur manages platform settings" ON platform_settings;
+DROP POLICY IF EXISTS "authenticated read platform settings" ON platform_settings;
+
 -- Seul le fondateur peut créer/modifier
 CREATE POLICY "fondateur manages platform settings" ON platform_settings
   FOR ALL TO authenticated

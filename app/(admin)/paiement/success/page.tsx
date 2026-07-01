@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { getPaymentByRef } from "@/lib/actions/payment-actions";
 import { Button } from "@/components/ui/button";
-import { CheckCircle, Loader2, Clock, ShoppingCart } from "lucide-react";
+import { CheckCircle, Loader2, Clock, Trophy, ShoppingCart } from "lucide-react";
 import { Suspense } from "react";
 
 function PaymentSuccessContent() {
@@ -21,8 +21,7 @@ function PaymentSuccessContent() {
       if (result?.status === "success") {
         setStatus("confirmed");
         setValidUntil(result.validUntil || null);
-      } else if (attempts < 6) {
-        // Réessayer toutes les 3 secondes (max 18s)
+      } else if (attempts < 8) {
         setTimeout(() => setAttempts((a) => a + 1), 3000);
       } else {
         setStatus("pending");
@@ -38,7 +37,7 @@ function PaymentSuccessContent() {
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
         <Loader2 className="h-10 w-10 animate-spin text-brand" />
         <p className="text-muted-foreground text-sm">Vérification du paiement…</p>
-        <p className="text-xs text-muted-foreground">({attempts + 1}/6 tentatives)</p>
+        <p className="text-xs text-muted-foreground">({attempts + 1}/8 tentatives)</p>
       </div>
     );
   }
@@ -58,29 +57,30 @@ function PaymentSuccessContent() {
           <div>
             <h1 className="text-2xl font-bold text-green-700">Paiement confirmé !</h1>
             <p className="text-muted-foreground text-sm mt-2">
-              Votre zone est maintenant activée.
+              Votre zone est maintenant activée. Vous pouvez ouvrir la vente sur vos matchs.
             </p>
             {until && (
-              <p className="text-sm font-medium mt-3 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
-                <Clock className="h-4 w-4 inline mr-1 text-green-600" />
+              <div className="flex items-center justify-center gap-1.5 mt-3 text-sm font-medium bg-green-50 border border-green-200 rounded-lg px-3 py-2 text-green-800">
+                <Clock className="h-4 w-4 text-green-600 shrink-0" />
                 Valable jusqu&apos;à {until}
-              </p>
+              </div>
             )}
           </div>
           <div className="space-y-2">
             <Button
-              onClick={() => router.push("/vente")}
+              onClick={() => router.push("/matchs")}
               className="w-full h-12 bg-brand hover:bg-brand/90 font-semibold"
             >
-              <ShoppingCart className="h-5 w-5 mr-2" />
-              Ouvrir la caisse
+              <Trophy className="h-5 w-5 mr-2" />
+              Retour aux matchs
             </Button>
             <Button
               variant="outline"
-              onClick={() => router.push("/scanner")}
+              onClick={() => router.push("/vente")}
               className="w-full h-12"
             >
-              Aller au scanner
+              <ShoppingCart className="h-5 w-5 mr-2" />
+              Ouvrir la caisse directement
             </Button>
           </div>
         </div>
@@ -88,7 +88,6 @@ function PaymentSuccessContent() {
     );
   }
 
-  // Pending — IPN pas encore reçu
   return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] px-4">
       <div className="max-w-sm w-full text-center space-y-6">
@@ -111,10 +110,10 @@ function PaymentSuccessContent() {
         </Button>
         <Button
           variant="ghost"
-          onClick={() => router.push("/vente")}
+          onClick={() => router.push("/abonnements")}
           className="w-full text-muted-foreground"
         >
-          Retour à la caisse
+          Voir l&apos;historique des paiements
         </Button>
       </div>
     </div>

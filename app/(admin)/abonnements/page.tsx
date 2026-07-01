@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CheckCircle2, Clock, CreditCard, ShoppingCart } from "lucide-react";
 import { ActivateButton } from "./activate-button";
+import { ResumePaymentButton } from "./resume-payment-button";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 
@@ -163,9 +164,12 @@ export default async function AbonnementsPage() {
                         {item.status === "success" ? formatUntil(item.validUntil) : "—"}
                       </TableCell>
                       <TableCell>
-                        <Badge variant="secondary" className={STATUS_COLORS[item.status] || ""}>
-                          {STATUS_LABELS[item.status] || item.status}
-                        </Badge>
+                        <div className="flex items-center">
+                          <Badge variant="secondary" className={STATUS_COLORS[item.status] || ""}>
+                            {STATUS_LABELS[item.status] || item.status}
+                          </Badge>
+                          {item.status === "pending" && <ResumePaymentButton />}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
