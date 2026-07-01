@@ -19,20 +19,24 @@ export async function createMatch(formData: {
 
   if (!user) return { error: "Non authentifié" };
 
-  const { error } = await supabase.from("matches").insert({
-    zone_id: formData.zoneId,
-    home_team: formData.homeTeam,
-    away_team: formData.awayTeam,
-    venue: formData.venue,
-    match_date: formData.matchDate,
-    notes: formData.notes || null,
-    created_by: user.id,
-  });
+  const { data: match, error } = await supabase
+    .from("matches")
+    .insert({
+      zone_id: formData.zoneId,
+      home_team: formData.homeTeam,
+      away_team: formData.awayTeam,
+      venue: formData.venue,
+      match_date: formData.matchDate,
+      notes: formData.notes || null,
+      created_by: user.id,
+    })
+    .select("id")
+    .single();
 
   if (error) return { error: error.message };
 
   revalidatePath("/matchs");
-  return { success: true };
+  return { success: true, matchId: match.id };
 }
 
 export async function updateMatchStatus(

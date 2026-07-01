@@ -12,15 +12,18 @@ import { EXPENSE_CATEGORY_LABELS } from "@/lib/constants";
 import { buildZoneUrl } from "@/lib/zone-utils";
 import { ZoneCardGrid } from "@/components/zone-card-grid";
 import { ZoneBackHeader } from "@/components/zone-back-header";
+import { FinancesFilters } from "./finances-filters";
 
 export const metadata = { title: "Finances" };
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+type Period = "jour" | "mois" | "custom";
+
 export default async function FinancesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ zone?: string }>;
+  searchParams: Promise<{ zone?: string; period?: string; date?: string; from?: string; to?: string }>;
 }) {
   const profile = await requireRole(["super_admin", "admin_zone"]);
   const params = await searchParams;
@@ -35,17 +38,41 @@ export default async function FinancesPage({
   const adminSupabase = await createAdminClient();
   const zoneId = effectiveZoneId;
 
-  const monthStart = new Date();
-  monthStart.setDate(1);
-  monthStart.setHours(0, 0, 0, 0);
-
   const today = new Date().toISOString().split("T")[0];
+  const period = (params.period as Period) || "mois";
 
-  // Paramètres plateforme effectifs aujourd'hui
+  // Build date range from period params
+  let dateStart: Date;
+  let dateEnd: Date;
+  let periodLabel: string;
+  let settingsDate = today;
+
+  if (period === "jour") {
+    const d = params.date || today;
+    dateStart = new Date(d + "T00:00:00");
+    dateEnd = new Date(d + "T23:59:59.999");
+    periodLabel = d === today ? "Aujourd'hui" : `Le ${formatDate(d)}`;
+    settingsDate = d;
+  } else if (period === "custom" && params.from && params.to) {
+    dateStart = new Date(params.from + "T00:00:00");
+    dateEnd = new Date(params.to + "T23:59:59.999");
+    periodLabel = `Du ${formatDate(params.from)} au ${formatDate(params.to)}`;
+    settingsDate = params.to;
+  } else {
+    // Default: current month
+    dateStart = new Date();
+    dateStart.setDate(1);
+    dateStart.setHours(0, 0, 0, 0);
+    dateEnd = new Date();
+    dateEnd.setHours(23, 59, 59, 999);
+    periodLabel = "Mois en cours";
+  }
+
+  // Platform settings effective on settingsDate
   const { data: platformData } = await adminSupabase
     .from("platform_settings")
     .select("frais_plateforme, odcav_rate")
-    .lte("effective_date", today)
+    .lte("effective_date", settingsDate)
     .order("effective_date", { ascending: false })
     .limit(1)
     .single();
@@ -55,43 +82,53 @@ export default async function FinancesPage({
   const { data: tickets } = (await supabase
     .from("tickets")
     .select("price, match_id, sold_at, match:matches(home_team, away_team, match_date, zone_id)")
-    .gte("sold_at", monthStart.toISOString())
+    .gte("sold_at", dateStart.toISOString())
+    .lte("sold_at", dateEnd.toISOString())
     .neq("status", "annule")) as { data: any[] | null };
 
   const filteredTickets = zoneId
     ? tickets?.filter((t: any) => t.match?.zone_id === zoneId)
     : tickets;
 
-  // Jours d'activité ce mois (jours avec au moins une vente)
   const activeDays = new Set(
     filteredTickets?.map((t: any) => (t.sold_at as string)?.split("T")[0]).filter(Boolean) || []
   ).size;
 
   const totalRevenue = filteredTickets?.reduce((sum: number, t: any) => sum + t.price, 0) || 0;
   const odcavCommission = Math.round(totalRevenue * odcavRate);
-  const fraisPlatformeMois = fraisPlateforme * activeDays;
+  const fraisPlatformePeriod = fraisPlateforme * activeDays;
 
   const revenueByMatch: Record<string, { homeTeam: string; awayTeam: string; date: string; sold: number; revenue: number }> = {};
   filteredTickets?.forEach((t: any) => {
     if (!t.match) return;
     if (!revenueByMatch[t.match_id]) {
-      revenueByMatch[t.match_id] = { homeTeam: t.match.home_team, awayTeam: t.match.away_team, date: t.match.match_date, sold: 0, revenue: 0 };
+      revenueByMatch[t.match_id] = {
+        homeTeam: t.match.home_team,
+        awayTeam: t.match.away_team,
+        date: t.match.match_date,
+        sold: 0,
+        revenue: 0,
+      };
     }
     revenueByMatch[t.match_id].sold++;
     revenueByMatch[t.match_id].revenue += t.price;
   });
 
+  const expenseFrom = dateStart.toISOString().split("T")[0];
+  const expenseTo = dateEnd.toISOString().split("T")[0];
+
   let expensesQuery = supabase
     .from("expenses")
     .select("*, match:matches(home_team, away_team), adder:profiles!expenses_added_by_fkey(full_name)")
-    .gte("expense_date", monthStart.toISOString().split("T")[0])
+    .gte("expense_date", expenseFrom)
+    .lte("expense_date", expenseTo)
     .order("expense_date", { ascending: false });
 
   if (zoneId) expensesQuery = expensesQuery.eq("zone_id", zoneId);
 
   const { data: expenses } = (await expensesQuery) as { data: any[] | null };
   const totalExpenses = expenses?.reduce((sum: number, e: any) => sum + e.amount, 0) || 0;
-  const balance = totalRevenue - totalExpenses - odcavCommission - fraisPlatformeMois;
+  const balance = totalRevenue - totalExpenses - odcavCommission - fraisPlatformePeriod;
 
   return (
     <div className="space-y-6 min-w-0">
@@ -99,7 +136,7 @@ export default async function FinancesPage({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold font-heading">Finances</h1>
-          <p className="text-muted-foreground">Mois en cours</p>
+          <p className="text-muted-foreground">{periodLabel}</p>
         </div>
         <Link href={buildZoneUrl("/finances/depenses/nouveau", params.zone)}>
           <Button className="bg-brand hover:bg-brand/90">
@@ -109,7 +146,15 @@ export default async function FinancesPage({
         </Link>
       </div>
 
-      {/* Ligne 1 : Recettes + Dépenses */}
+      <FinancesFilters
+        currentPeriod={period}
+        currentDate={period === "jour" ? (params.date || today) : undefined}
+        currentFrom={params.from}
+        currentTo={params.to}
+        zoneParam={params.zone}
+      />
+
+      {/* Recettes + Dépenses */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Card>
           <CardContent className="pt-6">
@@ -136,7 +181,7 @@ export default async function FinancesPage({
         </Card>
       </div>
 
-      {/* Ligne 2 : Déductions obligatoires */}
+      {/* Déductions obligatoires */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Card className="border-blue-200 bg-blue-50/40">
           <CardContent className="pt-5">
@@ -155,7 +200,7 @@ export default async function FinancesPage({
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-orange-700 font-medium">Frais plateforme</p>
-                <p className="text-xl font-bold text-orange-800">{formatFCFA(fraisPlatformeMois)}</p>
+                <p className="text-xl font-bold text-orange-800">{formatFCFA(fraisPlatformePeriod)}</p>
                 <p className="text-xs text-orange-600 mt-0.5">{formatFCFA(fraisPlateforme)} × {activeDays} jour(s)</p>
               </div>
               <Building2 className="h-7 w-7 text-orange-400" />
@@ -170,7 +215,9 @@ export default async function FinancesPage({
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-muted-foreground">Net à reverser à la zone</p>
-              <p className={`text-3xl font-bold ${balance >= 0 ? "text-success" : "text-danger"}`}>{formatFCFA(Math.max(0, balance))}</p>
+              <p className={`text-3xl font-bold ${balance >= 0 ? "text-success" : "text-danger"}`}>
+                {formatFCFA(Math.max(0, balance))}
+              </p>
               <p className="text-xs text-muted-foreground mt-1">Recettes − Dépenses − ODCAV − Frais plateforme</p>
             </div>
             <TrendingUp className="h-10 w-10 text-muted-foreground/20" />
@@ -193,7 +240,9 @@ export default async function FinancesPage({
             <TableBody>
               {Object.entries(revenueByMatch).length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center text-muted-foreground py-8">Aucune recette ce mois</TableCell>
+                  <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                    Aucune recette sur cette période
+                  </TableCell>
                 </TableRow>
               ) : (
                 Object.entries(revenueByMatch).map(([id, data]) => (
@@ -226,15 +275,21 @@ export default async function FinancesPage({
             <TableBody>
               {!expenses || expenses.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted-foreground py-8">Aucune dépense ce mois</TableCell>
+                  <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                    Aucune dépense sur cette période
+                  </TableCell>
                 </TableRow>
               ) : (
                 expenses.map((expense: any) => (
                   <TableRow key={expense.id}>
                     <TableCell className="hidden sm:table-cell text-sm">{formatDate(expense.expense_date)}</TableCell>
                     <TableCell className="font-medium">{expense.label}</TableCell>
-                    <TableCell className="hidden sm:table-cell capitalize">{EXPENSE_CATEGORY_LABELS[expense.category] || expense.category}</TableCell>
-                    <TableCell className="hidden md:table-cell">{expense.match ? `${expense.match.home_team} vs ${expense.match.away_team}` : "Global zone"}</TableCell>
+                    <TableCell className="hidden sm:table-cell capitalize">
+                      {EXPENSE_CATEGORY_LABELS[expense.category] || expense.category}
+                    </TableCell>
+                    <TableCell className="hidden md:table-cell">
+                      {expense.match ? `${expense.match.home_team} vs ${expense.match.away_team}` : "Global zone"}
+                    </TableCell>
                     <TableCell className="text-right font-bold text-danger">-{formatFCFA(expense.amount)}</TableCell>
                   </TableRow>
                 ))
