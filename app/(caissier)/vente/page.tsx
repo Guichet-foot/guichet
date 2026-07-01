@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { createTickets } from "@/lib/actions/ticket-actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { PaymentGate } from "@/components/payment-gate";
 import {
   Sheet,
   SheetContent,
@@ -40,7 +41,7 @@ interface CategoryOption {
   sold_count: number;
 }
 
-export default function VentePage() {
+function VenteContent() {
   const [matches, setMatches] = useState<MatchOption[]>([]);
   const [selectedMatchId, setSelectedMatchId] = useState<string>("");
   const [categories, setCategories] = useState<CategoryOption[]>([]);
@@ -416,5 +417,13 @@ export default function VentePage() {
         </SheetContent>
       </Sheet>
     </div>
+  );
+}
+
+export default function VentePage() {
+  return (
+    <PaymentGate>
+      <VenteContent />
+    </PaymentGate>
   );
 }

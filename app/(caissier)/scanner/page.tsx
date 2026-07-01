@@ -6,8 +6,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ScanLine, CheckCircle, AlertTriangle, XCircle } from "lucide-react";
 import { formatDateTime } from "@/lib/format";
 import type { ScanResult } from "@/lib/types";
+import { PaymentGate } from "@/components/payment-gate";
 
-export default function ScannerPage() {
+function ScannerContent() {
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const [scanning, setScanning] = useState(true);
   const [stats, setStats] = useState({ validated: 0, total: 0 });
@@ -180,5 +181,13 @@ export default function ScannerPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function ScannerPage() {
+  return (
+    <PaymentGate>
+      <ScannerContent />
+    </PaymentGate>
   );
 }
