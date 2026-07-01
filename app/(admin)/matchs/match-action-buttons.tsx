@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { updateMatchStatus, toggleMatchVente } from "@/lib/actions/match-actions";
-import { checkZonePayment, initiatePaytechPayment } from "@/lib/actions/payment-actions";
+import { checkZonePaymentById, initiatePaytechPaymentForZone } from "@/lib/actions/payment-actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,6 +19,7 @@ import Link from "next/link";
 
 interface MatchActionButtonsProps {
   matchId: string;
+  zoneId: string;
   status: string;
   venteActive: boolean;
   homeTeam?: string;
@@ -29,7 +30,7 @@ function formatFCFA(n: number) {
   return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ") + " FCFA";
 }
 
-export function MatchActionButtons({ matchId, status, venteActive, homeTeam, awayTeam }: MatchActionButtonsProps) {
+export function MatchActionButtons({ matchId, zoneId, status, venteActive, homeTeam, awayTeam }: MatchActionButtonsProps) {
   const [loading, setLoading] = useState<string | null>(null);
   const [scoreOpen, setScoreOpen] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
@@ -49,9 +50,9 @@ export function MatchActionButtons({ matchId, status, venteActive, homeTeam, awa
       return;
     }
 
-    // Ouvrir la vente — vérifier le paiement d'abord
+    // Ouvrir la vente — vérifier le paiement pour cette zone
     setLoading("vente");
-    const payStatus = await checkZonePayment();
+    const payStatus = await checkZonePaymentById(zoneId);
     setLoading(null);
 
     if (payStatus.isPaid) {
@@ -70,7 +71,7 @@ export function MatchActionButtons({ matchId, status, venteActive, homeTeam, awa
 
   async function handlePayNow() {
     setPaying(true);
-    const result = await initiatePaytechPayment();
+    const result = await initiatePaytechPaymentForZone(zoneId);
     if (result.error) {
       toast.error(result.error);
       setPaying(false);

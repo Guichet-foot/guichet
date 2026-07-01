@@ -1,17 +1,21 @@
 "use client";
 
 import { useState } from "react";
-import { initiatePaytechPayment } from "@/lib/actions/payment-actions";
+import { initiatePaytechPaymentForZone } from "@/lib/actions/payment-actions";
 import { Button } from "@/components/ui/button";
 import { CreditCard, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-export function ResumePaymentButton() {
+interface ResumePaymentButtonProps {
+  zoneId: string;
+}
+
+export function ResumePaymentButton({ zoneId }: ResumePaymentButtonProps) {
   const [loading, setLoading] = useState(false);
 
   async function handleResume() {
     setLoading(true);
-    const result = await initiatePaytechPayment();
+    const result = await initiatePaytechPaymentForZone(zoneId);
     if (result.error) {
       toast.error(result.error);
       setLoading(false);

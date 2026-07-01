@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { initiatePaytechPayment } from "@/lib/actions/payment-actions";
+import { initiatePaytechPaymentForZone } from "@/lib/actions/payment-actions";
 import { Button } from "@/components/ui/button";
 import { CreditCard, Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -9,14 +9,15 @@ import { toast } from "sonner";
 interface ActivateButtonProps {
   amount: number;
   zoneName: string;
+  zoneId: string;
 }
 
-export function ActivateButton({ amount, zoneName }: ActivateButtonProps) {
+export function ActivateButton({ amount, zoneName, zoneId }: ActivateButtonProps) {
   const [paying, setPaying] = useState(false);
 
   async function handlePay() {
     setPaying(true);
-    const result = await initiatePaytechPayment();
+    const result = await initiatePaytechPaymentForZone(zoneId);
     if (result.error) {
       toast.error(result.error);
       setPaying(false);

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { updateMatchStatus, toggleMatchVente } from "@/lib/actions/match-actions";
+import { checkZonePaymentById, initiatePaytechPaymentForZone } from "@/lib/actions/payment-actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +11,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import {
   Loader2,
@@ -21,6 +23,8 @@ import {
   Ticket,
   Calendar,
   MapPin,
+  Lock,
+  CreditCard,
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatFCFA, formatDateShort } from "@/lib/format";
@@ -30,6 +34,7 @@ import Link from "next/link";
 interface MatchMobileActionsProps {
   match: {
     id: string;
+    zone_id: string;
     home_team: string;
     away_team: string;
     venue: string;
@@ -46,17 +51,54 @@ interface MatchMobileActionsProps {
 export function MatchMobileActions({ match, stats, detailUrl }: MatchMobileActionsProps) {
   const [open, setOpen] = useState(false);
   const [scoreOpen, setScoreOpen] = useState(false);
+  const [paymentOpen, setPaymentOpen] = useState(false);
+  const [paymentAmount, setPaymentAmount] = useState(0);
+  const [paying, setPaying] = useState(false);
   const [loading, setLoading] = useState<string | null>(null);
   const [homeScore, setHomeScore] = useState("");
   const [awayScore, setAwayScore] = useState("");
 
   async function handleToggleVente() {
+    if (match.vente_active) {
+      setLoading("vente");
+      const result = await toggleMatchVente(match.id, false);
+      if (result.error) toast.error(result.error);
+      else toast.success("Vente fermée");
+      setLoading(null);
+      setOpen(false);
+      return;
+    }
+
+    // Opening — check payment first
     setLoading("vente");
-    const result = await toggleMatchVente(match.id, !match.vente_active);
-    if (result.error) toast.error(result.error);
-    else toast.success(match.vente_active ? "Vente fermée" : "Vente ouverte");
+    const payStatus = await checkZonePaymentById(match.zone_id);
     setLoading(null);
-    setOpen(false);
+
+    if (payStatus.isPaid) {
+      setLoading("vente");
+      const result = await toggleMatchVente(match.id, true);
+      if (result.error) toast.error(result.error);
+      else toast.success("Vente ouverte !");
+      setLoading(null);
+      setOpen(false);
+    } else {
+      setPaymentAmount(payStatus.amount);
+      setOpen(false);
+      setPaymentOpen(true);
+    }
+  }
+
+  async function handlePayNow() {
+    setPaying(true);
+    const result = await initiatePaytechPaymentForZone(match.zone_id);
+    if (result.error) {
+      toast.error(result.error);
+      setPaying(false);
+      return;
+    }
+    if (result.redirectUrl) {
+      window.location.href = result.redirectUrl;
+    }
   }
 
   async function handleTerminer() {
@@ -96,6 +138,7 @@ export function MatchMobileActions({ match, stats, detailUrl }: MatchMobileActio
         <MoreVertical className="h-4 w-4" />
       </Button>
 
+      {/* Match actions dialog */}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
           <DialogHeader>
@@ -104,7 +147,6 @@ export function MatchMobileActions({ match, stats, detailUrl }: MatchMobileActio
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            {/* Match info */}
             <div className="space-y-2 text-sm">
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Calendar className="h-4 w-4" />
@@ -126,7 +168,6 @@ export function MatchMobileActions({ match, stats, detailUrl }: MatchMobileActio
               </div>
             </div>
 
-            {/* Stats */}
             <div className="flex gap-4 text-sm">
               <div className="flex items-center gap-1">
                 <Ticket className="h-4 w-4 text-muted-foreground" />
@@ -135,7 +176,6 @@ export function MatchMobileActions({ match, stats, detailUrl }: MatchMobileActio
               <div className="font-semibold text-brand">{formatFCFA(stats.revenue)}</div>
             </div>
 
-            {/* Actions */}
             <div className="space-y-2">
               {!isFinished && (
                 <>
@@ -172,6 +212,48 @@ export function MatchMobileActions({ match, stats, detailUrl }: MatchMobileActio
                 </Button>
               </Link>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Payment required dialog */}
+      <Dialog open={paymentOpen} onOpenChange={setPaymentOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <div className="flex justify-center mb-2">
+              <div className="w-14 h-14 rounded-full bg-amber-100 flex items-center justify-center">
+                <Lock className="h-7 w-7 text-amber-600" />
+              </div>
+            </div>
+            <DialogTitle className="text-center">Billetterie non activée</DialogTitle>
+            <DialogDescription className="text-center">
+              Pour ouvrir la vente, activez d&apos;abord la billetterie du jour.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-center">
+              <p className="text-xs text-amber-700 font-semibold uppercase tracking-wide mb-1">Frais journaliers</p>
+              <p className="text-3xl font-bold text-amber-700">
+                {paymentAmount.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ")} FCFA
+              </p>
+              <p className="text-xs text-amber-600 mt-1">Valable 24h · Débloque caisse + scanner</p>
+            </div>
+            <Button
+              onClick={handlePayNow}
+              disabled={paying}
+              className="w-full h-11 bg-amber-600 hover:bg-amber-700 text-white font-semibold"
+            >
+              {paying ? (
+                <><Loader2 className="h-4 w-4 animate-spin mr-2" />Redirection…</>
+              ) : (
+                <><CreditCard className="h-4 w-4 mr-2" />Payer avec Paytech</>
+              )}
+            </Button>
+            <Link href="/abonnements" className="block">
+              <Button variant="outline" className="w-full h-9 text-sm" onClick={() => setPaymentOpen(false)}>
+                Voir les abonnements
+              </Button>
+            </Link>
           </div>
         </DialogContent>
       </Dialog>

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
   LayoutDashboard,
@@ -50,13 +50,17 @@ const superAdminLinks = [
 
 export function SidebarAdmin({ userName, userRole, zoneName }: SidebarProps) {
   const pathname = usePathname();
-  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
 
   const links =
     userRole === "super_admin"
-      ? [...adminLinks, ...superAdminLinks]
+      ? [
+          ...adminLinks.map((l) =>
+            l.href === "/abonnements" ? { ...l, label: "Billetterie Zone" } : l
+          ),
+          ...superAdminLinks,
+        ]
       : adminLinks;
 
   async function handleLogout() {
