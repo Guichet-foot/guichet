@@ -1,13 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { updateOdcavSettings } from "@/lib/actions/odcav-actions";
 import type { OdcavSettings, OdcavMember } from "@/lib/actions/odcav-actions";
+import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, Plus, Save, Trash2, Users } from "lucide-react";
+import { Loader2, Plus, Save, Trash2, Upload, Users, X } from "lucide-react";
 import { toast } from "sonner";
 
 interface OdcavSettingsFormProps {
@@ -16,6 +17,7 @@ interface OdcavSettingsFormProps {
 
 export function OdcavSettingsForm({ initialData }: OdcavSettingsFormProps) {
   const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [logoUrl, setLogoUrl] = useState(initialData.logoUrl);
   const [nom, setNom] = useState(initialData.nom);
   const [adresse, setAdresse] = useState(initialData.adresse);
@@ -27,6 +29,61 @@ export function OdcavSettingsForm({ initialData }: OdcavSettingsFormProps) {
       ? initialData.membres
       : [{ name: "", poste: "" }]
   );
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const maxSize = 2 * 1024 * 1024; // 2 MB
+    if (file.size > maxSize) {
+      toast.error("Le logo ne doit pas dépasser 2 Mo");
+      return;
+    }
+    if (!file.type.startsWith("image/")) {
+      toast.error("Veuillez sélectionner une image (PNG, JPG, SVG...)");
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const supabase = createClient();
+      const ext = file.name.split(".").pop() || "png";
+      const fileName = `odcav-logo.${ext}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("odcav-assets")
+        .upload(fileName, file, { upsert: true, contentType: file.type });
+
+      if (uploadError) {
+        toast.error(`Erreur upload : ${uploadError.message}`);
+        return;
+      }
+
+      const { data: { publicUrl } } = supabase.storage
+        .from("odcav-assets")
+        .getPublicUrl(fileName);
+
+      // Cache-bust pour forcer le rechargement de l'aperçu
+      setLogoUrl(`${publicUrl}?t=${Date.now()}`);
+      toast.success("Logo uploadé avec succès");
+    } catch {
+      toast.error("Erreur lors de l'upload");
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  async function handleRemoveLogo() {
+    try {
+      const supabase = createClient();
+      // Essaie de supprimer les deux extensions courantes
+      const ext = logoUrl?.split("odcav-logo.").pop()?.split("?")[0] || "png";
+      await supabase.storage.from("odcav-assets").remove([`odcav-logo.${ext}`]);
+    } catch {}
+    setLogoUrl("");
+  }
 
   function addMembre() {
     setMembres([...membres, { name: "", poste: "" }]);
@@ -77,23 +134,71 @@ export function OdcavSettingsForm({ initialData }: OdcavSettingsFormProps) {
               placeholder="ODCAV de Thiès"
             />
           </div>
+
+          {/* Logo upload */}
           <div className="space-y-2">
-            <Label>Logo (URL de l&apos;image)</Label>
-            <Input
-              value={logoUrl}
-              onChange={(e) => setLogoUrl(e.target.value)}
-              placeholder="https://exemple.com/logo-odcav.png"
+            <Label>Logo</Label>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleLogoUpload}
             />
-            {logoUrl && (
-              <div className="mt-2 p-3 bg-muted rounded-lg">
+
+            {logoUrl ? (
+              <div className="flex items-center gap-4 p-3 bg-muted rounded-lg border border-border">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={logoUrl}
-                  alt="Aperçu logo ODCAV"
-                  className="h-16 w-auto object-contain"
+                  alt="Logo ODCAV"
+                  className="h-16 w-auto object-contain rounded"
                   onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
                 />
+                <div className="flex flex-col gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploading}
+                  >
+                    {uploading ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    ) : (
+                      <Upload className="h-4 w-4 mr-2" />
+                    )}
+                    Changer le logo
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleRemoveLogo}
+                    className="text-danger hover:text-danger"
+                  >
+                    <X className="h-4 w-4 mr-2" />
+                    Supprimer
+                  </Button>
+                </div>
               </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                className="w-full flex flex-col items-center justify-center gap-2 p-8 border-2 border-dashed border-border rounded-lg hover:border-brand/40 hover:bg-brand/5 transition-colors"
+              >
+                {uploading ? (
+                  <Loader2 className="h-8 w-8 animate-spin text-brand" />
+                ) : (
+                  <Upload className="h-8 w-8 text-muted-foreground" />
+                )}
+                <span className="text-sm text-muted-foreground">
+                  {uploading ? "Upload en cours..." : "Cliquer pour choisir un logo"}
+                </span>
+                <span className="text-xs text-muted-foreground">PNG, JPG, SVG — max 2 Mo</span>
+              </button>
             )}
           </div>
         </CardContent>
@@ -191,7 +296,7 @@ export function OdcavSettingsForm({ initialData }: OdcavSettingsFormProps) {
       <Button
         type="button"
         onClick={handleSubmit}
-        disabled={loading}
+        disabled={loading || uploading}
         className="w-full h-12 bg-brand hover:bg-brand/90"
       >
         {loading ? (
