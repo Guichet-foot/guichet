@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { createTicket } from "@/lib/actions/ticket-actions";
+import { createTickets } from "@/lib/actions/ticket-actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Printer, ShoppingCart } from "lucide-react";
+import { Loader2, Printer, ShoppingCart, Minus, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { formatFCFA } from "@/lib/format";
 import { CATEGORY_COLORS } from "@/lib/constants";
@@ -47,6 +47,7 @@ export default function VentePage() {
   const [selectedCategory, setSelectedCategory] =
     useState<CategoryOption | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [quantity, setQuantity] = useState(1);
   const [loading, setLoading] = useState(false);
   const [todaySales, setTodaySales] = useState({ count: 0, total: 0 });
   const [initialLoading, setInitialLoading] = useState(true);
@@ -184,6 +185,7 @@ export default function VentePage() {
   function handleCategoryClick(cat: CategoryOption) {
     if (cat.sold_count >= cat.quantity_total) return;
     setSelectedCategory(cat);
+    setQuantity(1);
     setSheetOpen(true);
   }
 
@@ -191,7 +193,7 @@ export default function VentePage() {
     if (!selectedCategory || loading) return;
     setLoading(true);
 
-    const result = await createTicket(selectedMatchId, selectedCategory.id);
+    const result = await createTickets(selectedMatchId, selectedCategory.id, quantity);
 
     if (result.error) {
       toast.error(result.error);
@@ -199,26 +201,27 @@ export default function VentePage() {
       return;
     }
 
-    toast.success("Billet vendu !");
+    toast.success(quantity > 1 ? `${quantity} billets vendus !` : "Billet vendu !");
     setTodaySales((prev) => ({
-      count: prev.count + 1,
-      total: prev.total + selectedCategory.price,
+      count: prev.count + quantity,
+      total: prev.total + selectedCategory.price * quantity,
     }));
 
     setCategories((prev) =>
       prev.map((c) =>
         c.id === selectedCategory.id
-          ? { ...c, sold_count: c.sold_count + 1 }
+          ? { ...c, sold_count: c.sold_count + quantity }
           : c
       )
     );
 
     setSheetOpen(false);
     setSelectedCategory(null);
+    setQuantity(1);
     setLoading(false);
 
-    if (result.ticketId) {
-      window.open(`/api/tickets/${result.ticketId}/print`, "_blank");
+    if (result.batchId) {
+      window.open(`/api/tickets/print-batch?batch=${result.batchId}`, "_blank");
     }
   }
 
@@ -341,33 +344,75 @@ export default function VentePage() {
               Confirmer la vente
             </SheetTitle>
           </SheetHeader>
-          {selectedCategory && (
-            <div className="py-6 space-y-6">
-              <div className="text-center space-y-2">
-                <p className="text-xl font-bold">{selectedCategory.name}</p>
-                <p className="text-3xl font-bold text-brand">
-                  {formatFCFA(selectedCategory.price)}
+          {selectedCategory && (() => {
+            const remaining = selectedCategory.quantity_total - selectedCategory.sold_count;
+            const maxQty = Math.min(30, remaining);
+            const totalPrice = selectedCategory.price * quantity;
+            return (
+              <div className="py-4 space-y-5">
+                {/* Catégorie + prix unitaire */}
+                <div className="text-center space-y-1">
+                  <p className="text-xl font-bold">{selectedCategory.name}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {formatFCFA(selectedCategory.price)} / billet
+                  </p>
+                </div>
+
+                {/* Sélecteur quantité */}
+                <div className="flex items-center justify-center gap-4">
+                  <button
+                    type="button"
+                    onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                    disabled={quantity <= 1}
+                    className="w-12 h-12 rounded-full bg-muted flex items-center justify-center disabled:opacity-30 text-xl font-bold active:scale-95 transition-transform"
+                  >
+                    <Minus className="h-5 w-5" />
+                  </button>
+                  <div className="text-center w-16">
+                    <p className="text-4xl font-bold">{quantity}</p>
+                    <p className="text-xs text-muted-foreground">billet(s)</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setQuantity((q) => Math.min(maxQty, q + 1))}
+                    disabled={quantity >= maxQty}
+                    className="w-12 h-12 rounded-full bg-muted flex items-center justify-center disabled:opacity-30 text-xl font-bold active:scale-95 transition-transform"
+                  >
+                    <Plus className="h-5 w-5" />
+                  </button>
+                </div>
+
+                {/* Total */}
+                <div className="bg-brand/5 rounded-xl py-3 text-center">
+                  <p className="text-xs text-muted-foreground mb-0.5">Total à encaisser</p>
+                  <p className="text-3xl font-bold text-brand">{formatFCFA(totalPrice)}</p>
+                  {quantity > 1 && (
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {quantity} × {formatFCFA(selectedCategory.price)}
+                    </p>
+                  )}
+                </div>
+
+                <Button
+                  onClick={handleConfirm}
+                  disabled={loading}
+                  className="w-full h-16 text-lg font-bold bg-brand hover:bg-brand/90"
+                >
+                  {loading ? (
+                    <Loader2 className="h-6 w-6 animate-spin" />
+                  ) : (
+                    <>
+                      <Printer className="h-6 w-6 mr-3" />
+                      IMPRIMER {quantity > 1 ? `${quantity} BILLETS` : "LE BILLET"}
+                    </>
+                  )}
+                </Button>
+                <p className="text-center text-xs text-muted-foreground">
+                  Appuyez sur Entrée pour confirmer — max {maxQty} billet(s) disponible(s)
                 </p>
               </div>
-              <Button
-                onClick={handleConfirm}
-                disabled={loading}
-                className="w-full h-16 text-lg font-bold bg-brand hover:bg-brand/90"
-              >
-                {loading ? (
-                  <Loader2 className="h-6 w-6 animate-spin" />
-                ) : (
-                  <>
-                    <Printer className="h-6 w-6 mr-3" />
-                    IMPRIMER LE BILLET
-                  </>
-                )}
-              </Button>
-              <p className="text-center text-xs text-muted-foreground">
-                Appuyez sur Entrée pour confirmer
-              </p>
-            </div>
-          )}
+            );
+          })()}
         </SheetContent>
       </Sheet>
     </div>

@@ -6,6 +6,12 @@ import { format } from "date-fns";
 import type { ScanResult } from "@/lib/types";
 
 export async function createTicket(matchId: string, categoryId: string) {
+  return createTickets(matchId, categoryId, 1);
+}
+
+export async function createTickets(matchId: string, categoryId: string, quantity: number) {
+  const qty = Math.max(1, Math.min(30, quantity || 1));
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -41,8 +47,12 @@ export async function createTicket(matchId: string, categoryId: string) {
     .eq("category_id", categoryId)
     .neq("status", "annule");
 
-  if (soldCount !== null && soldCount >= category.quantity_total) {
+  const remaining = category.quantity_total - (soldCount || 0);
+  if (remaining <= 0) {
     return { error: "Plus de billets disponibles dans cette catégorie" };
+  }
+  if (qty > remaining) {
+    return { error: `Seulement ${remaining} billet(s) disponible(s)` };
   }
 
   const today = format(new Date(), "yyyyMMdd");
@@ -52,26 +62,33 @@ export async function createTicket(matchId: string, categoryId: string) {
     .select("*", { count: "exact", head: true })
     .like("serial_number", `GF-${today}-%`);
 
-  const serialNumber = `GF-${today}-${String((todayCount || 0) + 1).padStart(4, "0")}`;
+  const batchId = crypto.randomUUID();
+  const baseCount = todayCount || 0;
 
-  const { data: ticket, error } = await supabase
+  const ticketsToInsert = Array.from({ length: qty }, (_, i) => ({
+    match_id: matchId,
+    category_id: categoryId,
+    price: category.price,
+    serial_number: `GF-${today}-${String(baseCount + i + 1).padStart(4, "0")}`,
+    sold_by: user.id,
+    status: "vendu",
+    sale_batch_id: batchId,
+  }));
+
+  const { data: inserted, error } = await supabase
     .from("tickets")
-    .insert({
-      match_id: matchId,
-      category_id: categoryId,
-      price: category.price,
-      serial_number: serialNumber,
-      sold_by: user.id,
-      status: "vendu",
-    })
-    .select("id")
-    .single();
+    .insert(ticketsToInsert)
+    .select("id");
 
   if (error) return { error: error.message };
 
   revalidatePath("/vente");
   revalidatePath("/mes-ventes");
-  return { ticketId: ticket.id };
+  return {
+    batchId,
+    ticketId: inserted[0]?.id,
+    ticketIds: inserted.map((t) => t.id),
+  };
 }
 
 export async function validateTicket(qrToken: string): Promise<ScanResult> {
