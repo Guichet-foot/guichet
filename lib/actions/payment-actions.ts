@@ -45,6 +45,35 @@ export async function manualActivateZone(
   return { success: true };
 }
 
+// ─── Désactivation manuelle d'une billetterie (fondateur uniquement) ─────────
+export async function deactivateZoneBilling(
+  paymentId: string
+): Promise<{ success?: boolean; error?: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Non authentifié" };
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  if (!profile || profile.role !== "fondateur") {
+    return { error: "Seul le fondateur peut désactiver une billetterie" };
+  }
+
+  const adminClient = await createAdminClient();
+  const { error } = await adminClient
+    .from("zone_daily_payments")
+    .update({ valid_until: new Date().toISOString() })
+    .eq("id", paymentId)
+    .eq("status", "success");
+
+  if (error) return { error: "Erreur lors de la désactivation : " + error.message };
+  return { success: true };
+}
+
 // ─── Vérifier le paiement d'une zone spécifique (par ID) ──────────────────────
 export async function checkZonePaymentById(zoneId: string): Promise<{
   isPaid: boolean; validUntil?: string; amount: number; zoneName: string;

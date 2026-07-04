@@ -6,6 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { CreditCard, CheckCircle2, Clock, XCircle, TrendingUp } from "lucide-react";
 import { BillingFilters } from "./billing-filters";
 import { ManualActivationTrigger } from "./manual-activation-trigger";
+import { DeactivateButton } from "./deactivate-button";
 import { formatFCFA } from "@/lib/format";
 
 export const metadata = { title: "Abonnements" };
@@ -106,6 +107,8 @@ export default async function AbonnementsPage({
         p.ref_command?.toLowerCase().includes(q)
     );
   }
+
+  const nowIso = new Date().toISOString();
 
   // Compute summary stats from filtered results
   const totalCount = payments.length;
@@ -248,10 +251,16 @@ export default async function AbonnementsPage({
                     <TableHead>Montant</TableHead>
                     <TableHead className="hidden lg:table-cell">Valable jusqu&apos;à</TableHead>
                     <TableHead>Statut</TableHead>
+                    <TableHead></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {payments.map((p) => (
+                  {payments.map((p) => {
+                    const isActive =
+                      p.status === "success" &&
+                      p.valid_until &&
+                      p.valid_until > nowIso;
+                    return (
                     <TableRow key={p.id}>
                       <TableCell className="text-sm whitespace-nowrap">
                         {formatDT(p.paid_at || p.created_at)}
@@ -279,8 +288,17 @@ export default async function AbonnementsPage({
                           {STATUS_LABELS[p.status] || p.status}
                         </Badge>
                       </TableCell>
+                      <TableCell className="text-right">
+                        {isActive && (
+                          <DeactivateButton
+                            paymentId={p.id}
+                            zoneName={zoneMap.get(p.zone_id) || "cette zone"}
+                          />
+                        )}
+                      </TableCell>
                     </TableRow>
-                  ))}
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
