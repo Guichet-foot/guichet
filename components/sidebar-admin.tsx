@@ -20,6 +20,7 @@ import {
   User,
   Building2,
   CreditCard,
+  ContactRound,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
@@ -39,6 +40,7 @@ const adminLinks = [
   { href: "/finances", label: "Finances", icon: Wallet },
   { href: "/rapports", label: "Rapports", icon: FileText },
   { href: "/utilisateurs", label: "Utilisateurs", icon: Users },
+  { href: "/cartes", label: "Cartes d'accès", icon: ContactRound },
   { href: "/parametres", label: "Paramètres Zone", icon: Settings },
   { href: "/abonnements", label: "Abonnements", icon: CreditCard },
 ];

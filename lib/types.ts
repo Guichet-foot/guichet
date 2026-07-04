@@ -137,6 +137,20 @@ export interface ScanResult {
   scannedAt?: string;
 }
 
+export interface AccessCard {
+  id: string;
+  qr_token: string;
+  full_name: string;
+  phone: string;
+  zone_id: string;
+  zone_name: string;
+  poste: string;
+  asc_name: string | null;
+  photo_url: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
 export type TournamentStatus = "en_cours" | "termine";
 export type TournamentMatchStatus = "programme" | "termine" | "annule";
 
