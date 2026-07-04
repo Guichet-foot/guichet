@@ -47,6 +47,7 @@ const METHOD_LABELS: Record<string, string> = {
   orange_money_senegal: "Orange Money",
   free_money: "Free Money",
   card: "Carte bancaire",
+  cash: "Espèces (manuel)",
 };
 
 const STATUS_COLORS: Record<string, string> = {

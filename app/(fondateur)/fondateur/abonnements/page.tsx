@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CreditCard, CheckCircle2, Clock, XCircle, TrendingUp } from "lucide-react";
 import { BillingFilters } from "./billing-filters";
+import { ManualActivationTrigger } from "./manual-activation-trigger";
 import { formatFCFA } from "@/lib/format";
 
 export const metadata = { title: "Abonnements" };
@@ -26,6 +27,7 @@ const METHOD_LABELS: Record<string, string> = {
   orange_money_senegal: "Orange Money",
   free_money: "Free Money",
   card: "Carte bancaire",
+  cash: "Espèces (manuel)",
 };
 
 function formatDT(iso: string | null) {
@@ -113,6 +115,17 @@ export default async function AbonnementsPage({
     .filter((p) => p.status === "success")
     .reduce((sum, p) => sum + (p.amount || 0), 0);
 
+  // Current frais_plateforme (for pre-filling the manual activation modal)
+  const todayStr = new Date().toISOString().split("T")[0];
+  const { data: platformData } = await supabase
+    .from("platform_settings")
+    .select("frais_plateforme")
+    .lte("effective_date", todayStr)
+    .order("effective_date", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const currentFrais: number = platformData?.frais_plateforme ?? 5000;
+
   // Build available years from data (for filter buttons)
   const { data: yearsRaw } = await supabase
     .from("zone_daily_payments")
@@ -137,14 +150,17 @@ export default async function AbonnementsPage({
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <div className="w-12 h-12 rounded-xl bg-amber-100 flex items-center justify-center">
-          <CreditCard className="h-6 w-6 text-amber-600" />
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 rounded-xl bg-amber-100 flex items-center justify-center">
+            <CreditCard className="h-6 w-6 text-amber-600" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold font-heading">Abonnements</h1>
+            <p className="text-muted-foreground text-sm">Historique des activations billetterie par zone</p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-2xl font-bold font-heading">Abonnements</h1>
-          <p className="text-muted-foreground text-sm">Historique des activations billetterie par zone</p>
-        </div>
+        <ManualActivationTrigger zones={zones} defaultAmount={currentFrais} />
       </div>
 
       {/* Stats */}

@@ -3,6 +3,48 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 
+// ─── Activation manuelle par le fondateur (paiement en espèces) ───────────────
+export async function manualActivateZone(
+  zoneId: string,
+  amount: number,
+  durationHours: number
+): Promise<{ success?: boolean; error?: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Non authentifié" };
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  if (!profile || profile.role !== "fondateur") {
+    return { error: "Seul le fondateur peut effectuer une activation manuelle" };
+  }
+
+  const adminClient = await createAdminClient();
+  const now = new Date();
+  const validUntil = new Date(now.getTime() + durationHours * 60 * 60 * 1000);
+  const today = now.toISOString().split("T")[0];
+  const refCommand = `GF-CASH-${zoneId.split("-")[0].toUpperCase()}-${today}-${Date.now()}`;
+
+  const { error } = await adminClient
+    .from("zone_daily_payments")
+    .insert({
+      zone_id: zoneId,
+      ref_command: refCommand,
+      amount,
+      status: "success",
+      payment_method: "cash",
+      paid_at: now.toISOString(),
+      valid_until: validUntil.toISOString(),
+    });
+
+  if (error) return { error: "Erreur lors de l'activation : " + error.message };
+  return { success: true };
+}
+
 // ─── Vérifier le paiement d'une zone spécifique (par ID) ──────────────────────
 export async function checkZonePaymentById(zoneId: string): Promise<{
   isPaid: boolean; validUntil?: string; amount: number; zoneName: string;
