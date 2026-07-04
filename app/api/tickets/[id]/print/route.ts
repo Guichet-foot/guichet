@@ -29,7 +29,7 @@ export async function GET(
   const logoDataUrl = `data:image/png;base64,${logoBase64}`;
 
   /* QR: level M (15% recovery) — more robust on thermal ink imperfections */
-  const qrPx = fmt === "58" ? 220 : 280;
+  const qrPx = fmt === "58" ? 300 : 380;
   const qrDataUrl = await QRCode.toDataURL(ticket.qr_token, {
     width: qrPx,
     margin: 2,

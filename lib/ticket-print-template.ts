@@ -19,12 +19,12 @@ export function getPrintStyles(fmt: PrintFormat): string {
   const smallPt  = is58 ? "6.5"   : "7.5";
   const tinyPt   = is58 ? "6"     : "6.5";
   const bonPt    = is58 ? "8"     : "9";
-  const qrMM     = is58 ? "20"    : "24";
+  const qrMM     = is58 ? "30"    : "38";
 
   /* Logo crop: image is displayed taller than the container so
      overflow:hidden clips the whitespace top/bottom symmetrically. */
-  const logoContH = is58 ? "7mm"   : "9mm";
-  const logoImgH  = is58 ? "12mm"  : "15mm";
+  const logoContH = is58 ? "12mm"  : "16mm";
+  const logoImgH  = is58 ? "20mm"  : "27mm";
 
   return `
   @page { size: ${width} auto; margin: 0; }
@@ -69,7 +69,12 @@ export function getPrintStyles(fmt: PrintFormat): string {
     line-height: 1.2;
   }
   .qr { margin: 1.5mm auto 0.5mm; }
-  .qr img { width: ${qrMM}mm; height: ${qrMM}mm; display: block; margin: 0 auto; }
+  .qr img {
+    width: ${qrMM}mm; height: ${qrMM}mm;
+    display: block; margin: 0 auto;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+  }
   .small {
     font-size: ${smallPt}pt;
     font-family: 'Courier New', monospace;

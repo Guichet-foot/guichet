@@ -32,7 +32,7 @@ export async function GET(request: Request) {
   const logoBase64 = readFileSync(join(process.cwd(), "public", "logoticket.png")).toString("base64");
   const logoDataUrl = `data:image/png;base64,${logoBase64}`;
 
-  const qrPx = fmt === "58" ? 220 : 280;
+  const qrPx = fmt === "58" ? 300 : 380;
 
   const ticketBlocks = await Promise.all(
     tickets.map(async (ticket: any) => {
