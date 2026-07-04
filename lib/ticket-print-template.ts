@@ -101,7 +101,8 @@ export function renderTicketBlock(
   qrDataUrl: string,
   matchDateFmt: string,
   soldAtFmt: string,
-  fmt: PrintFormat
+  fmt: PrintFormat,
+  logoDataUrl: string
 ): string {
   const is58 = fmt === "58";
   const priceFmt = new Intl.NumberFormat("fr-FR").format(ticket.price);
@@ -114,11 +115,9 @@ export function renderTicketBlock(
     ? `<div class="c teams">${trunc(home, 20)}<br><span class="vs">vs</span><br>${trunc(away, 20)}</div>`
     : `<div class="c teams">${trunc(home, 14)} <span class="vs">vs</span> ${trunc(away, 14)}</div>`;
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://guichet-pi.vercel.app";
-
   return `
 <div class="logo-wrap c">
-  <img src="${appUrl}/logoticket.png" class="logo-img" alt="Guichet Foot" />
+  <img src="${logoDataUrl}" class="logo-img" alt="Guichet Foot" />
 </div>
 <div class="sep"></div>
 ${teamsHtml}

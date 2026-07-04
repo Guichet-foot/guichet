@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import QRCode from "qrcode";
+import { readFileSync } from "fs";
+import { join } from "path";
 import { getPrintStyles, renderTicketBlock, type PrintFormat } from "@/lib/ticket-print-template";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -26,19 +28,23 @@ export async function GET(request: Request) {
 
   if (!tickets || tickets.length === 0) return new NextResponse("Aucun billet trouvé", { status: 404 });
 
-  const qrPx = fmt === "58" ? 160 : 200;
+  /* Logo: embed as base64 once for all tickets */
+  const logoBase64 = readFileSync(join(process.cwd(), "public", "logoticket.png")).toString("base64");
+  const logoDataUrl = `data:image/png;base64,${logoBase64}`;
+
+  const qrPx = fmt === "58" ? 220 : 280;
 
   const ticketBlocks = await Promise.all(
     tickets.map(async (ticket: any) => {
       const qrDataUrl = await QRCode.toDataURL(ticket.qr_token, {
         width: qrPx,
-        margin: 1,
-        errorCorrectionLevel: "L",
+        margin: 2,
+        errorCorrectionLevel: "M",
         color: { dark: "#000000", light: "#FFFFFF" },
       });
       const matchDateFmt = format(new Date(ticket.match.match_date), "EEE d MMM yyyy — HH'h'mm", { locale: fr });
       const soldAtFmt    = format(new Date(ticket.sold_at), "dd/MM/yyyy HH:mm", { locale: fr });
-      return renderTicketBlock(ticket, qrDataUrl, matchDateFmt, soldAtFmt, fmt);
+      return renderTicketBlock(ticket, qrDataUrl, matchDateFmt, soldAtFmt, fmt, logoDataUrl);
     })
   );
 
