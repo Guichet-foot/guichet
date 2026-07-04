@@ -65,7 +65,7 @@ export async function GET(
   // Embed logo
   let logoDataUrl: string;
   try {
-    const logoBuf = readFileSync(join(process.cwd(), "public", "cartemembre.png"));
+    const logoBuf = readFileSync(join(process.cwd(), "public", "LOGO-ODCAV-MBOUR.png"));
     logoDataUrl = `data:image/png;base64,${logoBuf.toString("base64")}`;
   } catch {
     logoDataUrl = "";
