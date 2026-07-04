@@ -12,9 +12,7 @@ export async function GET(request: Request) {
   const batchId = searchParams.get("batch");
   const fmt = (searchParams.get("fmt") === "58" ? "58" : "80") as PrintFormat;
 
-  if (!batchId) {
-    return new NextResponse("batch requis", { status: 400 });
-  }
+  if (!batchId) return new NextResponse("batch requis", { status: 400 });
 
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -26,25 +24,21 @@ export async function GET(request: Request) {
     .eq("sale_batch_id", batchId)
     .order("serial_number");
 
-  if (!tickets || tickets.length === 0) {
-    return new NextResponse("Aucun billet trouvé", { status: 404 });
-  }
+  if (!tickets || tickets.length === 0) return new NextResponse("Aucun billet trouvé", { status: 404 });
 
-  const qrSize = fmt === "58" ? 140 : 180;
+  const qrPx = fmt === "58" ? 160 : 200;
 
   const ticketBlocks = await Promise.all(
     tickets.map(async (ticket: any) => {
       const qrDataUrl = await QRCode.toDataURL(ticket.qr_token, {
-        width: qrSize,
-        margin: 0,
+        width: qrPx,
+        margin: 1,
+        errorCorrectionLevel: "L",
         color: { dark: "#000000", light: "#FFFFFF" },
       });
-
       const matchDateFmt = format(new Date(ticket.match.match_date), "EEE d MMM yyyy — HH'h'mm", { locale: fr });
-      const soldAtFmt = format(new Date(ticket.sold_at), "dd/MM/yyyy HH:mm", { locale: fr });
-      const block = renderTicketBlock(ticket, qrDataUrl, matchDateFmt, soldAtFmt);
-
-      return `<div class="ticket-wrap">${block}</div>`;
+      const soldAtFmt    = format(new Date(ticket.sold_at), "dd/MM/yyyy HH:mm", { locale: fr });
+      return renderTicketBlock(ticket, qrDataUrl, matchDateFmt, soldAtFmt, fmt);
     })
   );
 
@@ -52,27 +46,21 @@ export async function GET(request: Request) {
     tickets.reduce((s: number, t: any) => s + t.price, 0)
   );
 
-  // Break between tickets: page-break on all except the last
-  const ticketSep = fmt === "58"
-    ? `<div style="break-after:page;page-break-after:always;"></div>`
-    : `<div style="break-after:page;page-break-after:always;"></div>`;
-
+  /* Inject a page-break div between tickets (never after the last one) */
+  const pageBreak = `<div style="break-after:page;page-break-after:always;height:0;"></div>`;
   const blocksHtml = ticketBlocks
-    .map((b, i) => (i < ticketBlocks.length - 1 ? b + ticketSep : b))
+    .map((b, i) => (i < ticketBlocks.length - 1 ? `<div class="ticket-wrap">${b}</div>${pageBreak}` : `<div class="ticket-wrap">${b}</div>`))
     .join("\n");
 
   const html = `<!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Billets — ${tickets[0].match.home_team} vs ${tickets[0].match.away_team}</title>
 <style>
 ${getPrintStyles(fmt)}
-.ticket-wrap { padding: 0; }
-@media print {
-  .ticket-wrap { page-break-inside: avoid; }
-}
+.ticket-wrap { page-break-inside: avoid; }
 </style>
 </head>
 <body>
@@ -81,17 +69,15 @@ ${blocksHtml}
   <p style="font-size:11pt;font-weight:bold;margin-bottom:3mm;">
     ${tickets.length} billet(s) — ${totalPriceFmt} FCFA
   </p>
-  <button onclick="window.print()" style="padding:2mm 6mm;font-size:11pt;cursor:pointer;font-weight:bold;">
+  <button onclick="window.print()" style="padding:2mm 8mm;font-size:11pt;cursor:pointer;font-weight:bold;">
     Imprimer tout
   </button>
 </div>
 <script>
-window.onload = function() { setTimeout(function() { window.print(); }, 300); };
+window.onload = function() { setTimeout(function() { window.print(); }, 400); };
 </script>
 </body>
 </html>`;
 
-  return new NextResponse(html, {
-    headers: { "Content-Type": "text/html; charset=utf-8" },
-  });
+  return new NextResponse(html, { headers: { "Content-Type": "text/html; charset=utf-8" } });
 }
