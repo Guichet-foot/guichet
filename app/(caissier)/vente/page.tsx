@@ -24,6 +24,9 @@ import { toast } from "sonner";
 import { formatFCFA } from "@/lib/format";
 import { CATEGORY_COLORS } from "@/lib/constants";
 
+type PrintFormat = "58" | "80";
+const PRINT_FORMAT_KEY = "gf_print_format";
+
 interface MatchOption {
   id: string;
   home_team: string;
@@ -52,6 +55,17 @@ function VenteContent() {
   const [loading, setLoading] = useState(false);
   const [todaySales, setTodaySales] = useState({ count: 0, total: 0 });
   const [initialLoading, setInitialLoading] = useState(true);
+  const [printFormat, setPrintFormat] = useState<PrintFormat>("80");
+
+  useEffect(() => {
+    const saved = localStorage.getItem(PRINT_FORMAT_KEY) as PrintFormat | null;
+    if (saved === "58" || saved === "80") setPrintFormat(saved);
+  }, []);
+
+  function toggleFormat(fmt: PrintFormat) {
+    setPrintFormat(fmt);
+    localStorage.setItem(PRINT_FORMAT_KEY, fmt);
+  }
 
   const loadCategories = useCallback(
     async (matchId: string) => {
@@ -222,7 +236,7 @@ function VenteContent() {
     setLoading(false);
 
     if (result.batchId) {
-      window.open(`/api/tickets/print-batch?batch=${result.batchId}`, "_blank");
+      window.open(`/api/tickets/print-batch?batch=${result.batchId}&fmt=${printFormat}`, "_blank");
     }
   }
 
@@ -248,12 +262,41 @@ function VenteContent() {
     <div className="space-y-4 max-w-2xl mx-auto">
       <Card className="bg-brand/5 border-brand/20">
         <CardContent className="pt-4 pb-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-sm text-muted-foreground">Vos ventes du jour</p>
               <p className="text-lg font-bold">
                 {todaySales.count} billets / {formatFCFA(todaySales.total)}
               </p>
+            </div>
+            {/* Sélecteur format d'impression */}
+            <div className="flex flex-col items-end gap-1 shrink-0">
+              <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                <Printer className="h-3 w-3" />
+                Format ticket
+              </p>
+              <div className="flex rounded-lg border border-brand/30 overflow-hidden text-xs font-semibold">
+                <button
+                  onClick={() => toggleFormat("58")}
+                  className={`px-2.5 py-1.5 transition-colors ${
+                    printFormat === "58"
+                      ? "bg-brand text-white"
+                      : "bg-white text-brand hover:bg-brand/10"
+                  }`}
+                >
+                  58mm
+                </button>
+                <button
+                  onClick={() => toggleFormat("80")}
+                  className={`px-2.5 py-1.5 transition-colors border-l border-brand/30 ${
+                    printFormat === "80"
+                      ? "bg-brand text-white"
+                      : "bg-white text-brand hover:bg-brand/10"
+                  }`}
+                >
+                  80mm
+                </button>
+              </div>
             </div>
           </div>
         </CardContent>

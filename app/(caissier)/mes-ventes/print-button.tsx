@@ -3,6 +3,8 @@
 import { Button } from "@/components/ui/button";
 import { Printer } from "lucide-react";
 
+const PRINT_FORMAT_KEY = "gf_print_format";
+
 interface PrintButtonProps {
   ticketId: string;
   batchId?: string | null;
@@ -10,9 +12,10 @@ interface PrintButtonProps {
 
 export function PrintButton({ ticketId, batchId }: PrintButtonProps) {
   function handlePrint() {
+    const fmt = localStorage.getItem(PRINT_FORMAT_KEY) === "58" ? "58" : "80";
     const url = batchId
-      ? `/api/tickets/print-batch?batch=${batchId}`
-      : `/api/tickets/${ticketId}/print`;
+      ? `/api/tickets/print-batch?batch=${batchId}&fmt=${fmt}`
+      : `/api/tickets/${ticketId}/print?fmt=${fmt}`;
     window.open(url, "_blank");
   }
 
