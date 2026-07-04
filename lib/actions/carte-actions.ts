@@ -97,6 +97,21 @@ export async function deleteAccessCard(id: string): Promise<{ error?: string }> 
   return {};
 }
 
+export async function ensureCardPhotosBucket(): Promise<{ error?: string }> {
+  const adminClient = await createAdminClient();
+  const { data: buckets } = await adminClient.storage.listBuckets();
+  const exists = (buckets || []).some((b: any) => b.name === "card-photos");
+  if (!exists) {
+    const { error } = await adminClient.storage.createBucket("card-photos", {
+      public: true,
+      allowedMimeTypes: ["image/jpeg", "image/png", "image/webp"],
+      fileSizeLimit: 5 * 1024 * 1024,
+    });
+    if (error) return { error: error.message };
+  }
+  return {};
+}
+
 export async function getZoneTeamsForCard(zoneId: string): Promise<{ id: string; name: string }[]> {
   const adminClient = await createAdminClient();
   const { data } = await adminClient

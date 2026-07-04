@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { createAccessCard, getZoneTeamsForCard } from "@/lib/actions/carte-actions";
+import { createAccessCard, getZoneTeamsForCard, ensureCardPhotosBucket } from "@/lib/actions/carte-actions";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -82,6 +82,14 @@ export function CardForm({
 
     // Upload photo to Supabase Storage
     if (photoFile) {
+      // Ensure bucket exists (created on first use via service role)
+      const bucketResult = await ensureCardPhotosBucket();
+      if (bucketResult.error) {
+        toast.error("Erreur création bucket : " + bucketResult.error);
+        setLoading(false);
+        return;
+      }
+
       const supabase = createClient();
       const ext = photoFile.name.split(".").pop();
       const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
