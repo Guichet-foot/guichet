@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { createAccessCard, getZoneTeamsForCard, ensureCardPhotosBucket } from "@/lib/actions/carte-actions";
-import { createClient } from "@/lib/supabase/client";
+import { createAccessCard, getZoneTeamsForCard, uploadCardPhoto } from "@/lib/actions/carte-actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -80,31 +79,17 @@ export function CardForm({
 
     let photoUrl: string | undefined;
 
-    // Upload photo to Supabase Storage
+    // Upload photo via server action (service role, pas de RLS)
     if (photoFile) {
-      // Ensure bucket exists (created on first use via service role)
-      const bucketResult = await ensureCardPhotosBucket();
-      if (bucketResult.error) {
-        toast.error("Erreur création bucket : " + bucketResult.error);
+      const fd = new FormData();
+      fd.append("photo", photoFile);
+      const uploadResult = await uploadCardPhoto(fd);
+      if (uploadResult.error) {
+        toast.error("Erreur upload photo : " + uploadResult.error);
         setLoading(false);
         return;
       }
-
-      const supabase = createClient();
-      const ext = photoFile.name.split(".").pop();
-      const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-      const { error: upErr } = await supabase.storage
-        .from("card-photos")
-        .upload(path, photoFile, { contentType: photoFile.type });
-
-      if (upErr) {
-        toast.error("Erreur upload photo : " + upErr.message);
-        setLoading(false);
-        return;
-      }
-
-      const { data: urlData } = supabase.storage.from("card-photos").getPublicUrl(path);
-      photoUrl = urlData.publicUrl;
+      photoUrl = uploadResult.url;
     }
 
     const ascName = ascMode === "manual" ? ascManual.trim() : ascSelected;
