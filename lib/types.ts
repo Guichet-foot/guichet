@@ -38,6 +38,8 @@ export interface Profile {
   role: UserRole;
   zone_id: string | null;
   active: boolean;
+  is_president: boolean;
+  created_by_admin: string | null;
   created_at: string;
   email?: string;
   zone?: Zone;

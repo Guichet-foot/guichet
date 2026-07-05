@@ -31,6 +31,7 @@ import {
   CheckCircle,
   Trash2,
   Copy,
+  ShieldAlert,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ROLE_LABELS } from "@/lib/constants";
@@ -42,12 +43,19 @@ interface UserActionsProps {
     phone: string | null;
     role: string;
     active: boolean;
+    is_president: boolean;
   };
   currentUserId: string;
   currentUserRole: string;
+  currentUserIsPresident: boolean;
 }
 
-export function UserActions({ user, currentUserId, currentUserRole }: UserActionsProps) {
+export function UserActions({
+  user,
+  currentUserId,
+  currentUserRole,
+  currentUserIsPresident,
+}: UserActionsProps) {
   const [editOpen, setEditOpen] = useState(false);
   const [passwordOpen, setPasswordOpen] = useState(false);
   const [loading, setLoading] = useState<string | null>(null);
@@ -58,6 +66,20 @@ export function UserActions({ user, currentUserId, currentUserRole }: UserAction
   const [role, setRole] = useState(user.role);
 
   const isSelf = user.id === currentUserId;
+
+  // A Président de zone can only be managed by super_admin
+  const isProtectedPresident = user.is_president && currentUserRole !== "super_admin";
+
+  // Roles available in the edit dialog
+  const editableRoles = (() => {
+    if (currentUserRole === "super_admin") {
+      return ["caissier", "portier", "admin_zone", "super_admin"];
+    }
+    if (currentUserRole === "admin_zone" && currentUserIsPresident) {
+      return ["caissier", "portier", "admin_zone"];
+    }
+    return ["caissier", "portier"];
+  })();
 
   async function handleUpdateInfo() {
     setLoading("edit");
@@ -99,7 +121,23 @@ export function UserActions({ user, currentUserId, currentUserRole }: UserAction
     }
   }
 
+  // Never show actions for yourself
   if (isSelf) return null;
+
+  // President account: show a lock indicator for non-super_admin
+  if (isProtectedPresident) {
+    return (
+      <div className="flex justify-end">
+        <span
+          className="flex items-center gap-1 text-xs text-amber-700 font-medium px-2 py-1 rounded bg-amber-50 border border-amber-200"
+          title="Seul le Super Admin peut modifier ce compte"
+        >
+          <ShieldAlert className="h-3 w-3" />
+          Protégé
+        </span>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -127,7 +165,10 @@ export function UserActions({ user, currentUserId, currentUserRole }: UserAction
           title={user.active ? "Suspendre" : "Réactiver"}
           className={`h-7 w-7 p-0 ${user.active ? "text-orange-500" : "text-success"}`}
         >
-          {loading === "toggle" ? <Loader2 className="h-3 w-3 animate-spin" /> : user.active ? <Ban className="h-3 w-3" /> : <CheckCircle className="h-3 w-3" />}
+          {loading === "toggle"
+            ? <Loader2 className="h-3 w-3 animate-spin" />
+            : user.active ? <Ban className="h-3 w-3" /> : <CheckCircle className="h-3 w-3" />
+          }
         </Button>
         <Button
           type="button" variant="ghost" size="sm"
@@ -136,7 +177,10 @@ export function UserActions({ user, currentUserId, currentUserRole }: UserAction
           title="Supprimer"
           className="h-7 w-7 p-0 text-danger"
         >
-          {loading === "delete" ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+          {loading === "delete"
+            ? <Loader2 className="h-3 w-3 animate-spin" />
+            : <Trash2 className="h-3 w-3" />
+          }
         </Button>
       </div>
 
@@ -160,16 +204,19 @@ export function UserActions({ user, currentUserId, currentUserRole }: UserAction
               <Select value={role} onValueChange={(v) => setRole(v ?? role)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="caissier">{ROLE_LABELS.caissier}</SelectItem>
-                  <SelectItem value="portier">{ROLE_LABELS.portier}</SelectItem>
-                  <SelectItem value="admin_zone">{ROLE_LABELS.admin_zone}</SelectItem>
-                  {currentUserRole === "super_admin" && (
-                    <SelectItem value="super_admin">{ROLE_LABELS.super_admin}</SelectItem>
-                  )}
+                  {editableRoles.includes("caissier")   && <SelectItem value="caissier">{ROLE_LABELS.caissier}</SelectItem>}
+                  {editableRoles.includes("portier")    && <SelectItem value="portier">{ROLE_LABELS.portier}</SelectItem>}
+                  {editableRoles.includes("admin_zone") && <SelectItem value="admin_zone">{ROLE_LABELS.admin_zone}</SelectItem>}
+                  {editableRoles.includes("super_admin")&& <SelectItem value="super_admin">{ROLE_LABELS.super_admin}</SelectItem>}
                 </SelectContent>
               </Select>
             </div>
-            <Button type="button" onClick={handleUpdateInfo} disabled={loading === "edit"} className="w-full bg-brand hover:bg-brand/90">
+            <Button
+              type="button"
+              onClick={handleUpdateInfo}
+              disabled={loading === "edit"}
+              className="w-full bg-brand hover:bg-brand/90"
+            >
               {loading === "edit" ? <Loader2 className="h-4 w-4 animate-spin" /> : "Enregistrer"}
             </Button>
           </div>
@@ -186,10 +233,14 @@ export function UserActions({ user, currentUserId, currentUserRole }: UserAction
             {!newPassword ? (
               <>
                 <p className="text-sm text-muted-foreground">
-                  Un nouveau mot de passe sera généré pour <strong>{user.full_name}</strong>.
-                  Transmettez-le à l&apos;utilisateur.
+                  Un nouveau mot de passe sera généré pour <strong>{user.full_name}</strong>. Transmettez-le à l&apos;utilisateur.
                 </p>
-                <Button type="button" onClick={handleResetPassword} disabled={loading === "password"} className="w-full bg-brand hover:bg-brand/90">
+                <Button
+                  type="button"
+                  onClick={handleResetPassword}
+                  disabled={loading === "password"}
+                  className="w-full bg-brand hover:bg-brand/90"
+                >
                   {loading === "password" ? <Loader2 className="h-4 w-4 animate-spin" /> : "Générer un nouveau mot de passe"}
                 </Button>
               </>

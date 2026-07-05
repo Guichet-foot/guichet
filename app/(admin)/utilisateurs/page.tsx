@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent } from "@/components/ui/card";
-import { Plus, Users } from "lucide-react";
+import { Plus, Users, Crown } from "lucide-react";
 import { ROLE_LABELS, ROLE_COLORS } from "@/lib/constants";
 import { buildZoneUrl } from "@/lib/zone-utils";
 import { UserActions } from "./user-actions";
@@ -41,6 +41,8 @@ export default async function UsersPage({
   }
 
   const { data: users } = await query;
+
+  const currentUserIsPresident = profile.is_president ?? false;
 
   return (
     <div className="space-y-6">
@@ -77,23 +79,44 @@ export default async function UsersPage({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {users.map((user: any) => (
+                {(users as any[]).map((user) => (
                   <TableRow key={user.id}>
                     <TableCell className="font-medium">{user.full_name}</TableCell>
                     <TableCell className="hidden sm:table-cell">{user.phone || "—"}</TableCell>
                     <TableCell>
-                      <Badge variant="secondary" className={ROLE_COLORS[user.role]}>{ROLE_LABELS[user.role]}</Badge>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <Badge variant="secondary" className={ROLE_COLORS[user.role]}>
+                          {ROLE_LABELS[user.role]}
+                        </Badge>
+                        {user.is_president && (
+                          <Badge className="bg-amber-100 text-amber-800 border-amber-300 gap-1">
+                            <Crown className="h-3 w-3" />
+                            Président
+                          </Badge>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={user.active ? "default" : "destructive"} className={user.active ? "bg-success/10 text-success" : ""}>
+                      <Badge
+                        variant={user.active ? "default" : "destructive"}
+                        className={user.active ? "bg-success/10 text-success" : ""}
+                      >
                         {user.active ? "Actif" : "Inactif"}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
                       <UserActions
-                        user={{ id: user.id, full_name: user.full_name, phone: user.phone, role: user.role, active: user.active }}
+                        user={{
+                          id: user.id,
+                          full_name: user.full_name,
+                          phone: user.phone,
+                          role: user.role,
+                          active: user.active,
+                          is_president: user.is_president ?? false,
+                        }}
                         currentUserId={profile.id}
                         currentUserRole={profile.role}
+                        currentUserIsPresident={currentUserIsPresident}
                       />
                     </TableCell>
                   </TableRow>
