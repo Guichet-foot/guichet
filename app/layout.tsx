@@ -27,6 +27,28 @@ export const metadata: Metadata = {
     shortcut: "/favicon.png",
     apple: "/icon-512.png",
   },
+  openGraph: {
+    title: "Guichet Foot",
+    description: "Le guichet du Navétane — billetterie en 2 clics",
+    url: "https://guichetfoot.com",
+    siteName: "Guichet Foot",
+    images: [
+      {
+        url: "https://guichetfoot.com/imagelogin.png",
+        width: 1200,
+        height: 630,
+        alt: "Guichet Foot",
+      },
+    ],
+    locale: "fr_SN",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Guichet Foot",
+    description: "Le guichet du Navétane — billetterie en 2 clics",
+    images: ["https://guichetfoot.com/imagelogin.png"],
+  },
 };
 
 export const viewport: Viewport = {
