@@ -31,6 +31,14 @@ const ICON_PHONE = `<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63
 const ICON_MAP = `<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>`;
 const ICON_BADGE = `<rect width="20" height="14" x="2" y="7" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>`;
 const ICON_SHIELD = `<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>`;
+const ICON_TAG = `<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>`;
+
+const TYPE_LABELS: Record<string, string> = {
+  zone: "ZONE", delegue: "DÉLÉGUÉ", vendeur: "VENDEUR", spectateur: "SPECTATEUR",
+};
+const TYPE_COLORS: Record<string, string> = {
+  zone: "#166534", delegue: "#1D4ED8", vendeur: "#B45309", spectateur: "#6D28D9",
+};
 
 function svgIcon(path: string) {
   return `<svg viewBox="0 0 24 24" width="100%" height="100%" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${path}</svg>`;
@@ -61,6 +69,10 @@ export async function GET(
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://guichet-pi.vercel.app";
   const qrContent = `${appUrl}/carte/${card.qr_token}`;
   const saison = getSaison(card);
+  const cardType = (card as any).card_type || "zone";
+  const isPaidCard = cardType === "vendeur" || cardType === "spectateur";
+  const typeLabel = TYPE_LABELS[cardType] || "ZONE";
+  const typeColor = TYPE_COLORS[cardType] || "#166534";
 
   // Embed logo
   let logoDataUrl: string;
@@ -93,12 +105,14 @@ export async function GET(
   });
 
   // Build info rows
+  const cardPrice = (card as any).price as number | null;
   const rows = [
     infoRow(ICON_USER, "NOM COMPLET", card.full_name),
     infoRow(ICON_PHONE, "TÉLÉPHONE", card.phone),
     infoRow(ICON_MAP, "ZONE", card.zone_name),
-    infoRow(ICON_BADGE, "POSTE", card.poste),
+    ...(!isPaidCard ? [infoRow(ICON_BADGE, "POSTE", card.poste || "")] : []),
     ...(card.asc_name ? [infoRow(ICON_SHIELD, "ASC", card.asc_name)] : []),
+    ...(cardPrice ? [infoRow(ICON_TAG, "MONTANT", `${cardPrice.toLocaleString("fr-FR")} FCFA`)] : []),
   ];
 
   const numRows = rows.length;
@@ -134,7 +148,7 @@ html, body {
 .header {
   position: absolute;
   top: 0; left: 0; right: 0;
-  height: 15mm;
+  height: 16.2mm;
   display: flex;
   align-items: center;
   background: #f0fdf4;
@@ -164,22 +178,33 @@ html, body {
   padding-right: 23mm;
 }
 .title {
-  font-size: 9.5pt;
+  font-size: 9pt;
   font-weight: 900;
   color: #1a5c2a;
   letter-spacing: 0.3px;
   line-height: 1.05;
 }
 .season {
-  font-size: 4.8pt;
+  font-size: 4.5pt;
   font-weight: 600;
   color: #1a5c2a;
-  margin-top: 0.4mm;
+  margin-top: 0.3mm;
+}
+.type-badge {
+  display: inline-block;
+  margin-top: 0.5mm;
+  padding: 0.3mm 1.5mm;
+  border-radius: 99px;
+  font-size: 3.8pt;
+  font-weight: 900;
+  letter-spacing: 0.4px;
+  color: white;
+  background: ${typeColor};
 }
 /* Body */
 .body {
   position: absolute;
-  top: 15mm; left: 0; right: 0; bottom: 0;
+  top: 16.2mm; left: 0; right: 0; bottom: 0;
   display: flex;
 }
 .info-col {
@@ -294,6 +319,7 @@ html, body {
     <div class="title-section">
       <div class="title">CARTE D'ACCÈS</div>
       <div class="season">— SAISON ${saison} —</div>
+      <div class="type-badge">${typeLabel}</div>
     </div>
   </div>
 

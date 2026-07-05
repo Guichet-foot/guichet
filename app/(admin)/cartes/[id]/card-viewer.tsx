@@ -22,7 +22,21 @@ import {
   Briefcase,
   Shield,
   Pencil,
+  Tag,
 } from "lucide-react";
+
+const TYPE_LABELS: Record<string, string> = {
+  zone: "ZONE",
+  delegue: "DÉLÉGUÉ",
+  vendeur: "VENDEUR",
+  spectateur: "SPECTATEUR",
+};
+const TYPE_COLORS: Record<string, string> = {
+  zone: "#166534",
+  delegue: "#1D4ED8",
+  vendeur: "#B45309",
+  spectateur: "#6D28D9",
+};
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -45,12 +59,20 @@ export function CardViewer({ card, qrDataUrl, printUrl }: CardViewerProps) {
     return d.getMonth() + 1 >= 8 ? `${y} - ${y + 1}` : `${y - 1} - ${y}`;
   })();
 
+  const cardType = card.card_type || "zone";
+  const isPaidCard = cardType === "vendeur" || cardType === "spectateur";
+  const typeColor = TYPE_COLORS[cardType] || "#166534";
+  const typeLabel = TYPE_LABELS[cardType] || "ZONE";
+
   const infoRows = [
     { Icon: User,      label: "NOM COMPLET", value: card.full_name },
     { Icon: Phone,     label: "TÉLÉPHONE",   value: card.phone },
     { Icon: MapPin,    label: "ZONE",        value: card.zone_name },
-    { Icon: Briefcase, label: "POSTE",       value: card.poste },
+    ...(!isPaidCard ? [{ Icon: Briefcase, label: "POSTE", value: card.poste }] : []),
     ...(card.asc_name ? [{ Icon: Shield, label: "ASC", value: card.asc_name }] : []),
+    ...(card.price != null && card.price > 0
+      ? [{ Icon: Tag, label: "MONTANT", value: `${card.price.toLocaleString("fr-FR")} FCFA` }]
+      : []),
   ];
 
   async function handleDelete() {
@@ -105,7 +127,7 @@ export function CardViewer({ card, qrDataUrl, printUrl }: CardViewerProps) {
             {/* ── HEADER ── */}
             <div
               className="absolute inset-x-0 top-0 flex items-center bg-green-50 border-b-[1.5px] border-green-800"
-              style={{ height: "27.8%", padding: "1.5% 2%" }}
+              style={{ height: "30%", padding: "1% 2%" }}
             >
               {/* ODCAV logo */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -116,26 +138,40 @@ export function CardViewer({ card, qrDataUrl, printUrl }: CardViewerProps) {
               />
 
               {/* Title */}
-              <div style={{ flex: 1, textAlign: "center", paddingRight: "27%" }}>
+              <div style={{ flex: 1, textAlign: "center", paddingRight: "25%" }}>
                 <p
                   className="font-black text-green-800 leading-tight"
-                  style={{ fontSize: "6cqi", lineHeight: 1.05, letterSpacing: "0.02em" }}
+                  style={{ fontSize: "5.5cqi", lineHeight: 1.05, letterSpacing: "0.02em" }}
                 >
                   CARTE D&apos;ACCÈS
                 </p>
                 <p
                   className="font-semibold text-green-700"
-                  style={{ fontSize: "2.4cqi", marginTop: "0.5cqi" }}
+                  style={{ fontSize: "2.1cqi", marginTop: "0.2cqi" }}
                 >
                   — SAISON {saison} —
                 </p>
+                <div style={{ marginTop: "0.5cqi", display: "flex", justifyContent: "center" }}>
+                  <span style={{
+                    backgroundColor: typeColor,
+                    color: "white",
+                    fontSize: "1.6cqi",
+                    padding: "0.2cqi 1.3cqi",
+                    borderRadius: "99px",
+                    fontWeight: 800,
+                    letterSpacing: "0.06em",
+                    display: "inline-block",
+                  }}>
+                    {typeLabel}
+                  </span>
+                </div>
               </div>
             </div>
 
             {/* ── BODY ── */}
             <div
               className="absolute inset-x-0 bottom-0 flex"
-              style={{ top: "27.8%" }}
+              style={{ top: "30%" }}
             >
               {/* Info rows — 65% */}
               <div className="flex flex-col border-r border-gray-200" style={{ width: "65%" }}>

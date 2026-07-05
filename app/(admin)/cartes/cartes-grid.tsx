@@ -65,11 +65,12 @@ function CardDesign({ card, qrDataUrl }: { card: AccessCard; qrDataUrl: string }
   const type = card.card_type || "zone";
   const price = card.price;
 
+  const isPaidCard = type === "vendeur" || type === "spectateur";
   const rows = [
     { Icon: User,      label: "NOM COMPLET", value: card.full_name },
     { Icon: Phone,     label: "TÉLÉPHONE",   value: card.phone },
     { Icon: MapPin,    label: "ZONE",        value: card.zone_name },
-    { Icon: Briefcase, label: "POSTE",       value: card.poste },
+    ...(!isPaidCard ? [{ Icon: Briefcase, label: "POSTE", value: card.poste }] : []),
     ...(card.asc_name ? [{ Icon: Shield, label: "ASC", value: card.asc_name }] : []),
     ...(price != null && price > 0
       ? [{ Icon: Tag, label: "MONTANT", value: `${price.toLocaleString("fr-FR")} FCFA` }]
