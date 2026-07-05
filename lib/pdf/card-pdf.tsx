@@ -31,6 +31,10 @@ const F_VALUE  = CARD_W * 0.028;   // 2.8cqi  →  6.8 pt
 const ICON_BOX  = CARD_W * 0.055;  // 13.35 pt
 const ICON_SIZE = ICON_BOX * 0.60; //  8.0 pt  (icon inside box)
 
+// ── Row height: fixed & compact so rows stack at top ──────────────
+// F_LABEL + marginTop + F_VALUE + ~4pt vertical padding = ~16pt
+const ROW_H = CARD_H * 0.105;      // 16.1 pt (fixed, NOT body/numRows)
+
 // ── Types ──────────────────────────────────────────────────────────
 const TYPE_LABELS: Record<string, string> = {
   zone: "ZONE", delegue: "DÉLÉGUÉ", vendeur: "VENDEUR", spectateur: "SPECTATEUR",
@@ -167,8 +171,8 @@ export function CardPDFView({ card }: { card: CardPDFData }) {
       : []),
   ];
 
-  // Each row gets an equal share of body height (same as HTML flex:1)
-  const rowH = BODY_H / rows.length;
+  // Fixed compact row height — rows stack from top, empty space at bottom
+  const rowH = ROW_H;
   // Row padding — 2% of card width like HTML's "padding: 0 2%"
   const rowPad = CARD_W * 0.02;
 
@@ -304,8 +308,8 @@ export function CardPDFView({ card }: { card: CardPDFData }) {
             <Image
               src={card.qrDataUrl}
               style={{
-                width:  QR_COL_W * 0.70,
-                height: QR_COL_W * 0.70,
+                width:  QR_COL_W * 0.88,
+                height: QR_COL_W * 0.88,
               }}
             />
           </View>
