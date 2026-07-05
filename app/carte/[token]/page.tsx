@@ -28,7 +28,7 @@ export default async function PublicCartePage({
         <div className="text-center mb-4">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="/LOGO-ODCAV-MBOUR.png"
+            src="/logoodcavdes.png"
             alt="ODCAV"
             className="h-20 w-auto mx-auto"
           />

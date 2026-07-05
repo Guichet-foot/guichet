@@ -65,7 +65,7 @@ export async function GET(
   // Embed logo
   let logoDataUrl: string;
   try {
-    const logoBuf = readFileSync(join(process.cwd(), "public", "LOGO-ODCAV-MBOUR.png"));
+    const logoBuf = readFileSync(join(process.cwd(), "public", "logoodcavdes.png"));
     logoDataUrl = `data:image/png;base64,${logoBuf.toString("base64")}`;
   } catch {
     logoDataUrl = "";
@@ -123,75 +123,58 @@ html, body {
   color: #111;
 }
 .card {
+  position: relative;
   width: 85.6mm;
   height: 54mm;
   border: 1.5pt solid #1a5c2a;
   border-radius: 5mm;
   overflow: hidden;
-  display: flex;
-  flex-direction: column;
 }
 /* Header */
 .header {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 15mm;
   display: flex;
   align-items: center;
   background: #f0fdf4;
   border-bottom: 1pt solid #1a5c2a;
-  padding: 1mm 2mm;
-  height: 15mm;
-  flex-shrink: 0;
+  padding: 0.8mm 2mm;
 }
 .logo {
-  height: 12mm;
+  height: 13mm;
   width: auto;
-  max-width: 15mm;
+  max-width: 18mm;
   object-fit: contain;
+  flex-shrink: 0;
 }
 .title-section {
   flex: 1;
   text-align: center;
-  padding: 0 1mm;
+  /* leave room for the large photo on the right */
+  padding-right: 31mm;
 }
 .title {
   font-size: 7.5pt;
   font-weight: 900;
   color: #1a5c2a;
-  letter-spacing: 0.3px;
+  letter-spacing: 0.2px;
   line-height: 1.1;
 }
 .season {
   font-size: 4.5pt;
   font-weight: 600;
   color: #1a5c2a;
-  margin-top: 0.5mm;
-}
-.photo {
-  width: 12mm;
-  height: 12mm;
-  border-radius: 50%;
-  border: 1pt solid #1a5c2a;
-  object-fit: cover;
-  flex-shrink: 0;
-}
-.photo-placeholder {
-  width: 12mm;
-  height: 12mm;
-  border-radius: 50%;
-  border: 1pt solid #1a5c2a;
-  background: #d1fae5;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
+  margin-top: 0.4mm;
 }
 /* Body */
 .body {
+  position: absolute;
+  top: 15mm; left: 0; right: 0; bottom: 0;
   display: flex;
-  flex: 1;
-  overflow: hidden;
 }
 .info-col {
-  flex: 1;
+  width: 55.6mm; /* 65% of 85.6mm */
   display: flex;
   flex-direction: column;
   border-right: 0.5pt solid #d1d5db;
@@ -208,19 +191,19 @@ html, body {
 }
 .row:last-child { border-bottom: none; }
 .icon-box {
-  width: 5mm;
-  height: 5mm;
+  width: 4.5mm;
+  height: 4.5mm;
   background: #1a5c2a;
-  border-radius: 0.8mm;
+  border-radius: 0.7mm;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  padding: 0.8mm;
+  padding: 0.7mm;
   margin-right: 1.5mm;
 }
 .field-label {
-  font-size: 3.5pt;
+  font-size: 3.2pt;
   color: #1a5c2a;
   font-weight: 700;
   text-transform: uppercase;
@@ -229,36 +212,60 @@ html, body {
   margin-bottom: 0.3mm;
 }
 .field-value {
-  font-size: 5.5pt;
+  font-size: 5pt;
   font-weight: 700;
   color: #111827;
   line-height: 1.1;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 50mm;
+  max-width: 48mm;
 }
 /* Right column */
 .right-col {
-  width: 25mm;
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: flex-end;
   padding: 1.5mm 1.5mm 2mm;
-  gap: 1mm;
 }
 .qr-box {
   border: 0.5pt solid #1a5c2a;
-  border-radius: 0.8mm;
   padding: 0.5mm;
   display: flex;
 }
 .qr-box img {
-  width: 20mm;
-  height: 20mm;
+  width: 18mm;
+  height: 18mm;
   display: block;
   image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+/* Photo — large, top-right, overlapping header+body */
+/* 29mm diameter ≈ 54% of card height (54mm) */
+.photo-wrap {
+  position: absolute;
+  top: 1.6mm;
+  right: 1.3mm;
+  width: 29mm;
+  height: 29mm;
+  border-radius: 50%;
+  border: 1.5pt solid #1a5c2a;
+  overflow: hidden;
+  background: #d1fae5;
+}
+.photo-wrap img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.photo-placeholder-svg {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .no-print { display: none; }
 @media screen {
@@ -270,14 +277,16 @@ html, body {
 </head>
 <body>
 <div class="card">
+  <!-- Header -->
   <div class="header">
-    ${logoDataUrl ? `<img src="${logoDataUrl}" class="logo" alt="ODCAV" />` : `<div style="width:12mm;height:12mm;background:#d1fae5;border-radius:50%;flex-shrink:0;"></div>`}
+    ${logoDataUrl ? `<img src="${logoDataUrl}" class="logo" alt="ODCAV" />` : `<div style="width:13mm;height:13mm;background:#d1fae5;border-radius:50%;flex-shrink:0;"></div>`}
     <div class="title-section">
-      <div class="title">CARTE D&apos;ACCÈS</div>
+      <div class="title">CARTE D'ACCÈS</div>
       <div class="season">— SAISON ${saison} —</div>
     </div>
-    ${photoHtml}
   </div>
+
+  <!-- Body -->
   <div class="body">
     <div class="info-col">
       ${rows.join("")}
@@ -287,6 +296,19 @@ html, body {
         <img src="${qrDataUrl}" alt="QR" />
       </div>
     </div>
+  </div>
+
+  <!-- Photo: large circle, overlapping header+body top-right -->
+  <div class="photo-wrap">
+    ${photoDataUrl
+      ? `<img src="${photoDataUrl}" alt="" />`
+      : `<div class="photo-placeholder-svg">
+           <svg viewBox="0 0 24 24" fill="none" stroke="#1a5c2a" stroke-width="1.5" width="55%" height="55%">
+             <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/>
+             <circle cx="12" cy="7" r="4"/>
+           </svg>
+         </div>`
+    }
   </div>
 </div>
 

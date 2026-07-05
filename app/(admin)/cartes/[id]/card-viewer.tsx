@@ -78,10 +78,10 @@ export function CardViewer({ card, qrDataUrl, printUrl }: CardViewerProps) {
   const saison = getSaison(card.created_at);
 
   const infoRows = [
-    { Icon: User,     label: "NOM COMPLET", value: card.full_name },
-    { Icon: Phone,    label: "TÉLÉPHONE",   value: card.phone },
-    { Icon: MapPin,   label: "ZONE",        value: card.zone_name },
-    { Icon: Briefcase,label: "POSTE",       value: card.poste },
+    { Icon: User,      label: "NOM COMPLET", value: card.full_name },
+    { Icon: Phone,     label: "TÉLÉPHONE",   value: card.phone },
+    { Icon: MapPin,    label: "ZONE",        value: card.zone_name },
+    { Icon: Briefcase, label: "POSTE",       value: card.poste },
     ...(card.asc_name ? [{ Icon: Shield, label: "ASC", value: card.asc_name }] : []),
   ];
 
@@ -100,7 +100,7 @@ export function CardViewer({ card, qrDataUrl, printUrl }: CardViewerProps) {
   async function downloadPNG() {
     setPngLoading(true);
     try {
-      const S = 10; // 10 px per mm → 856 × 540
+      const S = 10; // 10 px/mm → 856 × 540
       const W = Math.round(85.6 * S);
       const H = Math.round(54 * S);
       const canvas = document.createElement("canvas");
@@ -116,7 +116,7 @@ export function CardViewer({ card, qrDataUrl, printUrl }: CardViewerProps) {
       drawRoundRect(ctx, 2, 2, W - 4, H - 4, 5 * S);
       ctx.stroke();
 
-      const headerH = 15 * S;
+      const headerH = Math.round(0.278 * H); // 15mm
 
       // Header BG
       ctx.fillStyle = "#f0fdf4";
@@ -129,42 +129,57 @@ export function CardViewer({ card, qrDataUrl, printUrl }: CardViewerProps) {
       ctx.moveTo(2, headerH); ctx.lineTo(W - 2, headerH);
       ctx.stroke();
 
-      // ODCAV logo
-      try {
-        const logo = await loadImg("/LOGO-ODCAV-MBOUR.png");
-        const lH = 12 * S;
-        const lW = logo.naturalWidth / logo.naturalHeight * lH;
-        ctx.drawImage(logo, 2.5 * S, (headerH - lH) / 2, lW, lH);
-      } catch { /* skip */ }
-
-      // Title
-      ctx.fillStyle = GREEN; ctx.textAlign = "center";
-      ctx.font = `900 ${7.5 * S / 10}px Arial`;
-      ctx.fillText("CARTE D'ACCÈS", W / 2, headerH * 0.43);
-      ctx.font = `600 ${4.5 * S / 10}px Arial`;
-      ctx.fillText(`— SAISON ${saison} —`, W / 2, headerH * 0.75);
-
-      // Photo circle
-      const pD = 12 * S;
-      const pX = W - 2.5 * S - pD;
-      const pY = (headerH - pD) / 2;
-      const pCX = pX + pD / 2, pCY = pY + pD / 2;
+      // ── Photo (large, top-right, overlapping header/body) ──
+      const pD = Math.round(0.34 * W); // 34% of card width ≈ 291px ≈ 54% of height
+      const pX = W - Math.round(0.02 * W) - pD;
+      const pY = Math.round(0.03 * H);
+      const pCX = pX + pD / 2;
+      const pCY = pY + pD / 2;
 
       if (card.photo_url) {
         try {
           const photo = await loadImg(card.photo_url);
           ctx.save();
-          ctx.beginPath(); ctx.arc(pCX, pCY, pD / 2 - 1, 0, Math.PI * 2); ctx.clip();
+          ctx.beginPath(); ctx.arc(pCX, pCY, pD / 2 - 2, 0, Math.PI * 2); ctx.clip();
           ctx.drawImage(photo, pX, pY, pD, pD);
           ctx.restore();
         } catch { /* placeholder */ }
+      } else {
+        // Placeholder circle
+        ctx.fillStyle = "#d1fae5";
+        ctx.beginPath(); ctx.arc(pCX, pCY, pD / 2 - 2, 0, Math.PI * 2); ctx.fill();
       }
       // Photo border
-      ctx.strokeStyle = GREEN; ctx.lineWidth = 1.5;
+      ctx.strokeStyle = GREEN; ctx.lineWidth = 3;
       ctx.beginPath(); ctx.arc(pCX, pCY, pD / 2, 0, Math.PI * 2); ctx.stroke();
 
-      // Info rows
-      const rightColX = 61 * S;
+      // ── ODCAV logo ──
+      try {
+        const logo = await loadImg("/logoodcavdes.png");
+        const lH = Math.round(0.25 * headerH); // 25% taller = bigger logo
+        const lH2 = Math.round(0.85 * headerH);
+        const actualH = Math.min(lH2, 13 * S);
+        const lW = logo.naturalWidth / logo.naturalHeight * actualH;
+        ctx.drawImage(logo, 2.5 * S, (headerH - actualH) / 2, lW, actualH);
+      } catch { /* skip */ }
+
+      // ── Title (in header, left of photo) ──
+      const titleMaxX = pX - S; // don't exceed photo left edge
+      const titleCenterX = (2.5 * S + (pX - S)) / 2; // ??? let me adjust
+
+      // Actually let me center the title in the non-logo, non-photo zone
+      // Logo takes roughly 18% of W from left (after padding)
+      const logoEndX = 2.5 * S + Math.round(0.18 * W);
+      const titleCX = logoEndX + (pX - S - logoEndX) / 2;
+
+      ctx.fillStyle = GREEN; ctx.textAlign = "center";
+      ctx.font = `900 ${0.62 * headerH}px Arial`;
+      ctx.fillText("CARTE D'ACCÈS", titleCX, headerH * 0.45);
+      ctx.font = `600 ${0.37 * headerH}px Arial`;
+      ctx.fillText(`— SAISON ${saison} —`, titleCX, headerH * 0.78);
+
+      // ── Info rows ──
+      const rightColX = Math.round(0.65 * W);
       const numRows = infoRows.length;
       const rowH = (H - headerH) / numRows;
 
@@ -174,30 +189,31 @@ export function CardViewer({ card, qrDataUrl, printUrl }: CardViewerProps) {
           ctx.strokeStyle = "#e5e7eb"; ctx.lineWidth = 0.5;
           ctx.beginPath(); ctx.moveTo(2 * S, rowY); ctx.lineTo(rightColX - S, rowY); ctx.stroke();
         }
-        const boxX = 2 * S, boxH = 5 * S;
-        const boxY = rowY + (rowH - boxH) / 2;
+        const boxSide = Math.round(0.62 * rowH);
+        const boxX = 2 * S;
+        const boxY = rowY + (rowH - boxSide) / 2;
         ctx.fillStyle = GREEN;
-        drawRoundRect(ctx, boxX, boxY, boxH, boxH, 0.8 * S); ctx.fill();
+        drawRoundRect(ctx, boxX, boxY, boxSide, boxSide, 0.8 * S); ctx.fill();
 
         ctx.fillStyle = GREEN;
-        ctx.font = `700 ${3.6 * S / 10}px Arial`; ctx.textAlign = "left";
-        ctx.fillText(label, boxX + boxH + 1.5 * S, rowY + rowH * 0.38);
+        ctx.font = `700 ${0.28 * rowH}px Arial`; ctx.textAlign = "left";
+        ctx.fillText(label, boxX + boxSide + 1.5 * S, rowY + rowH * 0.38);
 
         ctx.fillStyle = "#111";
-        ctx.font = `700 ${5.5 * S / 10}px Arial`;
-        const maxW = rightColX - boxX - boxH - 3 * S;
+        ctx.font = `700 ${0.42 * rowH}px Arial`;
+        const maxW = rightColX - boxX - boxSide - 4 * S;
         let val = value;
         while (ctx.measureText(val).width > maxW && val.length > 3) val = val.slice(0, -2) + "…";
-        ctx.fillText(val, boxX + boxH + 1.5 * S, rowY + rowH * 0.72);
+        ctx.fillText(val, boxX + boxSide + 1.5 * S, rowY + rowH * 0.72);
       });
 
       // Right separator
       ctx.strokeStyle = "#d1d5db"; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(rightColX, headerH); ctx.lineTo(rightColX, H - 2); ctx.stroke();
 
-      // QR code
+      // ── QR code (bottom of right column) ──
       const qrImg = await loadImg(qrDataUrl);
-      const qrS = 20 * S;
+      const qrS = Math.round(0.22 * W); // 22% of card width
       const qrX = rightColX + (W - rightColX - qrS) / 2;
       const qrY = H - qrS - 2.5 * S;
       ctx.strokeStyle = GREEN; ctx.lineWidth = 1;
@@ -244,12 +260,13 @@ export function CardViewer({ card, qrDataUrl, printUrl }: CardViewerProps) {
       </div>
 
       {/* ── Card preview ── */}
-      {/*
-        Aspect ratio 85.6:54 ≈ 1.585:1
-        We use a container-query div so font sizes scale with the card width.
-      */}
       <Card className="overflow-hidden p-4 bg-gray-100">
         <div className="w-full max-w-xl mx-auto" style={{ containerType: "inline-size" }}>
+          {/*
+            Aspect ratio 85.6:54 ≈ 1.585:1
+            Photo is absolutely positioned (large, top-right, overlapping header/body).
+            cqi units for fonts (container query inline-size = card width).
+          */}
           <div
             className="relative w-full border-[3px] border-green-800 rounded-2xl overflow-hidden bg-white shadow-lg"
             style={{ aspectRatio: "85.6 / 54" }}
@@ -259,43 +276,34 @@ export function CardViewer({ card, qrDataUrl, printUrl }: CardViewerProps) {
               className="absolute inset-x-0 top-0 flex items-center bg-green-50 border-b-[1.5px] border-green-800"
               style={{ height: "27.8%", padding: "1.5% 2%" }}
             >
-              {/* ODCAV Logo */}
+              {/* ODCAV logo — bigger */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src="/LOGO-ODCAV-MBOUR.png"
+                src="/logoodcavdes.png"
                 alt="ODCAV"
-                style={{ height: "88%", width: "auto", objectFit: "contain", flexShrink: 0 }}
+                style={{
+                  height: "92%",
+                  width: "auto",
+                  maxWidth: "23%",
+                  objectFit: "contain",
+                  flexShrink: 0,
+                }}
               />
 
-              {/* Title */}
-              <div className="flex-1 text-center" style={{ padding: "0 2%" }}>
+              {/* Title — centered between logo and photo area */}
+              <div style={{ flex: 1, textAlign: "center", paddingRight: "36%" }}>
                 <p
                   className="font-black text-green-800 leading-tight"
-                  style={{ fontSize: "4.2cqi", lineHeight: 1.1 }}
+                  style={{ fontSize: "4.5cqi", lineHeight: 1.1 }}
                 >
                   CARTE D&apos;ACCÈS
                 </p>
                 <p
                   className="font-semibold text-green-700"
-                  style={{ fontSize: "2.2cqi", marginTop: "0.5cqi" }}
+                  style={{ fontSize: "2.3cqi", marginTop: "0.4cqi" }}
                 >
                   — SAISON {saison} —
                 </p>
-              </div>
-
-              {/* Photo */}
-              <div
-                className="rounded-full border-2 border-green-800 overflow-hidden bg-green-100 shrink-0"
-                style={{ height: "88%", aspectRatio: "1/1" }}
-              >
-                {card.photo_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={card.photo_url} alt="" className="w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <User className="w-2/5 h-2/5 text-green-700" />
-                  </div>
-                )}
               </div>
             </div>
 
@@ -304,10 +312,10 @@ export function CardViewer({ card, qrDataUrl, printUrl }: CardViewerProps) {
               className="absolute inset-x-0 bottom-0 flex"
               style={{ top: "27.8%" }}
             >
-              {/* Info rows — 70% width */}
+              {/* Info rows — 65% width */}
               <div
                 className="flex flex-col border-r border-gray-200"
-                style={{ width: "70%" }}
+                style={{ width: "65%" }}
               >
                 {infoRows.map(({ Icon, label, value }, i) => (
                   <div
@@ -320,7 +328,6 @@ export function CardViewer({ card, qrDataUrl, printUrl }: CardViewerProps) {
                       gap: "2%",
                     }}
                   >
-                    {/* Icon box */}
                     <div
                       className="flex items-center justify-center rounded bg-green-800 shrink-0"
                       style={{ width: "7cqi", height: "7cqi" }}
@@ -345,12 +352,12 @@ export function CardViewer({ card, qrDataUrl, printUrl }: CardViewerProps) {
                 ))}
               </div>
 
-              {/* QR code — 30% width */}
+              {/* Right column — 35% width, QR at bottom */}
               <div
                 className="flex items-end justify-center bg-white"
-                style={{ width: "30%", paddingBottom: "2.5%" }}
+                style={{ width: "35%", paddingBottom: "2.5%" }}
               >
-                <div className="border border-green-800 p-[1.5%]" style={{ width: "75%" }}>
+                <div className="border border-green-800 p-[1.5%]" style={{ width: "72%" }}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={qrDataUrl}
@@ -360,6 +367,31 @@ export function CardViewer({ card, qrDataUrl, printUrl }: CardViewerProps) {
                   />
                 </div>
               </div>
+            </div>
+
+            {/* ── PHOTO — absolutely positioned, large, overlapping header/body ── */}
+            {/*
+              width: 34% of card width = 34% × (85.6/54) ≈ 54% of card height
+              top: 3% of card height, right: 1.5% of card width
+            */}
+            <div
+              className="absolute rounded-full overflow-hidden bg-green-100"
+              style={{
+                width: "34%",
+                aspectRatio: "1 / 1",
+                top: "3%",
+                right: "1.5%",
+                border: "3px solid #1a5c2a",
+              }}
+            >
+              {card.photo_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={card.photo_url} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center">
+                  <User className="w-2/5 h-2/5 text-green-700" />
+                </div>
+              )}
             </div>
           </div>
         </div>
