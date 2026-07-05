@@ -18,10 +18,12 @@ CREATE TABLE IF NOT EXISTS match_unsold (
 -- RLS pour match_unsold
 ALTER TABLE match_unsold ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY IF NOT EXISTS "Lecture match_unsold pour authentifiés" ON match_unsold
+DROP POLICY IF EXISTS "Lecture match_unsold pour authentifiés" ON match_unsold;
+CREATE POLICY "Lecture match_unsold pour authentifiés" ON match_unsold
   FOR SELECT TO authenticated USING (true);
 
-CREATE POLICY IF NOT EXISTS "Admins gèrent les invendus" ON match_unsold
+DROP POLICY IF EXISTS "Admins gèrent les invendus" ON match_unsold;
+CREATE POLICY "Admins gèrent les invendus" ON match_unsold
   FOR ALL TO authenticated
   USING (
     (SELECT role FROM profiles WHERE id = auth.uid())
