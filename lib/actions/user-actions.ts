@@ -200,6 +200,22 @@ export async function resetUserPassword(userId: string) {
   return { password: newPassword };
 }
 
+// ── updateSelfInfo ────────────────────────────────────────────────
+export async function updateSelfInfo(formData: { fullName: string; phone: string }) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Non authentifié" };
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({ full_name: formData.fullName, phone: formData.phone || null })
+    .eq("id", user.id);
+
+  if (error) return { error: error.message };
+  revalidatePath("/utilisateurs");
+  return { success: true };
+}
+
 // ── deleteUser ────────────────────────────────────────────────────
 export async function deleteUser(userId: string) {
   const check = await canManage(userId);

@@ -4,9 +4,11 @@ import { useState } from "react";
 import {
   toggleUserActive,
   updateUserInfo,
+  updateSelfInfo,
   resetUserPassword,
   deleteUser,
 } from "@/lib/actions/user-actions";
+import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -32,6 +34,8 @@ import {
   Trash2,
   Copy,
   ShieldAlert,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ROLE_LABELS } from "@/lib/constants";
@@ -65,6 +69,11 @@ export function UserActions({
   const [phone, setPhone] = useState(user.phone || "");
   const [role, setRole] = useState(user.role);
 
+  // Self password change fields
+  const [selfPassword, setSelfPassword] = useState("");
+  const [selfPasswordConfirm, setSelfPasswordConfirm] = useState("");
+  const [showSelfPwd, setShowSelfPwd] = useState(false);
+
   const isSelf = user.id === currentUserId;
 
   // A Président de zone can only be managed by super_admin
@@ -86,6 +95,30 @@ export function UserActions({
     const result = await updateUserInfo(user.id, { fullName, phone, role });
     if (result.error) toast.error(result.error);
     else { toast.success("Informations modifiées"); setEditOpen(false); }
+    setLoading(null);
+  }
+
+  async function handleUpdateSelf() {
+    setLoading("edit");
+    const result = await updateSelfInfo({ fullName, phone });
+    if (result.error) toast.error(result.error);
+    else { toast.success("Vos informations ont été mises à jour"); setEditOpen(false); }
+    setLoading(null);
+  }
+
+  async function handleSelfPasswordChange() {
+    if (selfPassword.length < 6) { toast.error("Le mot de passe doit faire au moins 6 caractères"); return; }
+    if (selfPassword !== selfPasswordConfirm) { toast.error("Les mots de passe ne correspondent pas"); return; }
+    setLoading("password");
+    const supabase = createClient();
+    const { error } = await supabase.auth.updateUser({ password: selfPassword });
+    if (error) toast.error(error.message);
+    else {
+      toast.success("Mot de passe modifié avec succès");
+      setPasswordOpen(false);
+      setSelfPassword("");
+      setSelfPasswordConfirm("");
+    }
     setLoading(null);
   }
 
@@ -121,8 +154,105 @@ export function UserActions({
     }
   }
 
-  // Never show actions for yourself
-  if (isSelf) return null;
+  // Self: limited actions — edit own info + change own password
+  if (isSelf) {
+    return (
+      <>
+        <div className="flex gap-1 justify-end">
+          <Button
+            type="button" variant="ghost" size="sm"
+            onClick={() => setEditOpen(true)}
+            title="Modifier mes informations"
+            className="h-7 w-7 p-0"
+          >
+            <Pencil className="h-3 w-3" />
+          </Button>
+          <Button
+            type="button" variant="ghost" size="sm"
+            onClick={() => { setSelfPassword(""); setSelfPasswordConfirm(""); setPasswordOpen(true); }}
+            title="Changer mon mot de passe"
+            className="h-7 w-7 p-0"
+          >
+            <KeyRound className="h-3 w-3" />
+          </Button>
+        </div>
+
+        {/* Edit self info dialog */}
+        <Dialog open={editOpen} onOpenChange={setEditOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Mes informations</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Nom complet</Label>
+                <Input value={fullName} onChange={(e) => setFullName(e.target.value)} required />
+              </div>
+              <div className="space-y-2">
+                <Label>Téléphone</Label>
+                <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+221 77 123 45 67" />
+              </div>
+              <Button
+                type="button"
+                onClick={handleUpdateSelf}
+                disabled={loading === "edit"}
+                className="w-full bg-brand hover:bg-brand/90"
+              >
+                {loading === "edit" ? <Loader2 className="h-4 w-4 animate-spin" /> : "Enregistrer"}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Change own password dialog */}
+        <Dialog open={passwordOpen} onOpenChange={setPasswordOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Changer mon mot de passe</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Nouveau mot de passe</Label>
+                <div className="relative">
+                  <Input
+                    type={showSelfPwd ? "text" : "password"}
+                    value={selfPassword}
+                    onChange={(e) => setSelfPassword(e.target.value)}
+                    placeholder="Min. 6 caractères"
+                    className="pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowSelfPwd((v) => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                  >
+                    {showSelfPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Confirmer le mot de passe</Label>
+                <Input
+                  type={showSelfPwd ? "text" : "password"}
+                  value={selfPasswordConfirm}
+                  onChange={(e) => setSelfPasswordConfirm(e.target.value)}
+                  placeholder="Répétez le mot de passe"
+                />
+              </div>
+              <Button
+                type="button"
+                onClick={handleSelfPasswordChange}
+                disabled={loading === "password" || !selfPassword}
+                className="w-full bg-brand hover:bg-brand/90"
+              >
+                {loading === "password" ? <Loader2 className="h-4 w-4 animate-spin" /> : "Changer le mot de passe"}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </>
+    );
+  }
 
   // President account: show a lock indicator for non-super_admin
   if (isProtectedPresident) {
