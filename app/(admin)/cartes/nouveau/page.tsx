@@ -1,6 +1,9 @@
 import { requireRole } from "@/lib/auth";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { CardForm } from "./card-form";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { ArrowLeft } from "lucide-react";
 
 export const metadata = { title: "Nouvelle carte d'accès" };
 
@@ -46,11 +49,18 @@ export default async function NouvelleCartePage() {
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold font-heading">Nouvelle carte d&apos;accès</h1>
-        <p className="text-muted-foreground text-sm mt-1">
-          Créez une carte d&apos;identification pour un membre de zone
-        </p>
+      <div className="flex items-center gap-3">
+        <Link href="/cartes">
+          <Button variant="outline" size="sm">
+            <ArrowLeft className="h-4 w-4 mr-1" />Retour
+          </Button>
+        </Link>
+        <div>
+          <h1 className="text-2xl font-bold font-heading">Nouvelle carte d&apos;accès</h1>
+          <p className="text-muted-foreground text-sm mt-0.5">
+            Créez une carte d&apos;identification pour un membre de zone
+          </p>
+        </div>
       </div>
       <CardForm
         zones={zones}
