@@ -21,6 +21,7 @@ import {
   Building2,
   ContactRound,
   PackageX,
+  Network,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
@@ -50,13 +51,28 @@ const superAdminLinks = [
   { href: "/parametres-odcav", label: "Paramètre ODCAV", icon: Building2 },
 ];
 
+// C3 has no zone, no cartes, no Paramètre Zone — their own settings
+const c3Links = [
+  { href: "/dashboard",      label: "Tableau de bord",  icon: LayoutDashboard },
+  { href: "/equipes",        label: "Équipes",           icon: Shield },
+  { href: "/billets",        label: "Catégories billets",icon: Ticket },
+  { href: "/matchs",         label: "Matchs",            icon: Trophy },
+  { href: "/finances",       label: "Finances",          icon: Wallet },
+  { href: "/invendus",       label: "Invendus",          icon: PackageX },
+  { href: "/rapports",       label: "Rapports",          icon: FileText },
+  { href: "/utilisateurs",   label: "Utilisateurs",      icon: Users },
+  { href: "/parametres-c3",  label: "Paramètre C3",      icon: Network },
+];
+
 export function SidebarAdmin({ userName, userRole, zoneName }: SidebarProps) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
 
   const links =
-    userRole === "super_admin"
+    userRole === "c3"
+      ? c3Links
+      : userRole === "super_admin"
       ? [...adminLinks, ...superAdminLinks]
       : adminLinks;
 

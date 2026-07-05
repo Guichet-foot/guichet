@@ -20,9 +20,9 @@ export default async function UsersPage({
 }: {
   searchParams: Promise<{ zone?: string }>;
 }) {
-  const profile = await requireRole(["super_admin", "admin_zone"]);
+  const profile = await requireRole(["super_admin", "admin_zone", "c3"]);
   const params = await searchParams;
-  const { effectiveZoneId, selectedZone, ownedZones, needsZoneSelection } =
+  const { effectiveZoneId, selectedZone, ownedZones, needsZoneSelection, c3AccountId } =
     await getEffectiveZone(profile, params.zone);
 
   if (needsZoneSelection) {
@@ -36,7 +36,10 @@ export default async function UsersPage({
     .select("*, zone:zones!profiles_zone_id_fkey(name)")
     .order("created_at", { ascending: false });
 
-  if (effectiveZoneId) {
+  if (c3AccountId) {
+    // C3 sees only caissier/portier they created
+    query.eq("created_by_admin", c3AccountId);
+  } else if (effectiveZoneId) {
     query.eq("zone_id", effectiveZoneId);
   }
 

@@ -1,4 +1,4 @@
-export type UserRole = "fondateur" | "super_admin" | "admin_zone" | "caissier" | "portier";
+export type UserRole = "fondateur" | "super_admin" | "admin_zone" | "caissier" | "portier" | "c3";
 
 export type MatchStatus = "programme" | "en_cours" | "termine" | "annule";
 
@@ -57,7 +57,8 @@ export interface Team {
 
 export interface Match {
   id: string;
-  zone_id: string;
+  zone_id: string | null;
+  c3_account_id?: string | null;
   home_team: string;
   away_team: string;
   venue: string;

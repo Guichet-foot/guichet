@@ -12,11 +12,9 @@ function generatePassword(): string {
 }
 
 // ── Authorization helper ───────────────────────────────────────────
-// Returns the caller's profile and (optionally) the target's profile.
-// Returns { error } string if the caller is not allowed to act on the target.
 async function canManage(targetUserId: string): Promise<
   | { error: string }
-  | { caller: { role: string; is_president: boolean } }
+  | { caller: { id: string; role: string; is_president: boolean } }
 > {
   const supabase = await createClient();
   const { data: { user: currentUser } } = await supabase.auth.getUser();
@@ -31,17 +29,28 @@ async function canManage(targetUserId: string): Promise<
   if (!caller) return { error: "Profil introuvable" };
 
   // super_admin may manage anyone
-  if (caller.role === "super_admin") return { caller };
+  if (caller.role === "super_admin") return { caller: { id: currentUser.id, ...caller } };
 
   // For all others we need to inspect the target
   const adminClient = await createAdminClient();
   const { data: target } = await adminClient
     .from("profiles")
-    .select("role, is_president")
+    .select("role, is_president, created_by_admin")
     .eq("id", targetUserId)
     .single();
 
   if (!target) return { error: "Utilisateur introuvable" };
+
+  // C3 can only manage caissier/portier they themselves created
+  if (caller.role === "c3") {
+    if (!["caissier", "portier"].includes(target.role)) {
+      return { error: "Vous ne pouvez gérer que les caissiers et portiers de votre organisation" };
+    }
+    if (target.created_by_admin !== currentUser.id) {
+      return { error: "Cet utilisateur ne fait pas partie de votre organisation" };
+    }
+    return { caller: { id: currentUser.id, ...caller } };
+  }
 
   // Nobody below super_admin can touch a Président de zone
   if (target.is_president) {
@@ -53,7 +62,7 @@ async function canManage(targetUserId: string): Promise<
     return { error: "Vous ne pouvez pas modifier un compte Admin Zone" };
   }
 
-  return { caller };
+  return { caller: { id: currentUser.id, ...caller } };
 }
 
 // ── createUser ────────────────────────────────────────────────────
@@ -75,29 +84,34 @@ export async function createUser(formData: {
     .eq("id", currentUser.id)
     .single();
 
-  if (!caller || !["super_admin", "admin_zone"].includes(caller.role)) {
+  if (!caller || !["super_admin", "admin_zone", "c3"].includes(caller.role)) {
     return { error: "Non autorisé" };
+  }
+
+  // ── Rules for C3 callers ──────────────────────────────────────
+  if (caller.role === "c3") {
+    if (!["caissier", "portier"].includes(formData.role)) {
+      return { error: "La C3 ne peut créer que des caissiers et portiers" };
+    }
+    formData.zoneId = null; // C3 caissier/portier have no zone
   }
 
   // ── Rules for admin_zone callers ──────────────────────────────
   if (caller.role === "admin_zone") {
     if (caller.is_president) {
-      // Président: may create non-président admin_zone, caissier, portier
       if (!["admin_zone", "caissier", "portier"].includes(formData.role)) {
         return { error: "Non autorisé" };
       }
-      // Cannot promote another account to président (only super_admin can)
       if (formData.isPresident) {
         return { error: "Seul le Super Admin peut désigner un Président de zone" };
       }
     } else {
-      // Regular admin_zone: caissier and portier only
       if (!["caissier", "portier"].includes(formData.role)) {
         return { error: "Vous ne pouvez créer que des caissiers et portiers" };
       }
     }
     if (!caller.zone_id) return { error: "Votre zone est introuvable" };
-    formData.zoneId = caller.zone_id; // always force to caller's zone
+    formData.zoneId = caller.zone_id;
   }
 
   // Only super_admin may set is_president, and only for admin_zone

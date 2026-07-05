@@ -22,9 +22,9 @@ export default async function DashboardPage({
 }: {
   searchParams: Promise<{ zone?: string; date?: string; year?: string; match?: string }>;
 }) {
-  const profile = await requireRole(["super_admin", "admin_zone"]);
+  const profile = await requireRole(["super_admin", "admin_zone", "c3"]);
   const params = await searchParams;
-  const { effectiveZoneId, selectedZone, ownedZones, needsZoneSelection } =
+  const { effectiveZoneId, selectedZone, ownedZones, needsZoneSelection, c3AccountId } =
     await getEffectiveZone(profile, params.zone);
 
   if (needsZoneSelection) {
@@ -39,11 +39,13 @@ export default async function DashboardPage({
 
   const { data: todayTickets } = (await supabase
     .from("tickets")
-    .select("price, sold_at, match_id, match:matches(zone_id)")
+    .select("price, sold_at, match_id, match:matches(zone_id, c3_account_id)")
     .gte("sold_at", todayStart.toISOString())
     .neq("status", "annule")) as { data: any[] | null };
 
-  const filteredTodayTickets = zoneFilter
+  const filteredTodayTickets = c3AccountId
+    ? todayTickets?.filter((t: any) => t.match?.c3_account_id === c3AccountId)
+    : zoneFilter
     ? todayTickets?.filter((t: any) => t.match?.zone_id === zoneFilter)
     : todayTickets;
 
@@ -60,7 +62,8 @@ export default async function DashboardPage({
     .order("match_date")
     .limit(5);
 
-  if (zoneFilter) matchQuery = matchQuery.eq("zone_id", zoneFilter);
+  if (c3AccountId) matchQuery = matchQuery.eq("c3_account_id", c3AccountId);
+  else if (zoneFilter) matchQuery = matchQuery.eq("zone_id", zoneFilter);
 
   const { data: upcomingMatches } = await matchQuery;
 

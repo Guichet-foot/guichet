@@ -45,14 +45,14 @@ export async function getOdcavSettings(): Promise<OdcavSettings> {
 }
 
 export async function updateOdcavSettings(settings: OdcavSettings) {
-  await requireRole(["super_admin", "fondateur"]);
+  const profile = await requireRole(["super_admin", "fondateur", "c3"]);
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Non authentifié" };
 
   const { error } = await supabase.from("odcav_settings").upsert(
     {
-      id: user.id,  // Each super_admin writes to their own row
+      id: user.id,
       logo_url: settings.logoUrl,
       nom: settings.nom,
       adresse: settings.adresse,
@@ -65,6 +65,10 @@ export async function updateOdcavSettings(settings: OdcavSettings) {
     { onConflict: "id" }
   );
   if (error) return { error: error.message };
-  revalidatePath("/parametres-odcav");
+  if (profile.role === "c3") {
+    revalidatePath("/parametres-c3");
+  } else {
+    revalidatePath("/parametres-odcav");
+  }
   return { success: true };
 }

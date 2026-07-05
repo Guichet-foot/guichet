@@ -41,6 +41,7 @@ export default function NewMatchPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [zoneId, setZoneId] = useState<string>("");
+  const [c3AccountId, setC3AccountId] = useState<string | null>(null);
   const [teams, setTeams] = useState<TeamOption[]>([]);
   const [templates, setTemplates] = useState<TemplateOption[]>([]);
   const [selectedTemplates, setSelectedTemplates] = useState<Set<string>>(new Set());
@@ -62,22 +63,31 @@ export default function NewMatchPage() {
 
       const { data: profile } = await supabase
         .from("profiles")
-        .select("zone_id, role")
+        .select("zone_id, role, id")
         .eq("id", user.id)
         .single();
 
-      const effectiveZone = zoneParam || profile?.zone_id;
-
-      if (effectiveZone) {
-        setZoneId(effectiveZone);
-
+      if (profile?.role === "c3") {
+        // C3: load ALL teams from their ODCAV (RLS handles the restriction)
+        setC3AccountId(profile.id);
         const [{ data: teamList }, { data: templateList }] = await Promise.all([
-          supabase.from("teams").select("id, name").eq("zone_id", effectiveZone).order("name"),
-          supabase.from("ticket_templates").select("id, name, price, default_quantity, color").eq("zone_id", effectiveZone).order("price"),
+          supabase.from("teams").select("id, name").order("name"),
+          supabase.from("ticket_templates").select("id, name, price, default_quantity, color")
+            .eq("c3_account_id", profile.id).order("price"),
         ]);
-
         if (teamList) setTeams(teamList);
         if (templateList) setTemplates(templateList);
+      } else {
+        const effectiveZone = zoneParam || profile?.zone_id;
+        if (effectiveZone) {
+          setZoneId(effectiveZone);
+          const [{ data: teamList }, { data: templateList }] = await Promise.all([
+            supabase.from("teams").select("id, name").eq("zone_id", effectiveZone).order("name"),
+            supabase.from("ticket_templates").select("id, name, price, default_quantity, color").eq("zone_id", effectiveZone).order("price"),
+          ]);
+          if (teamList) setTeams(teamList);
+          if (templateList) setTemplates(templateList);
+        }
       }
     }
     init();
@@ -102,12 +112,13 @@ export default function NewMatchPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!zoneId) { toast.error("Zone non trouvée"); return; }
+    if (!zoneId && !c3AccountId) { toast.error("Zone non trouvée"); return; }
     if (homeTeam === awayTeam) { toast.error("Les deux équipes doivent être différentes"); return; }
     setLoading(true);
 
     const result = await createMatch({
-      zoneId,
+      zoneId: c3AccountId ? null : zoneId,
+      c3AccountId,
       homeTeam,
       awayTeam,
       venue,

@@ -16,7 +16,8 @@ import { Plus, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 interface TicketTemplateFormProps {
-  zoneId: string;
+  zoneId?: string | null;
+  c3AccountId?: string | null;
   editTemplate?: {
     id: string;
     name: string;
@@ -28,7 +29,7 @@ interface TicketTemplateFormProps {
   trigger?: React.ReactNode;
 }
 
-export function TicketTemplateForm({ zoneId, editTemplate, trigger }: TicketTemplateFormProps) {
+export function TicketTemplateForm({ zoneId, c3AccountId, editTemplate, trigger }: TicketTemplateFormProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [name, setName] = useState(editTemplate?.name || "");
@@ -66,7 +67,8 @@ export function TicketTemplateForm({ zoneId, editTemplate, trigger }: TicketTemp
       else { toast.success("Catégorie modifiée"); setOpen(false); }
     } else {
       const result = await createTicketTemplate({
-        zoneId,
+        zoneId: zoneId || null,
+        c3AccountId: c3AccountId || null,
         name,
         price: parseInt(price),
         defaultQuantity: parseInt(quantity),

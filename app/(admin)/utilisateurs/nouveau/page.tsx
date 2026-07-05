@@ -75,6 +75,7 @@ export default function NewUserPage() {
     if (currentUserRole === "super_admin") {
       return [
         { value: "admin_zone", label: "Admin Zone" },
+        { value: "c3",         label: "Coordination C3" },
         { value: "caissier",   label: "Caissier" },
         { value: "portier",    label: "Portier" },
         { value: "super_admin",label: "Super Admin" },
@@ -87,7 +88,7 @@ export default function NewUserPage() {
         { value: "portier",    label: "Portier" },
       ];
     }
-    // Regular admin_zone
+    // Regular admin_zone or c3: caissier/portier only
     return [
       { value: "caissier", label: "Caissier" },
       { value: "portier",  label: "Portier" },
@@ -96,6 +97,8 @@ export default function NewUserPage() {
 
   // Show "Président de zone" checkbox only for super_admin creating an admin_zone
   const showPresidentCheckbox = currentUserRole === "super_admin" && role === "admin_zone";
+  // C3 has no zone assignment — hide zone selector for c3 role
+  const hideZoneSelector = role === "c3" || role === "super_admin";
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -106,7 +109,7 @@ export default function NewUserPage() {
       fullName,
       phone,
       role: role as "super_admin" | "admin_zone" | "caissier" | "portier",
-      zoneId: role === "super_admin" ? null : zoneId || null,
+      zoneId: (role === "super_admin" || role === "c3") ? null : zoneId || null,
       isPresident: role === "admin_zone" ? isPresident : false,
     });
 
@@ -230,8 +233,8 @@ export default function NewUserPage() {
               </div>
             )}
 
-            {/* Zone selector — super_admin only, non super_admin role */}
-            {role && role !== "super_admin" && currentUserRole === "super_admin" && (
+            {/* Zone selector — super_admin only, for zone-based roles */}
+            {role && !hideZoneSelector && currentUserRole === "super_admin" && (
               <div className="space-y-2">
                 <Label>Zone</Label>
                 <Select value={zoneId} onValueChange={(v) => setZoneId(v ?? "")} required>

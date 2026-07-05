@@ -5,7 +5,8 @@ import { revalidatePath } from "next/cache";
 import type { MatchStatus } from "@/lib/types";
 
 export async function createMatch(formData: {
-  zoneId: string;
+  zoneId?: string | null;
+  c3AccountId?: string | null;
   homeTeam: string;
   awayTeam: string;
   venue: string;
@@ -13,16 +14,14 @@ export async function createMatch(formData: {
   notes: string;
 }) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
+  const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Non authentifié" };
 
   const { data: match, error } = await supabase
     .from("matches")
     .insert({
-      zone_id: formData.zoneId,
+      zone_id: formData.zoneId || null,
+      c3_account_id: formData.c3AccountId || null,
       home_team: formData.homeTeam,
       away_team: formData.awayTeam,
       venue: formData.venue,

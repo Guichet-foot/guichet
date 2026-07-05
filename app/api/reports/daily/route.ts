@@ -21,15 +21,17 @@ export async function POST(request: Request) {
     .eq("id", user.id)
     .single();
 
-  if (!profile || !["admin_zone", "super_admin"].includes(profile.role)) {
+  if (!profile || !["admin_zone", "super_admin", "c3"].includes(profile.role)) {
     return NextResponse.json({ error: "Non autorisé" }, { status: 403 });
   }
 
   const body = await request.json();
-  const { date, zoneId: bodyZoneId } = body;
+  const { date, zoneId: bodyZoneId, c3AccountId } = body;
 
   const effectiveZoneId: string | null =
     profile.role === "admin_zone" ? profile.zone_id : (bodyZoneId || null);
+  const effectiveC3Id: string | null =
+    profile.role === "c3" ? (c3AccountId || user.id) : null;
 
   // Récupérer les paramètres plateforme effectifs à cette date
   const adminSupabase = await createAdminClient();
@@ -47,14 +49,16 @@ export async function POST(request: Request) {
   // Tickets du jour
   const { data: tickets } = await supabase
     .from("tickets")
-    .select("price, match_id, match:matches(home_team, away_team, zone_id)")
+    .select("price, match_id, match:matches(home_team, away_team, zone_id, c3_account_id)")
     .gte("sold_at", `${date}T00:00:00`)
     .lte("sold_at", `${date}T23:59:59`)
     .neq("status", "annule") as { data: any[] | null };
 
-  const filteredTickets = effectiveZoneId
-    ? tickets?.filter((t: any) => t.match?.zone_id === effectiveZoneId)
-    : tickets;
+  const filteredTickets = effectiveC3Id
+    ? tickets?.filter((t: any) => t.match?.c3_account_id === effectiveC3Id)
+    : effectiveZoneId
+      ? tickets?.filter((t: any) => t.match?.zone_id === effectiveZoneId)
+      : tickets;
 
   const totalRevenue = filteredTickets?.reduce((s: number, t: any) => s + t.price, 0) || 0;
 
@@ -78,13 +82,17 @@ export async function POST(request: Request) {
     .select("label, category, amount")
     .eq("expense_date", date)
     .order("category");
-  if (effectiveZoneId) expensesQuery = expensesQuery.eq("zone_id", effectiveZoneId);
+  if (effectiveC3Id) {
+    expensesQuery = expensesQuery.eq("c3_account_id", effectiveC3Id);
+  } else if (effectiveZoneId) {
+    expensesQuery = expensesQuery.eq("zone_id", effectiveZoneId);
+  }
 
   const { data: expenses } = await expensesQuery as { data: any[] | null };
   const totalExpenses = expenses?.reduce((s: number, e: any) => s + e.amount, 0) || 0;
 
-  // Nom de la zone
-  let zoneName: string = (profile as any).zone?.name || "Toutes zones";
+  // Nom de la zone / organisation
+  let zoneName: string = effectiveC3Id ? "C3" : ((profile as any).zone?.name || "Toutes zones");
   if (profile.role === "super_admin" && effectiveZoneId) {
     const { data: zone } = await supabase
       .from("zones").select("name").eq("id", effectiveZoneId).single();

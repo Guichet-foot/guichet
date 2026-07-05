@@ -123,18 +123,26 @@ function VenteContent() {
 
       const { data: profile } = await supabase
         .from("profiles")
-        .select("zone_id")
+        .select("zone_id, created_by_admin")
         .eq("id", user.id)
         .single();
 
-      if (!profile?.zone_id) return;
+      if (!profile?.zone_id && !profile?.created_by_admin) return;
 
-      const { data: matchList } = await supabase
+      let matchQuery = supabase
         .from("matches")
         .select("id, home_team, away_team, match_date, venue, vente_active")
-        .eq("zone_id", profile.zone_id)
         .in("status", ["programme", "en_cours"])
         .order("match_date", { ascending: true });
+
+      if (profile.zone_id) {
+        matchQuery = matchQuery.eq("zone_id", profile.zone_id);
+      } else {
+        // C3 caissier: load matches belonging to the C3 account
+        matchQuery = matchQuery.eq("c3_account_id", profile.created_by_admin);
+      }
+
+      const { data: matchList } = await matchQuery;
 
       if (matchList && matchList.length > 0) {
         setMatches(matchList);

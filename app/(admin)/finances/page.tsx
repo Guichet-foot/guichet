@@ -25,9 +25,9 @@ export default async function FinancesPage({
 }: {
   searchParams: Promise<{ zone?: string; period?: string; date?: string; from?: string; to?: string }>;
 }) {
-  const profile = await requireRole(["super_admin", "admin_zone"]);
+  const profile = await requireRole(["super_admin", "admin_zone", "c3"]);
   const params = await searchParams;
-  const { effectiveZoneId, selectedZone, ownedZones, needsZoneSelection } =
+  const { effectiveZoneId, selectedZone, ownedZones, needsZoneSelection, c3AccountId } =
     await getEffectiveZone(profile, params.zone);
 
   if (needsZoneSelection) {
@@ -81,11 +81,13 @@ export default async function FinancesPage({
 
   const { data: tickets } = (await supabase
     .from("tickets")
-    .select("price, status, match_id, sold_at, match:matches(home_team, away_team, match_date, zone_id)")
+    .select("price, status, match_id, sold_at, match:matches(home_team, away_team, match_date, zone_id, c3_account_id)")
     .gte("sold_at", dateStart.toISOString())
     .lte("sold_at", dateEnd.toISOString())) as { data: any[] | null };
 
-  const filteredTickets = (zoneId
+  const filteredTickets = (c3AccountId
+    ? tickets?.filter((t: any) => t.match?.c3_account_id === c3AccountId)
+    : zoneId
     ? tickets?.filter((t: any) => t.match?.zone_id === zoneId)
     : tickets) || [];
 

@@ -39,9 +39,9 @@ export default async function EquipesPage({
 }: {
   searchParams: Promise<{ zone?: string }>;
 }) {
-  const profile = await requireRole(["super_admin", "admin_zone"]);
+  const profile = await requireRole(["super_admin", "admin_zone", "c3"]);
   const params = await searchParams;
-  const { effectiveZoneId, selectedZone, ownedZones, needsZoneSelection } =
+  const { effectiveZoneId, selectedZone, ownedZones, needsZoneSelection, c3AccountId } =
     await getEffectiveZone(profile, params.zone);
 
   if (needsZoneSelection) {
@@ -50,8 +50,9 @@ export default async function EquipesPage({
 
   const supabase = await createClient();
 
+  // C3: RLS returns all teams from their ODCAV's zones (no explicit filter needed)
   let query = supabase.from("teams").select("*").order("name");
-  if (effectiveZoneId) query = query.eq("zone_id", effectiveZoneId);
+  if (!c3AccountId && effectiveZoneId) query = query.eq("zone_id", effectiveZoneId);
 
   const { data: teams } = (await query) as { data: any[] | null };
 

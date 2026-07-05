@@ -27,20 +27,22 @@ export async function POST(request: Request) {
 
   if (
     !profile ||
-    !["admin_zone", "super_admin"].includes(profile.role)
+    !["admin_zone", "super_admin", "c3"].includes(profile.role)
   ) {
     return NextResponse.json({ error: "Non autorisé" }, { status: 403 });
   }
 
   const body = await request.json();
-  const { startDate, endDate, reportType, matchId } = body;
+  const { startDate, endDate, reportType, matchId, c3AccountId } = body;
 
   const zoneId =
     profile.role === "admin_zone" ? profile.zone_id : null;
+  const effectiveC3Id: string | null =
+    profile.role === "c3" ? (c3AccountId || user.id) : null;
 
   // Infos ODCAV pour le PDF
   const adminSupabase = await createAdminClient();
-  // For super_admin: their own settings row (id = user.id)
+  // For super_admin/C3: their own settings row (id = user.id)
   // For admin_zone: their super_admin's settings row (zone.created_by)
   let odcavSettingsId = user.id;
   if (profile.role === "admin_zone" && profile.zone_id) {
@@ -68,7 +70,7 @@ export async function POST(request: Request) {
   let ticketsQuery = supabase
     .from("tickets")
     .select(
-      "price, status, match_id, sold_at, match:matches(home_team, away_team, match_date, zone_id)"
+      "price, status, match_id, sold_at, match:matches(home_team, away_team, match_date, zone_id, c3_account_id)"
     )
     .gte("sold_at", `${startDate}T00:00:00`)
     .lte("sold_at", `${endDate}T23:59:59`);
@@ -79,9 +81,11 @@ export async function POST(request: Request) {
 
   const { data: tickets } = await ticketsQuery as { data: any[] | null };
 
-  const filteredTickets = (zoneId
-    ? tickets?.filter((t: any) => t.match?.zone_id === zoneId)
-    : tickets) || [];
+  const filteredTickets = (effectiveC3Id
+    ? tickets?.filter((t: any) => t.match?.c3_account_id === effectiveC3Id)
+    : zoneId
+      ? tickets?.filter((t: any) => t.match?.zone_id === zoneId)
+      : tickets) || [];
 
   // Revenue by match
   const revenueMap: Record<
@@ -123,7 +127,9 @@ export async function POST(request: Request) {
     .lte("expense_date", endDate)
     .order("expense_date");
 
-  if (zoneId) {
+  if (effectiveC3Id) {
+    expensesQuery = expensesQuery.eq("c3_account_id", effectiveC3Id);
+  } else if (zoneId) {
     expensesQuery = expensesQuery.eq("zone_id", zoneId);
   }
 

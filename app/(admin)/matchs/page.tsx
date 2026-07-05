@@ -24,9 +24,9 @@ export default async function MatchsPage({
 }: {
   searchParams: Promise<{ zone?: string }>;
 }) {
-  const profile = await requireRole(["super_admin", "admin_zone"]);
+  const profile = await requireRole(["super_admin", "admin_zone", "c3"]);
   const params = await searchParams;
-  const { effectiveZoneId, selectedZone, ownedZones, needsZoneSelection } =
+  const { effectiveZoneId, selectedZone, ownedZones, needsZoneSelection, c3AccountId } =
     await getEffectiveZone(profile, params.zone);
 
   if (needsZoneSelection) {
@@ -36,7 +36,8 @@ export default async function MatchsPage({
   const supabase = await createClient();
 
   let query = supabase.from("matches").select("*").order("match_date", { ascending: false });
-  if (effectiveZoneId) query = query.eq("zone_id", effectiveZoneId);
+  if (c3AccountId) query = query.eq("c3_account_id", c3AccountId);
+  else if (effectiveZoneId) query = query.eq("zone_id", effectiveZoneId);
 
   const { data: matches } = await query;
 

@@ -28,9 +28,9 @@ export default async function BilletsPage({
 }: {
   searchParams: Promise<{ zone?: string }>;
 }) {
-  const profile = await requireRole(["super_admin", "admin_zone"]);
+  const profile = await requireRole(["super_admin", "admin_zone", "c3"]);
   const params = await searchParams;
-  const { effectiveZoneId, selectedZone, ownedZones, needsZoneSelection } =
+  const { effectiveZoneId, selectedZone, ownedZones, needsZoneSelection, c3AccountId } =
     await getEffectiveZone(profile, params.zone);
 
   if (needsZoneSelection) {
@@ -39,11 +39,15 @@ export default async function BilletsPage({
 
   const supabase = await createClient();
 
-  const { data: templates } = await supabase
+  // C3: filter by c3_account_id; zone-based: filter by zone_id
+  const templatesQuery = supabase
     .from("ticket_templates")
     .select("*")
-    .eq("zone_id", effectiveZoneId!)
     .order("price", { ascending: true });
+
+  const { data: templates } = c3AccountId
+    ? await templatesQuery.eq("c3_account_id", c3AccountId)
+    : await templatesQuery.eq("zone_id", effectiveZoneId!);
 
   return (
     <div className="space-y-6">
@@ -61,7 +65,7 @@ export default async function BilletsPage({
             </p>
           </div>
         </div>
-        <TicketTemplateForm zoneId={effectiveZoneId!} />
+        <TicketTemplateForm zoneId={c3AccountId ? null : effectiveZoneId!} c3AccountId={c3AccountId} />
       </div>
 
       {!templates || templates.length === 0 ? (

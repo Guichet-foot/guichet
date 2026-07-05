@@ -6,7 +6,7 @@ import { requireRole } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 
 export async function getFinishedMatches() {
-  const profile = await requireRole(["super_admin", "admin_zone", "fondateur"]);
+  const profile = await requireRole(["super_admin", "admin_zone", "fondateur", "c3"]);
   const adminClient = await createAdminClient();
 
   let query = adminClient
@@ -26,6 +26,9 @@ export async function getFinishedMatches() {
       .single();
     if (prof?.zone_id) query = query.eq("zone_id", prof.zone_id as string);
     else return [];
+  } else if (profile.role === "c3") {
+    // C3: only their own matches
+    query = query.eq("c3_account_id", profile.id);
   } else if (profile.role === "super_admin") {
     // Scope to zones owned by this super_admin
     const { data: ownedZones } = await adminClient

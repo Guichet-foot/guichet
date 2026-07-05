@@ -11,9 +11,9 @@ export default async function RapportsPage({
 }: {
   searchParams: Promise<{ zone?: string }>;
 }) {
-  const profile = await requireRole(["super_admin", "admin_zone"]);
+  const profile = await requireRole(["super_admin", "admin_zone", "c3"]);
   const params = await searchParams;
-  const { effectiveZoneId, selectedZone, ownedZones, needsZoneSelection } =
+  const { effectiveZoneId, selectedZone, ownedZones, needsZoneSelection, c3AccountId } =
     await getEffectiveZone(profile, params.zone);
 
   if (needsZoneSelection) {
@@ -24,7 +24,7 @@ export default async function RapportsPage({
     <div className="max-w-lg mx-auto space-y-6">
       {profile.role === "super_admin" && selectedZone && <ZoneBackHeader zoneName={selectedZone.name} />}
       <h1 className="text-2xl font-bold font-heading">Rapports PDF</h1>
-      <RapportsForm zoneId={effectiveZoneId} />
+      <RapportsForm zoneId={effectiveZoneId} c3AccountId={c3AccountId} />
     </div>
   );
 }

@@ -16,7 +16,7 @@ interface MatchOption {
   away_team: string;
 }
 
-export function RapportsForm({ zoneId }: { zoneId: string | null }) {
+export function RapportsForm({ zoneId, c3AccountId }: { zoneId: string | null; c3AccountId?: string | null }) {
   const [loading, setLoading] = useState(false);
   const [matches, setMatches] = useState<MatchOption[]>([]);
   const [startDate, setStartDate] = useState(
@@ -31,17 +31,20 @@ export function RapportsForm({ zoneId }: { zoneId: string | null }) {
 
   useEffect(() => {
     async function fetchMatches() {
-      if (!zoneId) return;
       const supabase = createClient();
-      const { data } = await supabase
-        .from("matches")
-        .select("id, home_team, away_team")
-        .eq("zone_id", zoneId)
-        .order("match_date", { ascending: false });
+      let query = supabase.from("matches").select("id, home_team, away_team");
+      if (c3AccountId) {
+        query = query.eq("c3_account_id", c3AccountId);
+      } else if (zoneId) {
+        query = query.eq("zone_id", zoneId);
+      } else {
+        return;
+      }
+      const { data } = await query.order("match_date", { ascending: false });
       if (data) setMatches(data);
     }
     fetchMatches();
-  }, [zoneId]);
+  }, [zoneId, c3AccountId]);
 
   async function handleGenerate() {
     setLoading(true);
@@ -51,7 +54,7 @@ export function RapportsForm({ zoneId }: { zoneId: string | null }) {
         const res = await fetch("/api/reports/daily", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ date: dailyDate, zoneId }),
+          body: JSON.stringify({ date: dailyDate, zoneId, c3AccountId }),
         });
         if (!res.ok) { toast.error("Erreur lors de la génération"); setLoading(false); return; }
         const blob = await res.blob();
@@ -71,6 +74,7 @@ export function RapportsForm({ zoneId }: { zoneId: string | null }) {
             startDate, endDate, reportType,
             matchId: matchId === "all" ? null : matchId,
             zoneId,
+            c3AccountId,
           }),
         });
         if (!res.ok) { toast.error("Erreur lors de la génération"); setLoading(false); return; }

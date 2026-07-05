@@ -133,6 +133,7 @@ export async function updateSession(request: NextRequest) {
   const adminRoutes = [
     "/dashboard", "/equipes", "/utilisateurs",
     "/zones", "/billets", "/matchs", "/finances", "/rapports", "/parametres",
+    "/invendus", "/cartes", "/parametres-odcav", "/parametres-c3",
   ];
   const caissierRoutes = ["/vente", "/scanner", "/mes-ventes"];
   const portierRoutes = ["/scanner"];
@@ -140,6 +141,9 @@ export async function updateSession(request: NextRequest) {
   const isAdminRoute = adminRoutes.some((r) => pathname.startsWith(r));
   const isCaissierRoute = caissierRoutes.some((r) => pathname.startsWith(r));
   const isPortierRoute = portierRoutes.some((r) => pathname.startsWith(r));
+
+  // C3 is an admin-level role (same routing as admin_zone)
+  const isAdminRole = ["super_admin", "admin_zone", "c3"].includes(profile.role);
 
   if (profile.role === "portier") {
     if (!isPortierRoute) {
@@ -154,7 +158,7 @@ export async function updateSession(request: NextRequest) {
 
   if (
     isCaissierRoute &&
-    !["caissier", "admin_zone", "super_admin"].includes(profile.role)
+    !["caissier", "admin_zone", "super_admin", "c3"].includes(profile.role)
   ) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }

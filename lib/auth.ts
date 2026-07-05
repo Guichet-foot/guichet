@@ -38,7 +38,9 @@ export async function requireAuth(): Promise<Profile> {
 export async function requireRole(roles: UserRole[]): Promise<Profile> {
   const profile = await requireAuth();
   if (!roles.includes(profile.role)) {
-    redirect(profile.role === "caissier" ? "/vente" : "/dashboard");
+    if (profile.role === "caissier") redirect("/vente");
+    if (profile.role === "portier") redirect("/scanner");
+    redirect("/dashboard");
   }
   return profile;
 }

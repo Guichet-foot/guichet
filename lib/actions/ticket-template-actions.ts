@@ -4,7 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
 export async function createTicketTemplate(formData: {
-  zoneId: string;
+  zoneId?: string | null;
+  c3AccountId?: string | null;
   name: string;
   price: number;
   defaultQuantity: number;
@@ -13,7 +14,8 @@ export async function createTicketTemplate(formData: {
 }) {
   const supabase = await createClient();
   const { error } = await supabase.from("ticket_templates").insert({
-    zone_id: formData.zoneId,
+    zone_id: formData.zoneId || null,
+    c3_account_id: formData.c3AccountId || null,
     name: formData.name,
     price: formData.price,
     default_quantity: formData.defaultQuantity,
