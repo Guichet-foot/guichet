@@ -57,6 +57,7 @@ export function CardForm({
   const [done, setDone] = useState(false);
 
   const isPaidType = CARD_TYPES.find((t) => t.value === cardType)?.paid ?? false;
+  const hasPoste = !isPaidType; // Zone et Délégué ont un poste, pas les Vendeurs/Spectateurs
 
   useEffect(() => {
     if (!isSuperAdmin || !zoneId) return;
@@ -64,9 +65,9 @@ export function CardForm({
     setAscSelected("");
   }, [zoneId, isSuperAdmin]);
 
-  // Reset price when switching to free type
   useEffect(() => {
     if (!isPaidType) setPrice("");
+    if (isPaidType) setPoste(""); // pas de poste pour vendeur/spectateur
   }, [isPaidType]);
 
   function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -90,7 +91,11 @@ export function CardForm({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!fullName.trim() || !phone.trim() || !zoneId || !poste.trim()) {
+    if (!fullName.trim() || !phone.trim() || !zoneId) {
+      toast.error("Remplissez tous les champs obligatoires");
+      return;
+    }
+    if (hasPoste && !poste.trim()) {
       toast.error("Remplissez tous les champs obligatoires");
       return;
     }
@@ -263,11 +268,13 @@ export function CardForm({
             </div>
           )}
 
-          <div className="space-y-1.5">
-            <Label htmlFor="poste">Poste *</Label>
-            <Input id="poste" value={poste} onChange={(e) => setPoste(e.target.value)}
-              placeholder="ex : Secrétaire Général" required />
-          </div>
+          {hasPoste && (
+            <div className="space-y-1.5">
+              <Label htmlFor="poste">Poste *</Label>
+              <Input id="poste" value={poste} onChange={(e) => setPoste(e.target.value)}
+                placeholder="ex : Secrétaire Général" required />
+            </div>
+          )}
 
           <div className="space-y-1.5">
             <Label htmlFor="saison">Saison</Label>

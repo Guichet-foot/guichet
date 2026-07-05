@@ -63,6 +63,7 @@ export function CardEditForm({ card, zones, isSuperAdmin, initialTeams }: CardEd
   const [deleting, setDeleting] = useState(false);
 
   const isPaidType = CARD_TYPES.find((t) => t.value === cardType)?.paid ?? false;
+  const hasPoste = !isPaidType;
 
   useEffect(() => {
     if (!isSuperAdmin || !zoneId) return;
@@ -72,6 +73,7 @@ export function CardEditForm({ card, zones, isSuperAdmin, initialTeams }: CardEd
 
   useEffect(() => {
     if (!isPaidType) setPrice("");
+    if (isPaidType) setPoste("");
   }, [isPaidType]);
 
   function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -97,7 +99,11 @@ export function CardEditForm({ card, zones, isSuperAdmin, initialTeams }: CardEd
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!fullName.trim() || !phone.trim() || !zoneId || !poste.trim()) {
+    if (!fullName.trim() || !phone.trim() || !zoneId) {
+      toast.error("Remplissez tous les champs obligatoires");
+      return;
+    }
+    if (hasPoste && !poste.trim()) {
       toast.error("Remplissez tous les champs obligatoires");
       return;
     }
@@ -274,10 +280,12 @@ export function CardEditForm({ card, zones, isSuperAdmin, initialTeams }: CardEd
               </div>
             )}
 
-            <div className="space-y-1.5">
-              <Label htmlFor="poste">Poste *</Label>
-              <Input id="poste" value={poste} onChange={(e) => setPoste(e.target.value)} required />
-            </div>
+            {hasPoste && (
+              <div className="space-y-1.5">
+                <Label htmlFor="poste">Poste *</Label>
+                <Input id="poste" value={poste} onChange={(e) => setPoste(e.target.value)} required />
+              </div>
+            )}
 
             <div className="space-y-1.5">
               <Label htmlFor="saison">Saison</Label>
