@@ -137,6 +137,8 @@ export interface ScanResult {
   scannedAt?: string;
 }
 
+export type CardType = 'zone' | 'delegue' | 'vendeur' | 'spectateur';
+
 export interface AccessCard {
   id: string;
   qr_token: string;
@@ -148,6 +150,8 @@ export interface AccessCard {
   asc_name: string | null;
   saison: string | null;
   photo_url: string | null;
+  card_type: CardType;
+  price: number | null;
   created_by: string | null;
   created_at: string;
 }

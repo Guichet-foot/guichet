@@ -10,6 +10,13 @@ import { Camera, Loader2, Upload, X, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 
+const CARD_TYPES = [
+  { value: "zone",      label: "Zone",        paid: false },
+  { value: "delegue",   label: "Délégué",     paid: false },
+  { value: "vendeur",   label: "Vendeurs",    paid: true  },
+  { value: "spectateur", label: "Spectateurs", paid: true  },
+];
+
 interface CardFormProps {
   zones: { id: string; name: string }[];
   defaultZoneId: string;
@@ -33,6 +40,8 @@ export function CardForm({
   const [zoneId, setZoneId] = useState(defaultZoneId);
   const [zoneName, setZoneName] = useState(defaultZoneName);
   const [poste, setPoste] = useState("");
+  const [cardType, setCardType] = useState("zone");
+  const [price, setPrice] = useState("");
   const [saison, setSaison] = useState(() => {
     const now = new Date();
     const y = now.getFullYear();
@@ -47,12 +56,18 @@ export function CardForm({
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
 
-  // When zone changes (super_admin), load teams for that zone
+  const isPaidType = CARD_TYPES.find((t) => t.value === cardType)?.paid ?? false;
+
   useEffect(() => {
     if (!isSuperAdmin || !zoneId) return;
     getZoneTeamsForCard(zoneId).then(setTeams);
     setAscSelected("");
   }, [zoneId, isSuperAdmin]);
+
+  // Reset price when switching to free type
+  useEffect(() => {
+    if (!isPaidType) setPrice("");
+  }, [isPaidType]);
 
   function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -79,12 +94,14 @@ export function CardForm({
       toast.error("Remplissez tous les champs obligatoires");
       return;
     }
+    if (isPaidType && (!price || parseInt(price) <= 0)) {
+      toast.error("Saisissez le montant de la carte");
+      return;
+    }
 
     setLoading(true);
 
     let photoUrl: string | undefined;
-
-    // Upload photo via server action (service role, pas de RLS)
     if (photoFile) {
       const fd = new FormData();
       fd.append("photo", photoFile);
@@ -108,6 +125,8 @@ export function CardForm({
       saison: saison.trim() || undefined,
       asc_name: ascName || undefined,
       photo_url: photoUrl,
+      card_type: cardType,
+      price: isPaidType && price ? parseInt(price) : null,
     });
 
     setLoading(false);
@@ -143,80 +162,82 @@ export function CardForm({
         <CardContent className="pt-5 pb-5">
           <Label className="mb-3 block">Photo de profil</Label>
           <div className="flex items-center gap-4">
-            {/* Preview circle */}
             <div
               className="w-24 h-24 rounded-full border-2 border-dashed border-green-300 flex items-center justify-center overflow-hidden bg-green-50 shrink-0 cursor-pointer hover:border-green-500 transition-colors"
               onClick={() => fileInputRef.current?.click()}
             >
               {photoPreview ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={photoPreview}
-                  alt="Aperçu"
-                  className="w-full h-full object-cover"
-                />
+                <img src={photoPreview} alt="Aperçu" className="w-full h-full object-cover" />
               ) : (
                 <Camera className="h-8 w-8 text-green-400" />
               )}
             </div>
             <div className="space-y-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => fileInputRef.current?.click()}
-              >
+              <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
                 <Upload className="h-4 w-4 mr-2" />
                 {photoPreview ? "Changer la photo" : "Choisir une photo"}
               </Button>
               {photoPreview && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={removePhoto}
-                  className="text-destructive hover:text-destructive"
-                >
-                  <X className="h-4 w-4 mr-1" />
-                  Supprimer
+                <Button type="button" variant="ghost" size="sm" onClick={removePhoto}
+                  className="text-destructive hover:text-destructive">
+                  <X className="h-4 w-4 mr-1" />Supprimer
                 </Button>
               )}
               <p className="text-xs text-muted-foreground">JPG, PNG · max 5 Mo</p>
             </div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              className="hidden"
-              onChange={handlePhotoChange}
-            />
+            <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp"
+              className="hidden" onChange={handlePhotoChange} />
           </div>
         </CardContent>
       </Card>
 
-      {/* Identity fields */}
+      {/* Identity + card type fields */}
       <Card>
         <CardContent className="pt-5 pb-5 space-y-4">
+          {/* Type de carte */}
+          <div className="space-y-1.5">
+            <Label htmlFor="cardType">Type de carte *</Label>
+            <select
+              id="cardType"
+              value={cardType}
+              onChange={(e) => setCardType(e.target.value)}
+              className="h-10 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              {CARD_TYPES.map((t) => (
+                <option key={t.value} value={t.value}>
+                  {t.label}{t.paid ? " (payant)" : " (gratuit)"}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Montant (only for paid types) */}
+          {isPaidType && (
+            <div className="space-y-1.5">
+              <Label htmlFor="price">Montant (FCFA) *</Label>
+              <Input
+                id="price"
+                type="number"
+                min={0}
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+                placeholder="ex : 20000"
+                required
+              />
+            </div>
+          )}
+
           <div className="space-y-1.5">
             <Label htmlFor="fullName">Nom complet *</Label>
-            <Input
-              id="fullName"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              placeholder="ex : Abdou Ka"
-              required
-            />
+            <Input id="fullName" value={fullName} onChange={(e) => setFullName(e.target.value)}
+              placeholder="ex : Abdou Ka" required />
           </div>
 
           <div className="space-y-1.5">
             <Label htmlFor="phone">Téléphone *</Label>
-            <Input
-              id="phone"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="+221 77 776 25 22"
-              required
-            />
+            <Input id="phone" value={phone} onChange={(e) => setPhone(e.target.value)}
+              placeholder="+221 77 776 25 22" required />
           </div>
 
           {/* Zone selector (super_admin only) */}
@@ -244,70 +265,42 @@ export function CardForm({
 
           <div className="space-y-1.5">
             <Label htmlFor="poste">Poste *</Label>
-            <Input
-              id="poste"
-              value={poste}
-              onChange={(e) => setPoste(e.target.value)}
-              placeholder="ex : Secrétaire Général"
-              required
-            />
+            <Input id="poste" value={poste} onChange={(e) => setPoste(e.target.value)}
+              placeholder="ex : Secrétaire Général" required />
           </div>
 
           <div className="space-y-1.5">
             <Label htmlFor="saison">Saison</Label>
-            <Input
-              id="saison"
-              value={saison}
-              onChange={(e) => setSaison(e.target.value)}
-              placeholder="ex : 2025 - 2026"
-            />
+            <Input id="saison" value={saison} onChange={(e) => setSaison(e.target.value)}
+              placeholder="ex : 2025 - 2026" />
           </div>
 
           {/* ASC field */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <Label>ASC (optionnel)</Label>
-              <button
-                type="button"
-                className="text-xs text-green-700 underline"
-                onClick={() => setAscMode(ascMode === "list" ? "manual" : "list")}
-              >
+              <button type="button" className="text-xs text-green-700 underline"
+                onClick={() => setAscMode(ascMode === "list" ? "manual" : "list")}>
                 {ascMode === "list" ? "Saisir manuellement" : "Choisir dans la liste"}
               </button>
             </div>
-
             {ascMode === "list" ? (
-              <select
-                value={ascSelected}
-                onChange={(e) => setAscSelected(e.target.value)}
-                className="h-10 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-              >
+              <select value={ascSelected} onChange={(e) => setAscSelected(e.target.value)}
+                className="h-10 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-ring">
                 <option value="">Aucune ASC</option>
-                {teams.map((t) => (
-                  <option key={t.id} value={t.name}>{t.name}</option>
-                ))}
+                {teams.map((t) => <option key={t.id} value={t.name}>{t.name}</option>)}
               </select>
             ) : (
-              <Input
-                value={ascManual}
-                onChange={(e) => setAscManual(e.target.value)}
-                placeholder="Nom de l'ASC…"
-              />
+              <Input value={ascManual} onChange={(e) => setAscManual(e.target.value)}
+                placeholder="Nom de l'ASC…" />
             )}
           </div>
         </CardContent>
       </Card>
 
-      <Button
-        type="submit"
-        disabled={loading}
-        className="w-full h-12 bg-green-700 hover:bg-green-800 text-white font-semibold"
-      >
-        {loading ? (
-          <><Loader2 className="h-4 w-4 animate-spin mr-2" />Création en cours…</>
-        ) : (
-          "Créer la carte"
-        )}
+      <Button type="submit" disabled={loading}
+        className="w-full h-12 bg-green-700 hover:bg-green-800 text-white font-semibold">
+        {loading ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Création en cours…</> : "Créer la carte"}
       </Button>
     </form>
   );

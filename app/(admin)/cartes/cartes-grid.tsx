@@ -15,13 +15,42 @@ import {
   Shield,
   Printer,
   Pencil,
+  ShoppingCart,
+  Users,
+  TrendingUp,
+  Wallet,
+  CreditCard,
+  Tag,
 } from "lucide-react";
 import type { AccessCard } from "@/lib/types";
+import { formatFCFA } from "@/lib/format";
 
 export interface CardWithQR {
   card: AccessCard;
   qrDataUrl: string;
 }
+
+type Tab = "zone_delegue" | "vendeur" | "spectateur";
+
+const TABS: { id: Tab; label: string }[] = [
+  { id: "zone_delegue", label: "Zone et Délégué" },
+  { id: "vendeur", label: "Vendeurs" },
+  { id: "spectateur", label: "Spectateurs" },
+];
+
+const TYPE_LABELS: Record<string, string> = {
+  zone: "ZONE",
+  delegue: "DÉLÉGUÉ",
+  vendeur: "VENDEUR",
+  spectateur: "SPECTATEUR",
+};
+
+const TYPE_COLORS: Record<string, string> = {
+  zone: "#166534",
+  delegue: "#1D4ED8",
+  vendeur: "#B45309",
+  spectateur: "#6D28D9",
+};
 
 function getSaison(card: AccessCard): string {
   if (card.saison) return card.saison;
@@ -30,17 +59,21 @@ function getSaison(card: AccessCard): string {
   return d.getMonth() + 1 >= 8 ? `${y} - ${y + 1}` : `${y - 1} - ${y}`;
 }
 
-const ICON_MAP = [User, Phone, MapPin, Briefcase, Shield];
-
-/** Card design — scales via container queries (cqi). Used in grid and dialog. */
+/** Card design — scales via container queries (cqi). */
 function CardDesign({ card, qrDataUrl }: { card: AccessCard; qrDataUrl: string }) {
   const saison = getSaison(card);
+  const type = card.card_type || "zone";
+  const price = card.price;
+
   const rows = [
     { Icon: User,      label: "NOM COMPLET", value: card.full_name },
     { Icon: Phone,     label: "TÉLÉPHONE",   value: card.phone },
     { Icon: MapPin,    label: "ZONE",        value: card.zone_name },
     { Icon: Briefcase, label: "POSTE",       value: card.poste },
     ...(card.asc_name ? [{ Icon: Shield, label: "ASC", value: card.asc_name }] : []),
+    ...(price != null && price > 0
+      ? [{ Icon: Tag, label: "MONTANT", value: `${price.toLocaleString("fr-FR")} FCFA` }]
+      : []),
   ];
 
   return (
@@ -51,32 +84,52 @@ function CardDesign({ card, qrDataUrl }: { card: AccessCard; qrDataUrl: string }
       {/* Header */}
       <div
         className="absolute inset-x-0 top-0 flex items-center bg-green-50 border-b border-green-800"
-        style={{ height: "27.8%", padding: "1.5% 2%" }}
+        style={{ height: "30%", padding: "1% 2%" }}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="/logoodcavdes.png"
           alt="ODCAV"
-          style={{ height: "85%", width: "auto", objectFit: "contain", flexShrink: 0 }}
+          style={{ height: "80%", width: "auto", objectFit: "contain", flexShrink: 0 }}
         />
-        <div style={{ flex: 1, textAlign: "center", paddingRight: "27%" }}>
+        <div style={{ flex: 1, textAlign: "center", paddingRight: "25%" }}>
           <p
             className="font-black text-green-800 leading-tight"
-            style={{ fontSize: "6cqi", lineHeight: 1.05 }}
+            style={{ fontSize: "5.5cqi", lineHeight: 1.05 }}
           >
             CARTE D&apos;ACCÈS
           </p>
           <p
             className="font-semibold text-green-700"
-            style={{ fontSize: "2.3cqi", marginTop: "0.4cqi" }}
+            style={{ fontSize: "2.1cqi", marginTop: "0.2cqi" }}
           >
             — SAISON {saison} —
           </p>
+          <div style={{
+            marginTop: "0.5cqi",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "1.5cqi",
+          }}>
+            <span style={{
+              backgroundColor: TYPE_COLORS[type] || "#166534",
+              color: "white",
+              fontSize: "1.6cqi",
+              padding: "0.2cqi 1.3cqi",
+              borderRadius: "99px",
+              fontWeight: 800,
+              letterSpacing: "0.06em",
+              display: "inline-block",
+            }}>
+              {TYPE_LABELS[type] || "ZONE"}
+            </span>
+          </div>
         </div>
       </div>
 
       {/* Body */}
-      <div className="absolute inset-x-0 bottom-0 flex" style={{ top: "27.8%" }}>
+      <div className="absolute inset-x-0 bottom-0 flex" style={{ top: "30%" }}>
         {/* Info rows */}
         <div className="flex flex-col border-r border-gray-200" style={{ width: "65%" }}>
           {rows.map(({ Icon, label, value }, i) => (
@@ -135,9 +188,9 @@ function CardDesign({ card, qrDataUrl }: { card: AccessCard; qrDataUrl: string }
       <div
         className="absolute rounded-full overflow-hidden bg-green-50"
         style={{
-          width: "24%",
+          width: "22%",
           aspectRatio: "1 / 1",
-          top: "4%",
+          top: "3%",
           right: "2%",
           border: "2.5px solid #1a5c2a",
         }}
@@ -159,12 +212,11 @@ interface CartesGridProps {
   items: CardWithQR[];
 }
 
-export function CartesGrid({ items }: CartesGridProps) {
+function CartesGrid({ items }: CartesGridProps) {
   const [selected, setSelected] = useState<CardWithQR | null>(null);
 
   return (
     <>
-      {/* Grid 3 par ligne */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
         {items.map((item) => (
           <button
@@ -180,17 +232,13 @@ export function CartesGrid({ items }: CartesGridProps) {
         ))}
       </div>
 
-      {/* Aperçu dialog au clic */}
       <Dialog open={!!selected} onOpenChange={(open) => !open && setSelected(null)}>
         <DialogContent className="max-w-lg p-5 gap-4">
           {selected && (
             <>
-              {/* Full card preview */}
               <div style={{ containerType: "inline-size" }}>
                 <CardDesign card={selected.card} qrDataUrl={selected.qrDataUrl} />
               </div>
-
-              {/* Actions */}
               <div className="flex gap-2">
                 <Link href={`/cartes/${selected.card.id}/edit`} className="flex-1">
                   <Button className="w-full bg-green-700 hover:bg-green-800 text-white">
@@ -212,5 +260,131 @@ export function CartesGrid({ items }: CartesGridProps) {
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+/** Main client component: stats cards + tabs + filtered grid */
+export function CartesClient({ items }: { items: CardWithQR[] }) {
+  const [activeTab, setActiveTab] = useState<Tab>("zone_delegue");
+
+  const vendeurItems = items.filter((i) => i.card.card_type === "vendeur");
+  const spectateurItems = items.filter((i) => i.card.card_type === "spectateur");
+  const revenusVendeurs = vendeurItems.reduce((s, i) => s + (i.card.price || 0), 0);
+  const revenusSpectateurs = spectateurItems.reduce((s, i) => s + (i.card.price || 0), 0);
+  const totalRevenus = revenusVendeurs + revenusSpectateurs;
+
+  const filteredItems =
+    activeTab === "zone_delegue"
+      ? items.filter(
+          (i) => i.card.card_type === "zone" || i.card.card_type === "delegue"
+        )
+      : activeTab === "vendeur"
+      ? vendeurItems
+      : spectateurItems;
+
+  if (items.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
+        <CreditCard className="h-16 w-16 mb-4 opacity-20" />
+        <p className="font-medium">Aucune carte créée</p>
+        <p className="text-sm mt-1">Créez votre première carte d&apos;accès</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Stats Cards */}
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          {/* Vendeurs count */}
+          <div className="rounded-xl p-4 bg-green-100 border border-green-200 flex items-center justify-between">
+            <div>
+              <p className="text-green-800 font-bold text-sm sm:text-base leading-tight">Vendeurs</p>
+              <p className="text-green-900 font-semibold text-base sm:text-lg mt-0.5">
+                {vendeurItems.length} Cartes Vendeurs
+              </p>
+            </div>
+            <ShoppingCart className="h-8 w-8 sm:h-10 sm:w-10 text-green-300 shrink-0" />
+          </div>
+
+          {/* Spectateurs count */}
+          <div className="rounded-xl p-4 bg-indigo-100 border border-indigo-200 flex items-center justify-between">
+            <div>
+              <p className="text-indigo-800 font-bold text-sm sm:text-base leading-tight">Spectateurs</p>
+              <p className="text-indigo-900 font-semibold text-base sm:text-lg mt-0.5">
+                {spectateurItems.length} Cartes Spectateurs
+              </p>
+            </div>
+            <Users className="h-8 w-8 sm:h-10 sm:w-10 text-indigo-300 shrink-0" />
+          </div>
+
+          {/* Total Revenus */}
+          <div className="col-span-2 sm:col-span-1 rounded-xl p-4 bg-green-800 flex items-center justify-between">
+            <div>
+              <p className="text-white font-bold text-sm sm:text-base leading-tight">REVENUS TOTAL</p>
+              <p className="text-white/60 text-xs mt-0.5">Vendeurs + Spectateurs</p>
+              <p className="text-white font-bold text-xl sm:text-2xl mt-1">
+                {formatFCFA(totalRevenus)}
+              </p>
+            </div>
+            <TrendingUp className="h-10 w-10 sm:h-12 sm:w-12 text-white/20 shrink-0" />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          {/* Revenus Vendeurs */}
+          <div className="rounded-xl p-4 bg-amber-50 border border-amber-200 flex items-center justify-between">
+            <div>
+              <p className="text-amber-800 font-bold text-sm sm:text-base leading-tight">Revenus Vendeurs</p>
+              <p className="text-amber-900 font-semibold text-base sm:text-lg mt-0.5">
+                {formatFCFA(revenusVendeurs)}
+              </p>
+            </div>
+            <Wallet className="h-8 w-8 sm:h-10 sm:w-10 text-amber-200 shrink-0" />
+          </div>
+
+          {/* Revenus Spectateurs */}
+          <div className="rounded-xl p-4 bg-pink-50 border border-pink-200 flex items-center justify-between">
+            <div>
+              <p className="text-pink-800 font-bold text-sm sm:text-base leading-tight">Revenus spectateurs</p>
+              <p className="text-pink-900 font-semibold text-base sm:text-lg mt-0.5">
+                {formatFCFA(revenusSpectateurs)}
+              </p>
+            </div>
+            <Wallet className="h-8 w-8 sm:h-10 sm:w-10 text-pink-200 shrink-0" />
+          </div>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="border-b border-border">
+        <div className="flex">
+          {TABS.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`px-5 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === tab.id
+                  ? "border-green-700 text-green-700"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Grid */}
+      {filteredItems.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+          <CreditCard className="h-12 w-12 mb-3 opacity-20" />
+          <p className="font-medium">Aucune carte dans cet onglet</p>
+        </div>
+      ) : (
+        <CartesGrid items={filteredItems} />
+      )}
+    </div>
   );
 }

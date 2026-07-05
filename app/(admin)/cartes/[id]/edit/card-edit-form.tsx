@@ -16,7 +16,14 @@ import {
 import { Camera, Loader2, Upload, X, CheckCircle2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-import type { AccessCard } from "@/lib/types";
+import type { AccessCard, CardType } from "@/lib/types";
+
+const CARD_TYPES = [
+  { value: "zone",       label: "Zone",        paid: false },
+  { value: "delegue",    label: "Délégué",     paid: false },
+  { value: "vendeur",    label: "Vendeurs",    paid: true  },
+  { value: "spectateur", label: "Spectateurs", paid: true  },
+];
 
 interface CardEditFormProps {
   card: AccessCard;
@@ -34,6 +41,8 @@ export function CardEditForm({ card, zones, isSuperAdmin, initialTeams }: CardEd
   const [zoneId, setZoneId] = useState(card.zone_id);
   const [zoneName, setZoneName] = useState(card.zone_name);
   const [poste, setPoste] = useState(card.poste);
+  const [cardType, setCardType] = useState<CardType>(card.card_type || "zone");
+  const [price, setPrice] = useState(card.price != null ? String(card.price) : "");
   const [saison, setSaison] = useState(card.saison || "");
   const [ascMode, setAscMode] = useState<"list" | "manual">(
     card.asc_name ? "manual" : "list"
@@ -44,7 +53,6 @@ export function CardEditForm({ card, zones, isSuperAdmin, initialTeams }: CardEd
   const [ascManual, setAscManual] = useState(card.asc_name || "");
   const [teams, setTeams] = useState(initialTeams);
 
-  // Photo state
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(card.photo_url);
   const [photoRemoved, setPhotoRemoved] = useState(false);
@@ -54,11 +62,17 @@ export function CardEditForm({ card, zones, isSuperAdmin, initialTeams }: CardEd
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
+  const isPaidType = CARD_TYPES.find((t) => t.value === cardType)?.paid ?? false;
+
   useEffect(() => {
     if (!isSuperAdmin || !zoneId) return;
     getZoneTeamsForCard(zoneId).then(setTeams);
     setAscSelected("");
   }, [zoneId, isSuperAdmin]);
+
+  useEffect(() => {
+    if (!isPaidType) setPrice("");
+  }, [isPaidType]);
 
   function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -87,11 +101,14 @@ export function CardEditForm({ card, zones, isSuperAdmin, initialTeams }: CardEd
       toast.error("Remplissez tous les champs obligatoires");
       return;
     }
+    if (isPaidType && (!price || parseInt(price) <= 0)) {
+      toast.error("Saisissez le montant de la carte");
+      return;
+    }
 
     setLoading(true);
 
     let finalPhotoUrl: string | null = card.photo_url ?? null;
-
     if (photoFile) {
       const fd = new FormData();
       fd.append("photo", photoFile);
@@ -117,6 +134,8 @@ export function CardEditForm({ card, zones, isSuperAdmin, initialTeams }: CardEd
       saison: saison.trim() || undefined,
       asc_name: ascName || null,
       photo_url: finalPhotoUrl,
+      card_type: cardType,
+      price: isPaidType && price ? parseInt(price) : null,
     });
 
     setLoading(false);
@@ -195,6 +214,39 @@ export function CardEditForm({ card, zones, isSuperAdmin, initialTeams }: CardEd
         {/* Fields */}
         <Card>
           <CardContent className="pt-5 pb-5 space-y-4">
+            {/* Type de carte */}
+            <div className="space-y-1.5">
+              <Label htmlFor="cardType">Type de carte *</Label>
+              <select
+                id="cardType"
+                value={cardType}
+                onChange={(e) => setCardType(e.target.value as CardType)}
+                className="h-10 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                {CARD_TYPES.map((t) => (
+                  <option key={t.value} value={t.value}>
+                    {t.label}{t.paid ? " (payant)" : " (gratuit)"}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Montant (only for paid types) */}
+            {isPaidType && (
+              <div className="space-y-1.5">
+                <Label htmlFor="price">Montant (FCFA) *</Label>
+                <Input
+                  id="price"
+                  type="number"
+                  min={0}
+                  value={price}
+                  onChange={(e) => setPrice(e.target.value)}
+                  placeholder="ex : 20000"
+                  required
+                />
+              </div>
+            )}
+
             <div className="space-y-1.5">
               <Label htmlFor="fullName">Nom complet *</Label>
               <Input id="fullName" value={fullName} onChange={(e) => setFullName(e.target.value)} required />
@@ -208,9 +260,7 @@ export function CardEditForm({ card, zones, isSuperAdmin, initialTeams }: CardEd
             {isSuperAdmin && (
               <div className="space-y-1.5">
                 <Label htmlFor="zone">Zone *</Label>
-                <select
-                  id="zone"
-                  value={zoneId}
+                <select id="zone" value={zoneId}
                   onChange={(e) => {
                     const z = zones.find((z) => z.id === e.target.value);
                     setZoneId(e.target.value);
@@ -219,9 +269,7 @@ export function CardEditForm({ card, zones, isSuperAdmin, initialTeams }: CardEd
                   required
                   className="h-10 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                 >
-                  {zones.map((z) => (
-                    <option key={z.id} value={z.id}>{z.name}</option>
-                  ))}
+                  {zones.map((z) => <option key={z.id} value={z.id}>{z.name}</option>)}
                 </select>
               </div>
             )}
@@ -233,7 +281,8 @@ export function CardEditForm({ card, zones, isSuperAdmin, initialTeams }: CardEd
 
             <div className="space-y-1.5">
               <Label htmlFor="saison">Saison</Label>
-              <Input id="saison" value={saison} onChange={(e) => setSaison(e.target.value)} placeholder="ex : 2025 - 2026" />
+              <Input id="saison" value={saison} onChange={(e) => setSaison(e.target.value)}
+                placeholder="ex : 2025 - 2026" />
             </div>
 
             <div className="space-y-2">
@@ -245,16 +294,14 @@ export function CardEditForm({ card, zones, isSuperAdmin, initialTeams }: CardEd
                 </button>
               </div>
               {ascMode === "list" ? (
-                <select
-                  value={ascSelected}
-                  onChange={(e) => setAscSelected(e.target.value)}
-                  className="h-10 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                >
+                <select value={ascSelected} onChange={(e) => setAscSelected(e.target.value)}
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-ring">
                   <option value="">Aucune ASC</option>
                   {teams.map((t) => <option key={t.id} value={t.name}>{t.name}</option>)}
                 </select>
               ) : (
-                <Input value={ascManual} onChange={(e) => setAscManual(e.target.value)} placeholder="Nom de l'ASC…" />
+                <Input value={ascManual} onChange={(e) => setAscManual(e.target.value)}
+                  placeholder="Nom de l'ASC…" />
               )}
             </div>
           </CardContent>
@@ -272,7 +319,6 @@ export function CardEditForm({ card, zones, isSuperAdmin, initialTeams }: CardEd
         </div>
       </form>
 
-      {/* Delete dialog */}
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader>

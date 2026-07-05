@@ -13,6 +13,8 @@ export async function createAccessCard(data: {
   asc_name?: string;
   saison?: string;
   photo_url?: string;
+  card_type?: string;
+  price?: number | null;
 }): Promise<{ card?: AccessCard; error?: string }> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -84,6 +86,8 @@ export async function updateAccessCard(
     saison?: string;
     asc_name?: string | null;
     photo_url?: string | null;
+    card_type?: string;
+    price?: number | null;
   }
 ): Promise<{ error?: string }> {
   const supabase = await createClient();

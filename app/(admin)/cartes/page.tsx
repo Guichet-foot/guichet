@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { CreditCard, Plus } from "lucide-react";
 import Link from "next/link";
 import QRCode from "qrcode";
-import { CartesGrid } from "./cartes-grid";
+import { CartesClient } from "./cartes-grid";
 
 export const metadata = { title: "Cartes d'accès" };
 
@@ -97,16 +97,8 @@ export default async function CartesPage({
         </div>
       )}
 
-      {/* Grid */}
-      {cards.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
-          <CreditCard className="h-16 w-16 mb-4 opacity-20" />
-          <p className="font-medium">Aucune carte créée</p>
-          <p className="text-sm mt-1">Créez votre première carte d&apos;accès</p>
-        </div>
-      ) : (
-        <CartesGrid items={items} />
-      )}
+      {/* Client: stats + tabs + grid */}
+      <CartesClient items={items} />
     </div>
   );
 }
