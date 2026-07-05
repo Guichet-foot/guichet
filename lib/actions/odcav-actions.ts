@@ -21,12 +21,17 @@ export interface OdcavSettings {
 }
 
 export async function getOdcavSettings(): Promise<OdcavSettings> {
-  const supabase = await createAdminClient();
-  const { data } = await supabase
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  const adminClient = await createAdminClient();
+  // Each super_admin has their own row identified by their user UUID
+  const rowId = user?.id ?? "global";
+  const { data } = await adminClient
     .from("odcav_settings")
     .select("*")
-    .eq("id", "global")
-    .single();
+    .eq("id", rowId)
+    .maybeSingle();
 
   return {
     logoUrl: data?.logo_url || "",
@@ -42,9 +47,12 @@ export async function getOdcavSettings(): Promise<OdcavSettings> {
 export async function updateOdcavSettings(settings: OdcavSettings) {
   await requireRole(["super_admin", "fondateur"]);
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Non authentifié" };
+
   const { error } = await supabase.from("odcav_settings").upsert(
     {
-      id: "global",
+      id: user.id,  // Each super_admin writes to their own row
       logo_url: settings.logoUrl,
       nom: settings.nom,
       adresse: settings.adresse,

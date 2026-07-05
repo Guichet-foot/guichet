@@ -45,12 +45,41 @@ export async function createAccessCard(data: {
 }
 
 export async function getAccessCards(zoneId?: string): Promise<AccessCard[]> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role, zone_id")
+    .eq("id", user.id)
+    .single();
+  if (!profile) return [];
+
   const adminClient = await createAdminClient();
   let query = adminClient
     .from("access_cards")
     .select("*")
     .order("created_at", { ascending: false });
-  if (zoneId) query = query.eq("zone_id", zoneId);
+
+  if (zoneId) {
+    // Explicit zone filter (e.g. from URL param)
+    query = query.eq("zone_id", zoneId);
+  } else if (profile.role === "admin_zone") {
+    if (!profile.zone_id) return [];
+    query = query.eq("zone_id", profile.zone_id);
+  } else if (profile.role === "super_admin") {
+    // Scope to zones owned by this super_admin
+    const { data: ownedZones } = await adminClient
+      .from("zones")
+      .select("id")
+      .eq("created_by", user.id);
+    const ownedZoneIds = (ownedZones || []).map((z: any) => z.id);
+    if (ownedZoneIds.length === 0) return [];
+    query = query.in("zone_id", ownedZoneIds);
+  }
+  // fondateur: no filter — sees all
+
   const { data } = await query;
   return (data || []) as AccessCard[];
 }

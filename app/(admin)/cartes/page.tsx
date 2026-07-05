@@ -1,5 +1,5 @@
 import { requireRole } from "@/lib/auth";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
 import { getAccessCards } from "@/lib/actions/carte-actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -21,12 +21,12 @@ export default async function CartesPage({
   const params = await searchParams;
 
   const supabase = await createClient();
-  const adminClient = await createAdminClient();
 
   const isSuperAdmin = profile.role === "super_admin";
 
+  // RLS ensures super_admin only sees their own zones (created_by = auth.uid())
   const { data: zonesRaw } = isSuperAdmin
-    ? await adminClient.from("zones").select("id, name").order("name")
+    ? await supabase.from("zones").select("id, name").order("name")
     : { data: null };
   const zones = (zonesRaw || []) as { id: string; name: string }[];
 

@@ -25,7 +25,18 @@ export async function getFinishedMatches() {
       .eq("id", user.id)
       .single();
     if (prof?.zone_id) query = query.eq("zone_id", prof.zone_id as string);
+    else return [];
+  } else if (profile.role === "super_admin") {
+    // Scope to zones owned by this super_admin
+    const { data: ownedZones } = await adminClient
+      .from("zones")
+      .select("id")
+      .eq("created_by", profile.id);
+    const zoneIds = (ownedZones || []).map((z: any) => z.id);
+    if (zoneIds.length === 0) return [];
+    query = query.in("zone_id", zoneIds);
   }
+  // fondateur: no filter — sees all
 
   const { data } = await query;
   return (data || []) as any[];

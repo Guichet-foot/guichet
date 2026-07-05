@@ -40,11 +40,19 @@ export async function POST(request: Request) {
 
   // Infos ODCAV pour le PDF
   const adminSupabase = await createAdminClient();
+  // For super_admin: their own settings row (id = user.id)
+  // For admin_zone: their super_admin's settings row (zone.created_by)
+  let odcavSettingsId = user.id;
+  if (profile.role === "admin_zone" && profile.zone_id) {
+    const { data: zoneOwner } = await adminSupabase
+      .from("zones").select("created_by").eq("id", profile.zone_id).maybeSingle();
+    if (zoneOwner?.created_by) odcavSettingsId = zoneOwner.created_by;
+  }
   const { data: odcavData } = await adminSupabase
     .from("odcav_settings")
     .select("logo_url, nom, adresse, president, telephone, email")
-    .eq("id", "global")
-    .single();
+    .eq("id", odcavSettingsId)
+    .maybeSingle();
   const odcavInfo = odcavData
     ? {
         logoUrl: odcavData.logo_url || undefined,
