@@ -14,7 +14,6 @@ import {
 } from "lucide-react";
 import { formatDateTime } from "@/lib/format";
 import type { ScanResult, AccessCard } from "@/lib/types";
-import { PaymentGate } from "@/components/payment-gate";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://guichet-pi.vercel.app";
 
@@ -265,9 +264,5 @@ function ScannerContent() {
 }
 
 export default function ScannerPage() {
-  return (
-    <PaymentGate>
-      <ScannerContent />
-    </PaymentGate>
-  );
+  return <ScannerContent />;
 }

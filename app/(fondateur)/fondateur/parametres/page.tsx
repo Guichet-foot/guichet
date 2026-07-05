@@ -1,7 +1,7 @@
 import { requireRole } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/server";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Settings2, History } from "lucide-react";
+import { Settings2, History, Layers } from "lucide-react";
 import { PlatformFeeForm } from "./platform-fee-form";
 import { formatFCFA, formatDate } from "@/lib/format";
 
@@ -28,7 +28,8 @@ export default async function ParametresFondateurPage() {
     .select("*")
     .order("effective_date", { ascending: false });
 
-  const currentFee = current?.frais_plateforme ?? 5000;
+  const feePerBlock = current?.fee_per_block ?? 1000;
+  const feePerTicket = feePerBlock / 100;
 
   return (
     <div className="max-w-2xl space-y-6">
@@ -38,18 +39,20 @@ export default async function ParametresFondateurPage() {
         </div>
         <div>
           <h1 className="text-2xl font-bold font-heading">Paramètres plateforme</h1>
-          <p className="text-muted-foreground text-sm">Gestion des frais et commissions</p>
+          <p className="text-muted-foreground text-sm">Facturation par bloc de billets</p>
         </div>
       </div>
 
-      {/* Affichage paramètres actuels */}
+      {/* Tarif actuel */}
       <Card className="border-amber-200 bg-amber-50">
         <CardContent className="pt-6">
           <div className="grid grid-cols-2 gap-6">
             <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Frais plateforme</p>
-              <p className="text-2xl font-bold text-amber-700">{formatFCFA(currentFee)}</p>
-              <p className="text-xs text-muted-foreground mt-0.5">par jour d&apos;activité</p>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1 flex items-center gap-1">
+                <Layers className="h-3 w-3" /> Tarif par bloc
+              </p>
+              <p className="text-2xl font-bold text-amber-700">{formatFCFA(feePerBlock)}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">= {feePerTicket} FCFA / billet · 1 bloc = 100 billets</p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Commission ODCAV</p>
@@ -66,7 +69,7 @@ export default async function ParametresFondateurPage() {
       </Card>
 
       {/* Formulaire modification */}
-      <PlatformFeeForm currentFee={currentFee} />
+      <PlatformFeeForm currentFeePerBlock={feePerBlock} />
 
       {/* Historique */}
       {history && history.length > 0 && (
@@ -83,8 +86,8 @@ export default async function ParametresFondateurPage() {
                 <thead>
                   <tr className="border-b bg-muted/30">
                     <th className="px-4 py-3 text-left font-medium">Date d&apos;effet</th>
-                    <th className="px-4 py-3 text-right font-medium">Frais / jour</th>
-                    <th className="px-4 py-3 text-right font-medium">ODCAV</th>
+                    <th className="px-4 py-3 text-right font-medium">Tarif / bloc</th>
+                    <th className="px-4 py-3 text-right font-medium">Par billet</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -94,8 +97,8 @@ export default async function ParametresFondateurPage() {
                         {formatDate(h.effective_date)}
                         {i === 0 && <span className="ml-2 text-xs bg-amber-200 text-amber-800 px-1.5 py-0.5 rounded">Actuel</span>}
                       </td>
-                      <td className="px-4 py-3 text-right">{formatFCFA(h.frais_plateforme)}</td>
-                      <td className="px-4 py-3 text-right">{(h.odcav_rate * 100).toFixed(0)}%</td>
+                      <td className="px-4 py-3 text-right">{formatFCFA(h.fee_per_block ?? 1000)}</td>
+                      <td className="px-4 py-3 text-right">{((h.fee_per_block ?? 1000) / 100)} FCFA</td>
                     </tr>
                   ))}
                 </tbody>

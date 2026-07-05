@@ -21,6 +21,7 @@ import {
   Building2,
   CreditCard,
   ContactRound,
+  PackageX,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
@@ -38,6 +39,7 @@ const adminLinks = [
   { href: "/billets", label: "Billets", icon: Ticket },
   { href: "/matchs", label: "Matchs", icon: Trophy },
   { href: "/finances", label: "Finances", icon: Wallet },
+  { href: "/invendus", label: "Invendus", icon: PackageX },
   { href: "/rapports", label: "Rapports", icon: FileText },
   { href: "/utilisateurs", label: "Utilisateurs", icon: Users },
   { href: "/cartes", label: "Cartes d'accès", icon: ContactRound },

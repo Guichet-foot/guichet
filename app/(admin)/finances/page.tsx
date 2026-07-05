@@ -71,12 +71,12 @@ export default async function FinancesPage({
   // Platform settings effective on settingsDate
   const { data: platformData } = await adminSupabase
     .from("platform_settings")
-    .select("frais_plateforme, odcav_rate")
+    .select("frais_plateforme, odcav_rate, fee_per_block")
     .lte("effective_date", settingsDate)
     .order("effective_date", { ascending: false })
     .limit(1)
     .single();
-  const fraisPlateforme = platformData?.frais_plateforme ?? 5000;
+  const feePerBlock = (platformData as any)?.fee_per_block ?? 1000;
   const odcavRate = platformData?.odcav_rate ?? 0.05;
 
   const { data: tickets } = (await supabase
@@ -90,13 +90,11 @@ export default async function FinancesPage({
     ? tickets?.filter((t: any) => t.match?.zone_id === zoneId)
     : tickets;
 
-  const activeDays = new Set(
-    filteredTickets?.map((t: any) => (t.sold_at as string)?.split("T")[0]).filter(Boolean) || []
-  ).size;
-
+  const totalSold = filteredTickets?.length || 0;
   const totalRevenue = filteredTickets?.reduce((sum: number, t: any) => sum + t.price, 0) || 0;
   const odcavCommission = Math.round(totalRevenue * odcavRate);
-  const fraisPlatformePeriod = fraisPlateforme * activeDays;
+  const totalBlocks = totalSold > 0 ? Math.ceil(totalSold / 100) : 0;
+  const fraisPlateformePeriod = totalBlocks * feePerBlock;
 
   const revenueByMatch: Record<string, { homeTeam: string; awayTeam: string; date: string; sold: number; revenue: number }> = {};
   filteredTickets?.forEach((t: any) => {
@@ -128,7 +126,7 @@ export default async function FinancesPage({
 
   const { data: expenses } = (await expensesQuery) as { data: any[] | null };
   const totalExpenses = expenses?.reduce((sum: number, e: any) => sum + e.amount, 0) || 0;
-  const balance = totalRevenue - totalExpenses - odcavCommission - fraisPlatformePeriod;
+  const balance = totalRevenue - totalExpenses - odcavCommission - fraisPlateformePeriod;
 
   return (
     <div className="space-y-6 min-w-0">
@@ -162,7 +160,7 @@ export default async function FinancesPage({
               <div>
                 <p className="text-sm text-muted-foreground">Recettes brutes</p>
                 <p className="text-2xl font-bold text-brand">{formatFCFA(totalRevenue)}</p>
-                <p className="text-xs text-muted-foreground mt-1">{activeDays} jour(s) d&apos;activité</p>
+                <p className="text-xs text-muted-foreground mt-1">{totalSold} billet(s) vendu(s)</p>
               </div>
               <Banknote className="h-8 w-8 text-brand/40" />
             </div>
@@ -200,8 +198,8 @@ export default async function FinancesPage({
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-orange-700 font-medium">Frais plateforme</p>
-                <p className="text-xl font-bold text-orange-800">{formatFCFA(fraisPlatformePeriod)}</p>
-                <p className="text-xs text-orange-600 mt-0.5">{formatFCFA(fraisPlateforme)} × {activeDays} jour(s)</p>
+                <p className="text-xl font-bold text-orange-800">{formatFCFA(fraisPlateformePeriod)}</p>
+                <p className="text-xs text-orange-600 mt-0.5">{totalBlocks} bloc(s) × {formatFCFA(feePerBlock)}/bloc</p>
               </div>
               <Building2 className="h-7 w-7 text-orange-400" />
             </div>

@@ -5,7 +5,6 @@ import { createClient } from "@/lib/supabase/client";
 import { createTickets } from "@/lib/actions/ticket-actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { PaymentGate } from "@/components/payment-gate";
 import {
   Sheet,
   SheetContent,
@@ -464,9 +463,5 @@ function VenteContent() {
 }
 
 export default function VentePage() {
-  return (
-    <PaymentGate>
-      <VenteContent />
-    </PaymentGate>
-  );
+  return <VenteContent />;
 }

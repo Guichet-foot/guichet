@@ -1,6 +1,5 @@
 import { requireRole } from "@/lib/auth";
 import { SidebarAdmin } from "@/components/sidebar-admin";
-import { BilletterieBanner } from "@/components/billetterie-banner";
 
 export default async function AdminLayout({
   children,
@@ -18,7 +17,6 @@ export default async function AdminLayout({
       />
       <main className="flex-1 min-w-0 overflow-hidden">
         <div className="p-4 pt-16 lg:p-8 lg:pt-8 max-w-full">
-          {profile.role === "admin_zone" && <BilletterieBanner canPay={true} />}
           {children}
         </div>
       </main>
