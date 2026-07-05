@@ -144,6 +144,8 @@ interface ReportData {
     unsold: number;
     validated: number;
     revenue: number;
+    matchExpenses: number;
+    solde: number;
   }[];
   expenses: {
     date: string;
@@ -239,23 +241,29 @@ export function FinancialReport({ data }: { data: ReportData }) {
             <>
               <Text style={styles.sectionTitle}>Détail recettes par match</Text>
               <View style={styles.headerRow}>
-                <Text style={{ flex: 3, fontSize: 7, fontFamily: "Helvetica-Bold" }}>Match</Text>
-                <Text style={{ flex: 1, fontSize: 7, fontFamily: "Helvetica-Bold", textAlign: "right" }}>Imprimés</Text>
-                <Text style={{ flex: 1, fontSize: 7, fontFamily: "Helvetica-Bold", textAlign: "right", color: "#DC2626" }}>Invendus</Text>
-                <Text style={{ flex: 1, fontSize: 7, fontFamily: "Helvetica-Bold", textAlign: "right", color: "#1D4ED8" }}>Vendus</Text>
-                <Text style={{ flex: 1.5, fontSize: 7, fontFamily: "Helvetica-Bold", textAlign: "right" }}>Recettes</Text>
+                <Text style={{ flex: 2.5, fontSize: 6, fontFamily: "Helvetica-Bold" }}>Match</Text>
+                <Text style={{ flex: 0.7, fontSize: 6, fontFamily: "Helvetica-Bold", textAlign: "right" }}>Impr.</Text>
+                <Text style={{ flex: 0.7, fontSize: 6, fontFamily: "Helvetica-Bold", textAlign: "right", color: "#DC2626" }}>Invendu</Text>
+                <Text style={{ flex: 0.7, fontSize: 6, fontFamily: "Helvetica-Bold", textAlign: "right", color: "#1D4ED8" }}>Vendus</Text>
+                <Text style={{ flex: 1.3, fontSize: 6, fontFamily: "Helvetica-Bold", textAlign: "right" }}>Recettes</Text>
+                <Text style={{ flex: 1.3, fontSize: 6, fontFamily: "Helvetica-Bold", textAlign: "right", color: "#DC2626" }}>Dépenses</Text>
+                <Text style={{ flex: 1.3, fontSize: 6, fontFamily: "Helvetica-Bold", textAlign: "right" }}>Solde</Text>
               </View>
               {data.revenueByMatch.map((item, i) => (
                 <View key={i} style={styles.row}>
-                  <View style={{ flex: 3 }}>
-                    <Text style={{ fontSize: 8 }}>{item.teams}</Text>
-                    <Text style={{ fontSize: 7, color: "#6B7280" }}>{item.date}</Text>
+                  <View style={{ flex: 2.5 }}>
+                    <Text style={{ fontSize: 7 }}>{item.teams}</Text>
+                    <Text style={{ fontSize: 6, color: "#6B7280" }}>{item.date}</Text>
                   </View>
-                  <Text style={{ flex: 1, fontSize: 8, textAlign: "right" }}>{item.printed}</Text>
-                  <Text style={{ flex: 1, fontSize: 8, textAlign: "right", color: "#DC2626" }}>{item.unsold}</Text>
-                  <Text style={{ flex: 1, fontSize: 8, textAlign: "right", color: "#1D4ED8" }}>{item.validated}</Text>
-                  <Text style={{ flex: 1.5, fontSize: 8, textAlign: "right", fontFamily: "Helvetica-Bold", color: "#0D5C3F" }}>
-                    {formatAmount(item.revenue)}
+                  <Text style={{ flex: 0.7, fontSize: 7, textAlign: "right" }}>{item.printed}</Text>
+                  <Text style={{ flex: 0.7, fontSize: 7, textAlign: "right", color: "#DC2626" }}>{item.unsold}</Text>
+                  <Text style={{ flex: 0.7, fontSize: 7, textAlign: "right", color: "#1D4ED8" }}>{item.validated}</Text>
+                  <Text style={{ flex: 1.3, fontSize: 7, textAlign: "right", color: "#0D5C3F" }}>{formatAmount(item.revenue)}</Text>
+                  <Text style={{ flex: 1.3, fontSize: 7, textAlign: "right", color: "#DC2626" }}>
+                    {item.matchExpenses > 0 ? `-${formatAmount(item.matchExpenses)}` : "—"}
+                  </Text>
+                  <Text style={{ flex: 1.3, fontSize: 7, textAlign: "right", fontFamily: "Helvetica-Bold", color: item.solde >= 0 ? "#16A571" : "#DC2626" }}>
+                    {formatAmount(item.solde)}
                   </Text>
                 </View>
               ))}

@@ -128,6 +128,20 @@ export async function POST(request: Request) {
   const totalExpenses =
     expenses?.reduce((sum: number, e: any) => sum + e.amount, 0) || 0;
 
+  // Grouper les dépenses par match pour le tableau
+  const expensesByMatchId: Record<string, number> = {};
+  expenses?.forEach((e: any) => {
+    if (e.match_id) {
+      expensesByMatchId[e.match_id] = (expensesByMatchId[e.match_id] || 0) + e.amount;
+    }
+  });
+
+  // Enrichir revenueMap avec les dépenses et le solde par match
+  const enrichedRevenueByMatch = Object.entries(revenueMap).map(([id, m]) => {
+    const matchExpenses = expensesByMatchId[id] || 0;
+    return { ...m, matchExpenses, solde: m.revenue - matchExpenses };
+  });
+
   const reportData = {
     zoneName: (profile as any).zone?.name || "Toutes zones",
     startDate: format(new Date(startDate), "dd/MM/yyyy", { locale: fr }),
@@ -136,7 +150,7 @@ export async function POST(request: Request) {
     generatedAt: format(new Date(), "dd/MM/yyyy HH:mm", { locale: fr }),
     totalRevenue,
     totalExpenses,
-    revenueByMatch: Object.values(revenueMap),
+    revenueByMatch: enrichedRevenueByMatch,
     odcavInfo,
     expenses:
       expenses?.map((e) => ({

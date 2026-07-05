@@ -138,6 +138,14 @@ export default async function FinancesPage({
   const totalExpenses = expenses?.reduce((sum: number, e: any) => sum + e.amount, 0) || 0;
   const balance = totalRevenue - totalExpenses - odcavCommission - fraisPlateformePeriod;
 
+  // Grouper les dépenses par match pour le tableau
+  const expensesByMatchId: Record<string, number> = {};
+  expenses?.forEach((e: any) => {
+    if (e.match_id) {
+      expensesByMatchId[e.match_id] = (expensesByMatchId[e.match_id] || 0) + e.amount;
+    }
+  });
+
   return (
     <div className="space-y-6 min-w-0">
       {profile.role === "super_admin" && selectedZone && <ZoneBackHeader zoneName={selectedZone.name} />}
@@ -238,34 +246,44 @@ export default async function FinancesPage({
         <CardContent className="p-0 overflow-x-auto">
           <Table>
             <TableHeader>
-              <TableRow>
-                <TableHead>Match</TableHead>
-                <TableHead className="text-right">Imprimés</TableHead>
-                <TableHead className="text-right text-red-600">Invendus</TableHead>
-                <TableHead className="text-right text-blue-600">Vendus</TableHead>
-                <TableHead className="text-right">Recettes</TableHead>
+              <TableRow className="text-xs">
+                <TableHead className="py-2 text-xs">Match</TableHead>
+                <TableHead className="py-2 text-xs text-right">Impr.</TableHead>
+                <TableHead className="py-2 text-xs text-right text-red-600">Invendu</TableHead>
+                <TableHead className="py-2 text-xs text-right text-blue-600">Vendus</TableHead>
+                <TableHead className="py-2 text-xs text-right">Recettes</TableHead>
+                <TableHead className="py-2 text-xs text-right text-danger">Dépenses</TableHead>
+                <TableHead className="py-2 text-xs text-right font-bold">Solde</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {Object.entries(revenueByMatch).length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                     Aucune recette sur cette période
                   </TableCell>
                 </TableRow>
               ) : (
-                Object.entries(revenueByMatch).map(([id, data]) => (
-                  <TableRow key={id}>
-                    <TableCell>
-                      <p className="font-medium">{data.homeTeam} vs {data.awayTeam}</p>
-                      <p className="text-xs text-muted-foreground">{formatDate(data.date)}</p>
-                    </TableCell>
-                    <TableCell className="text-right">{data.printed}</TableCell>
-                    <TableCell className="text-right font-medium text-red-600">{data.unsold}</TableCell>
-                    <TableCell className="text-right font-medium text-blue-600">{data.validated}</TableCell>
-                    <TableCell className="text-right font-bold text-brand">{formatFCFA(data.revenue)}</TableCell>
-                  </TableRow>
-                ))
+                Object.entries(revenueByMatch).map(([id, data]) => {
+                  const matchExp = expensesByMatchId[id] || 0;
+                  const solde = data.revenue - matchExp;
+                  return (
+                    <TableRow key={id} className="text-sm">
+                      <TableCell className="py-2">
+                        <p className="font-medium text-xs leading-snug">{data.homeTeam} vs {data.awayTeam}</p>
+                        <p className="text-xs text-muted-foreground">{formatDate(data.date)}</p>
+                      </TableCell>
+                      <TableCell className="py-2 text-right text-xs">{data.printed}</TableCell>
+                      <TableCell className="py-2 text-right text-xs font-medium text-red-600">{data.unsold}</TableCell>
+                      <TableCell className="py-2 text-right text-xs font-medium text-blue-600">{data.validated}</TableCell>
+                      <TableCell className="py-2 text-right text-xs font-semibold text-brand whitespace-nowrap">{formatFCFA(data.revenue)}</TableCell>
+                      <TableCell className="py-2 text-right text-xs font-medium text-danger whitespace-nowrap">{matchExp > 0 ? `-${formatFCFA(matchExp)}` : "—"}</TableCell>
+                      <TableCell className={`py-2 text-right text-xs font-bold whitespace-nowrap ${solde >= 0 ? "text-success" : "text-danger"}`}>
+                        {formatFCFA(solde)}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
               )}
             </TableBody>
           </Table>
