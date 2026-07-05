@@ -8,12 +8,11 @@ import { revalidatePath } from "next/cache";
 export async function getFinishedMatches() {
   const profile = await requireRole(["super_admin", "admin_zone", "fondateur"]);
   const adminClient = await createAdminClient();
-  const today = new Date().toISOString().split("T")[0];
 
   let query = adminClient
     .from("matches")
     .select("id, home_team, away_team, match_date, venue, zone_id, zone:zones!matches_zone_id_fkey(name)")
-    .lte("match_date", today)
+    .eq("status", "termine")
     .order("match_date", { ascending: false });
 
   if (profile.role === "admin_zone") {

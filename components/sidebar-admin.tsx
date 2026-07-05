@@ -19,7 +19,6 @@ import {
   Ticket,
   User,
   Building2,
-  CreditCard,
   ContactRound,
   PackageX,
 } from "lucide-react";
@@ -44,7 +43,6 @@ const adminLinks = [
   { href: "/utilisateurs", label: "Utilisateurs", icon: Users },
   { href: "/cartes", label: "Cartes d'accès", icon: ContactRound },
   { href: "/parametres", label: "Paramètres Zone", icon: Settings },
-  { href: "/abonnements", label: "Abonnements", icon: CreditCard },
 ];
 
 const superAdminLinks = [
@@ -59,12 +57,7 @@ export function SidebarAdmin({ userName, userRole, zoneName }: SidebarProps) {
 
   const links =
     userRole === "super_admin"
-      ? [
-          ...adminLinks.map((l) =>
-            l.href === "/abonnements" ? { ...l, label: "Billetterie Zone" } : l
-          ),
-          ...superAdminLinks,
-        ]
+      ? [...adminLinks, ...superAdminLinks]
       : adminLinks;
 
   async function handleLogout() {
