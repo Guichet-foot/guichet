@@ -73,6 +73,46 @@ export async function getCardByQRToken(token: string): Promise<AccessCard | null
   return data as AccessCard | null;
 }
 
+export async function updateAccessCard(
+  id: string,
+  data: {
+    full_name: string;
+    phone: string;
+    zone_id: string;
+    zone_name: string;
+    poste: string;
+    saison?: string;
+    asc_name?: string | null;
+    photo_url?: string | null;
+  }
+): Promise<{ error?: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Non authentifié" };
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role, zone_id")
+    .eq("id", user.id)
+    .single();
+
+  if (!profile || !["super_admin", "admin_zone", "fondateur"].includes(profile.role)) {
+    return { error: "Non autorisé" };
+  }
+  if (profile.role === "admin_zone" && profile.zone_id !== data.zone_id) {
+    return { error: "Vous ne pouvez modifier des cartes que pour votre zone" };
+  }
+
+  const adminClient = await createAdminClient();
+  const { error } = await adminClient
+    .from("access_cards")
+    .update({ ...data })
+    .eq("id", id);
+
+  if (error) return { error: error.message };
+  return {};
+}
+
 export async function deleteAccessCard(id: string): Promise<{ error?: string }> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();

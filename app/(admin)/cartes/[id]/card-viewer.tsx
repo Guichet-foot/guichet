@@ -21,9 +21,11 @@ import {
   MapPin,
   Briefcase,
   Shield,
+  Pencil,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import type { AccessCard } from "@/lib/types";
 
 interface CardViewerProps {
@@ -70,13 +72,18 @@ export function CardViewer({ card, qrDataUrl, printUrl }: CardViewerProps) {
           <ArrowLeft className="h-4 w-4 mr-1" />Retour
         </Button>
         <div className="flex-1" />
+        <Link href={`/cartes/${card.id}/edit`}>
+          <Button variant="outline" size="sm" className="border-green-700 text-green-700 hover:bg-green-50">
+            <Pencil className="h-4 w-4 mr-1" />Modifier
+          </Button>
+        </Link>
         <Button
           variant="outline"
           size="sm"
           onClick={() => window.open(`${printUrl}?auto=0`, "_blank")}
           className="border-green-700 text-green-700 hover:bg-green-50"
         >
-          <Printer className="h-4 w-4 mr-1" />Imprimer / PDF
+          <Printer className="h-4 w-4 mr-1" />PDF
         </Button>
         <Button
           variant="ghost"
