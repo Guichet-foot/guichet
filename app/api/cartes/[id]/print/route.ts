@@ -141,28 +141,37 @@ html, body {
   border-bottom: 1pt solid #1a5c2a;
   padding: 0.8mm 2mm;
 }
-.logo {
+.logo-wrap {
   height: 13mm;
-  width: auto;
-  max-width: 18mm;
-  object-fit: contain;
+  width: 13mm;
+  background: white;
+  border-radius: 1.5mm;
+  padding: 0.5mm;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
+}
+.logo {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 .title-section {
   flex: 1;
   text-align: center;
-  /* leave room for the large photo on the right */
-  padding-right: 31mm;
+  /* leave room for the smaller photo on the right (21mm + 1.5mm margin) */
+  padding-right: 23mm;
 }
 .title {
-  font-size: 7.5pt;
+  font-size: 9.5pt;
   font-weight: 900;
   color: #1a5c2a;
-  letter-spacing: 0.2px;
-  line-height: 1.1;
+  letter-spacing: 0.3px;
+  line-height: 1.05;
 }
 .season {
-  font-size: 4.5pt;
+  font-size: 4.8pt;
   font-weight: 600;
   color: #1a5c2a;
   margin-top: 0.4mm;
@@ -242,14 +251,14 @@ html, body {
   image-rendering: pixelated;
   image-rendering: crisp-edges;
 }
-/* Photo — large, top-right, overlapping header+body */
-/* 29mm diameter ≈ 54% of card height (54mm) */
+/* Photo — top-right, overlapping header+body */
+/* 21mm diameter ≈ 39% of card height (54mm) */
 .photo-wrap {
   position: absolute;
-  top: 1.6mm;
-  right: 1.3mm;
-  width: 29mm;
-  height: 29mm;
+  top: 2mm;
+  right: 1.5mm;
+  width: 21mm;
+  height: 21mm;
   border-radius: 50%;
   border: 1.5pt solid #1a5c2a;
   overflow: hidden;
@@ -279,7 +288,9 @@ html, body {
 <div class="card">
   <!-- Header -->
   <div class="header">
-    ${logoDataUrl ? `<img src="${logoDataUrl}" class="logo" alt="ODCAV" />` : `<div style="width:13mm;height:13mm;background:#d1fae5;border-radius:50%;flex-shrink:0;"></div>`}
+    <div class="logo-wrap">
+      ${logoDataUrl ? `<img src="${logoDataUrl}" class="logo" alt="ODCAV" />` : `<div style="width:100%;height:100%;background:#d1fae5;border-radius:50%;"></div>`}
+    </div>
     <div class="title-section">
       <div class="title">CARTE D'ACCÈS</div>
       <div class="season">— SAISON ${saison} —</div>

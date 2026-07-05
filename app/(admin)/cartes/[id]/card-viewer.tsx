@@ -126,8 +126,8 @@ export function CardViewer({ card, qrDataUrl, printUrl }: CardViewerProps) {
       ctx.moveTo(2, headerH); ctx.lineTo(W - 2, headerH);
       ctx.stroke();
 
-      // ── Photo (large, top-right, overlapping header/body) ──
-      const pD = Math.round(0.34 * W); // 34% of card width ≈ 291px ≈ 54% of height
+      // ── Photo (top-right, overlapping header/body) ──
+      const pD = Math.round(0.24 * W); // 24% of card width ≈ 38% of height
       const pX = W - Math.round(0.02 * W) - pD;
       const pY = Math.round(0.03 * H);
       const pCX = pX + pD / 2;
@@ -150,30 +150,29 @@ export function CardViewer({ card, qrDataUrl, printUrl }: CardViewerProps) {
       ctx.strokeStyle = GREEN; ctx.lineWidth = 3;
       ctx.beginPath(); ctx.arc(pCX, pCY, pD / 2, 0, Math.PI * 2); ctx.stroke();
 
-      // ── ODCAV logo ──
+      // ── ODCAV logo — white background container so logo is always visible ──
+      const logoBoxH = Math.round(0.84 * headerH);
+      const logoBoxW = logoBoxH; // square
+      const logoBoxX = 2.5 * S;
+      const logoBoxY = (headerH - logoBoxH) / 2;
+      ctx.fillStyle = "#ffffff";
+      drawRoundRect(ctx, logoBoxX, logoBoxY, logoBoxW, logoBoxH, 0.6 * S);
+      ctx.fill();
       try {
         const logo = await loadImg("/logoodcavdes.png");
-        const lH = Math.round(0.25 * headerH); // 25% taller = bigger logo
-        const lH2 = Math.round(0.85 * headerH);
-        const actualH = Math.min(lH2, 13 * S);
-        const lW = logo.naturalWidth / logo.naturalHeight * actualH;
-        ctx.drawImage(logo, 2.5 * S, (headerH - actualH) / 2, lW, actualH);
+        const pad = 0.05 * logoBoxH;
+        ctx.drawImage(logo, logoBoxX + pad, logoBoxY + pad, logoBoxW - 2 * pad, logoBoxH - 2 * pad);
       } catch { /* skip */ }
 
-      // ── Title (in header, left of photo) ──
-      const titleMaxX = pX - S; // don't exceed photo left edge
-      const titleCenterX = (2.5 * S + (pX - S)) / 2; // ??? let me adjust
-
-      // Actually let me center the title in the non-logo, non-photo zone
-      // Logo takes roughly 18% of W from left (after padding)
-      const logoEndX = 2.5 * S + Math.round(0.18 * W);
-      const titleCX = logoEndX + (pX - S - logoEndX) / 2;
+      // ── Title (centered between logo and photo) ──
+      const logoEndX = logoBoxX + logoBoxW + S;
+      const titleCX = logoEndX + (pX - 2 * S - logoEndX) / 2;
 
       ctx.fillStyle = GREEN; ctx.textAlign = "center";
-      ctx.font = `900 ${0.62 * headerH}px Arial`;
-      ctx.fillText("CARTE D'ACCÈS", titleCX, headerH * 0.45);
+      ctx.font = `900 ${0.68 * headerH}px Arial`;
+      ctx.fillText("CARTE D'ACCÈS", titleCX, headerH * 0.46);
       ctx.font = `600 ${0.37 * headerH}px Arial`;
-      ctx.fillText(`— SAISON ${saison} —`, titleCX, headerH * 0.78);
+      ctx.fillText(`— SAISON ${saison} —`, titleCX, headerH * 0.80);
 
       // ── Info rows ──
       const rightColX = Math.round(0.65 * W);
@@ -273,31 +272,30 @@ export function CardViewer({ card, qrDataUrl, printUrl }: CardViewerProps) {
               className="absolute inset-x-0 top-0 flex items-center bg-green-50 border-b-[1.5px] border-green-800"
               style={{ height: "27.8%", padding: "1.5% 2%" }}
             >
-              {/* ODCAV logo — bigger */}
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="/logoodcavdes.png"
-                alt="ODCAV"
-                style={{
-                  height: "92%",
-                  width: "auto",
-                  maxWidth: "23%",
-                  objectFit: "contain",
-                  flexShrink: 0,
-                }}
-              />
+              {/* ODCAV logo — fond blanc pour garantir la visibilité */}
+              <div
+                className="shrink-0 flex items-center justify-center rounded-lg overflow-hidden"
+                style={{ height: "88%", aspectRatio: "1/1", background: "white", padding: "2px" }}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/logoodcavdes.png"
+                  alt="ODCAV"
+                  style={{ height: "100%", width: "100%", objectFit: "contain" }}
+                />
+              </div>
 
-              {/* Title — centered between logo and photo area */}
-              <div style={{ flex: 1, textAlign: "center", paddingRight: "36%" }}>
+              {/* Title — centré entre logo et zone photo */}
+              <div style={{ flex: 1, textAlign: "center", paddingRight: "27%" }}>
                 <p
                   className="font-black text-green-800 leading-tight"
-                  style={{ fontSize: "4.5cqi", lineHeight: 1.1 }}
+                  style={{ fontSize: "6cqi", lineHeight: 1.05, letterSpacing: "0.02em" }}
                 >
                   CARTE D&apos;ACCÈS
                 </p>
                 <p
                   className="font-semibold text-green-700"
-                  style={{ fontSize: "2.3cqi", marginTop: "0.4cqi" }}
+                  style={{ fontSize: "2.4cqi", marginTop: "0.5cqi" }}
                 >
                   — SAISON {saison} —
                 </p>
@@ -366,18 +364,15 @@ export function CardViewer({ card, qrDataUrl, printUrl }: CardViewerProps) {
               </div>
             </div>
 
-            {/* ── PHOTO — absolutely positioned, large, overlapping header/body ── */}
-            {/*
-              width: 34% of card width = 34% × (85.6/54) ≈ 54% of card height
-              top: 3% of card height, right: 1.5% of card width
-            */}
+            {/* ── PHOTO — absolue, top-right, chevauchant en-tête/corps ── */}
+            {/* width: 24% de la largeur ≈ 38% de la hauteur de la carte */}
             <div
               className="absolute rounded-full overflow-hidden bg-green-100"
               style={{
-                width: "34%",
+                width: "24%",
                 aspectRatio: "1 / 1",
-                top: "3%",
-                right: "1.5%",
+                top: "4%",
+                right: "2%",
                 border: "3px solid #1a5c2a",
               }}
             >
