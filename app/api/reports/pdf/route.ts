@@ -56,15 +56,14 @@ export async function POST(request: Request) {
       }
     : undefined;
 
-  // Fetch tickets
+  // Fetch tickets (all statuses for accurate printed/unsold/validated counts)
   let ticketsQuery = supabase
     .from("tickets")
     .select(
-      "price, match_id, sold_at, match:matches(home_team, away_team, match_date, zone_id)"
+      "price, status, match_id, sold_at, match:matches(home_team, away_team, match_date, zone_id)"
     )
     .gte("sold_at", `${startDate}T00:00:00`)
-    .lte("sold_at", `${endDate}T23:59:59`)
-    .neq("status", "annule");
+    .lte("sold_at", `${endDate}T23:59:59`);
 
   if (matchId) {
     ticketsQuery = ticketsQuery.eq("match_id", matchId);
@@ -72,34 +71,39 @@ export async function POST(request: Request) {
 
   const { data: tickets } = await ticketsQuery as { data: any[] | null };
 
-  const filteredTickets = zoneId
+  const filteredTickets = (zoneId
     ? tickets?.filter((t: any) => t.match?.zone_id === zoneId)
-    : tickets;
+    : tickets) || [];
 
   // Revenue by match
   const revenueMap: Record<
     string,
-    { teams: string; date: string; sold: number; revenue: number }
+    { teams: string; date: string; printed: number; unsold: number; validated: number; revenue: number }
   > = {};
 
-  filteredTickets?.forEach((t: any) => {
+  filteredTickets.forEach((t: any) => {
     if (!t.match) return;
     if (!revenueMap[t.match_id]) {
       revenueMap[t.match_id] = {
         teams: `${t.match.home_team} vs ${t.match.away_team}`,
-        date: format(new Date(t.match.match_date), "dd/MM/yyyy", {
-          locale: fr,
-        }),
-        sold: 0,
-        revenue: 0,
+        date: format(new Date(t.match.match_date), "dd/MM/yyyy", { locale: fr }),
+        printed: 0, unsold: 0, validated: 0, revenue: 0,
       };
     }
-    revenueMap[t.match_id].sold++;
-    revenueMap[t.match_id].revenue += t.price;
+    revenueMap[t.match_id].printed++;
+    if (t.status === "annule") {
+      revenueMap[t.match_id].unsold++;
+    } else {
+      revenueMap[t.match_id].revenue += t.price;
+    }
+    if (t.status === "scanne") {
+      revenueMap[t.match_id].validated++;
+    }
   });
 
-  const totalRevenue =
-    filteredTickets?.reduce((sum: number, t: any) => sum + t.price, 0) || 0;
+  const totalRevenue = filteredTickets
+    .filter((t: any) => t.status !== "annule")
+    .reduce((sum: number, t: any) => sum + t.price, 0);
 
   // Fetch expenses
   let expensesQuery = supabase

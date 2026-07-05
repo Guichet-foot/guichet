@@ -85,6 +85,37 @@ export async function declareToutVendus(matchId: string): Promise<{ error?: stri
   return {};
 }
 
+export async function closeMatchUnsold(matchId: string): Promise<{ error?: string }> {
+  await requireRole(["super_admin", "admin_zone", "fondateur"]);
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Non authentifié" };
+
+  const adminClient = await createAdminClient();
+  // Upsert with is_closed=true (creates the row if it doesn't exist)
+  const { error } = await adminClient.from("match_unsold").upsert(
+    {
+      match_id: matchId,
+      unsold_count: 0,
+      tout_vendus: false,
+      is_closed: true,
+      declared_by: user.id,
+      declared_at: new Date().toISOString(),
+    },
+    { onConflict: "match_id" }
+  );
+  // If row already exists, just update is_closed
+  if (error) {
+    const { error: updateErr } = await adminClient
+      .from("match_unsold")
+      .update({ is_closed: true })
+      .eq("match_id", matchId);
+    if (updateErr) return { error: updateErr.message };
+  }
+  revalidatePath("/invendus");
+  return {};
+}
+
 export async function resetUnsold(matchId: string): Promise<{ error?: string }> {
   await requireRole(["super_admin", "admin_zone", "fondateur"]);
   const adminClient = await createAdminClient();

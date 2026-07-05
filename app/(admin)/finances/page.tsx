@@ -81,35 +81,45 @@ export default async function FinancesPage({
 
   const { data: tickets } = (await supabase
     .from("tickets")
-    .select("price, match_id, sold_at, match:matches(home_team, away_team, match_date, zone_id)")
+    .select("price, status, match_id, sold_at, match:matches(home_team, away_team, match_date, zone_id)")
     .gte("sold_at", dateStart.toISOString())
-    .lte("sold_at", dateEnd.toISOString())
-    .neq("status", "annule")) as { data: any[] | null };
+    .lte("sold_at", dateEnd.toISOString())) as { data: any[] | null };
 
-  const filteredTickets = zoneId
+  const filteredTickets = (zoneId
     ? tickets?.filter((t: any) => t.match?.zone_id === zoneId)
-    : tickets;
+    : tickets) || [];
 
-  const totalSold = filteredTickets?.length || 0;
-  const totalRevenue = filteredTickets?.reduce((sum: number, t: any) => sum + t.price, 0) || 0;
+  const totalSold = filteredTickets.filter((t: any) => t.status !== "annule").length;
+  const totalRevenue = filteredTickets
+    .filter((t: any) => t.status !== "annule")
+    .reduce((sum: number, t: any) => sum + t.price, 0);
   const odcavCommission = Math.round(totalRevenue * odcavRate);
   const totalBlocks = totalSold > 0 ? Math.ceil(totalSold / 100) : 0;
   const fraisPlateformePeriod = totalBlocks * feePerBlock;
 
-  const revenueByMatch: Record<string, { homeTeam: string; awayTeam: string; date: string; sold: number; revenue: number }> = {};
-  filteredTickets?.forEach((t: any) => {
+  const revenueByMatch: Record<string, {
+    homeTeam: string; awayTeam: string; date: string;
+    printed: number; unsold: number; validated: number; revenue: number;
+  }> = {};
+  filteredTickets.forEach((t: any) => {
     if (!t.match) return;
     if (!revenueByMatch[t.match_id]) {
       revenueByMatch[t.match_id] = {
         homeTeam: t.match.home_team,
         awayTeam: t.match.away_team,
         date: t.match.match_date,
-        sold: 0,
-        revenue: 0,
+        printed: 0, unsold: 0, validated: 0, revenue: 0,
       };
     }
-    revenueByMatch[t.match_id].sold++;
-    revenueByMatch[t.match_id].revenue += t.price;
+    revenueByMatch[t.match_id].printed++;
+    if (t.status === "annule") {
+      revenueByMatch[t.match_id].unsold++;
+    } else {
+      revenueByMatch[t.match_id].revenue += t.price;
+    }
+    if (t.status === "scanne") {
+      revenueByMatch[t.match_id].validated++;
+    }
   });
 
   const expenseFrom = dateStart.toISOString().split("T")[0];
@@ -230,24 +240,29 @@ export default async function FinancesPage({
             <TableHeader>
               <TableRow>
                 <TableHead>Match</TableHead>
-                <TableHead className="hidden sm:table-cell">Date</TableHead>
-                <TableHead className="text-right">Billets</TableHead>
-                <TableHead className="text-right">Total</TableHead>
+                <TableHead className="text-right">Imprimés</TableHead>
+                <TableHead className="text-right text-red-600">Invendus</TableHead>
+                <TableHead className="text-right text-blue-600">Vendus</TableHead>
+                <TableHead className="text-right">Recettes</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {Object.entries(revenueByMatch).length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
                     Aucune recette sur cette période
                   </TableCell>
                 </TableRow>
               ) : (
                 Object.entries(revenueByMatch).map(([id, data]) => (
                   <TableRow key={id}>
-                    <TableCell className="font-medium">{data.homeTeam} vs {data.awayTeam}</TableCell>
-                    <TableCell className="hidden sm:table-cell text-sm">{formatDate(data.date)}</TableCell>
-                    <TableCell className="text-right">{data.sold}</TableCell>
+                    <TableCell>
+                      <p className="font-medium">{data.homeTeam} vs {data.awayTeam}</p>
+                      <p className="text-xs text-muted-foreground">{formatDate(data.date)}</p>
+                    </TableCell>
+                    <TableCell className="text-right">{data.printed}</TableCell>
+                    <TableCell className="text-right font-medium text-red-600">{data.unsold}</TableCell>
+                    <TableCell className="text-right font-medium text-blue-600">{data.validated}</TableCell>
                     <TableCell className="text-right font-bold text-brand">{formatFCFA(data.revenue)}</TableCell>
                   </TableRow>
                 ))
