@@ -99,14 +99,11 @@ export function CardViewer({ card, qrDataUrl, printUrl }: CardViewerProps) {
             <Pencil className="h-4 w-4 mr-1" />Modifier
           </Button>
         </Link>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => window.open(`${printUrl}?auto=0`, "_blank")}
-          className="border-green-700 text-green-700 hover:bg-green-50"
-        >
-          <Printer className="h-4 w-4 mr-1" />PDF
-        </Button>
+        <a href={`/api/cartes/${card.id}/download`} download>
+          <Button variant="outline" size="sm" className="border-green-700 text-green-700 hover:bg-green-50">
+            <Printer className="h-4 w-4 mr-1" />Télécharger
+          </Button>
+        </a>
         <Button
           variant="ghost"
           size="sm"

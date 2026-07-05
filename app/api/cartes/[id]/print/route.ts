@@ -158,9 +158,6 @@ html, body {
 .logo-wrap {
   height: 13mm;
   width: 13mm;
-  background: white;
-  border-radius: 1.5mm;
-  padding: 0.5mm;
   display: flex;
   align-items: center;
   justify-content: center;

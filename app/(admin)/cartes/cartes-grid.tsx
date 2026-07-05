@@ -13,7 +13,7 @@ import {
   MapPin,
   Briefcase,
   Shield,
-  Printer,
+  Download,
   Pencil,
   ShoppingCart,
   Users,
@@ -21,6 +21,8 @@ import {
   Wallet,
   CreditCard,
   Tag,
+  FileDown,
+  Loader2,
 } from "lucide-react";
 import type { AccessCard } from "@/lib/types";
 import { formatFCFA } from "@/lib/format";
@@ -246,15 +248,11 @@ function CartesGrid({ items }: CartesGridProps) {
                     <Pencil className="h-4 w-4 mr-1.5" />Modifier
                   </Button>
                 </Link>
-                <Button
-                  variant="outline"
-                  className="border-green-700 text-green-700 hover:bg-green-50"
-                  onClick={() =>
-                    window.open(`/api/cartes/${selected.card.id}/print?auto=0`, "_blank")
-                  }
-                >
-                  <Printer className="h-4 w-4 mr-1.5" />PDF
-                </Button>
+                <a href={`/api/cartes/${selected.card.id}/download`} download>
+                  <Button variant="outline" className="border-green-700 text-green-700 hover:bg-green-50">
+                    <Download className="h-4 w-4 mr-1.5" />Télécharger
+                  </Button>
+                </a>
               </div>
             </>
           )}
@@ -267,6 +265,32 @@ function CartesGrid({ items }: CartesGridProps) {
 /** Main client component: stats cards + tabs + filtered grid */
 export function CartesClient({ items }: { items: CardWithQR[] }) {
   const [activeTab, setActiveTab] = useState<Tab>("zone_delegue");
+  const [downloading, setDownloading] = useState(false);
+
+  async function downloadBulk(cardItems: CardWithQR[]) {
+    if (cardItems.length === 0) return;
+    setDownloading(true);
+    try {
+      const ids = cardItems.map((i) => i.card.id);
+      const res = await fetch("/api/cartes/bulk-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids }),
+      });
+      if (!res.ok) throw new Error("Erreur génération PDF");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "cartes-acces.pdf";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      alert("Erreur lors du téléchargement");
+    } finally {
+      setDownloading(false);
+    }
+  }
 
   const vendeurItems = items.filter((i) => i.card.card_type === "vendeur");
   const spectateurItems = items.filter((i) => i.card.card_type === "spectateur");
@@ -358,8 +382,8 @@ export function CartesClient({ items }: { items: CardWithQR[] }) {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="border-b border-border">
+      {/* Tabs + bulk download */}
+      <div className="border-b border-border flex items-center justify-between">
         <div className="flex">
           {TABS.map((tab) => (
             <button
@@ -375,6 +399,18 @@ export function CartesClient({ items }: { items: CardWithQR[] }) {
             </button>
           ))}
         </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="mb-1 mr-1 text-xs gap-1.5 border-green-700 text-green-700 hover:bg-green-50"
+          onClick={() => downloadBulk(filteredItems)}
+          disabled={downloading || filteredItems.length === 0}
+        >
+          {downloading
+            ? <><Loader2 className="h-3.5 w-3.5 animate-spin" />Génération…</>
+            : <><FileDown className="h-3.5 w-3.5" />PDF A4 ({filteredItems.length})</>
+          }
+        </Button>
       </div>
 
       {/* Grid */}
