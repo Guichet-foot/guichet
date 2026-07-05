@@ -250,7 +250,7 @@ export default async function FinancesPage({
                 <TableHead className="py-2 text-xs">Match</TableHead>
                 <TableHead className="py-2 text-xs text-right">Impr.</TableHead>
                 <TableHead className="py-2 text-xs text-right text-red-600">Invendu</TableHead>
-                <TableHead className="py-2 text-xs text-right text-blue-600">Vendus</TableHead>
+                <TableHead className="py-2 text-xs text-right text-green-700">Facturés</TableHead>
                 <TableHead className="py-2 text-xs text-right">Recettes</TableHead>
                 <TableHead className="py-2 text-xs text-right text-danger">Dépenses</TableHead>
                 <TableHead className="py-2 text-xs text-right font-bold">Solde</TableHead>
@@ -275,7 +275,7 @@ export default async function FinancesPage({
                       </TableCell>
                       <TableCell className="py-2 text-right text-xs">{data.printed}</TableCell>
                       <TableCell className="py-2 text-right text-xs font-medium text-red-600">{data.unsold}</TableCell>
-                      <TableCell className="py-2 text-right text-xs font-medium text-blue-600">{data.validated}</TableCell>
+                      <TableCell className="py-2 text-right text-xs font-medium text-green-700">{data.printed - data.unsold}</TableCell>
                       <TableCell className="py-2 text-right text-xs font-semibold text-brand whitespace-nowrap">{formatFCFA(data.revenue)}</TableCell>
                       <TableCell className="py-2 text-right text-xs font-medium text-danger whitespace-nowrap">{matchExp > 0 ? `-${formatFCFA(matchExp)}` : "—"}</TableCell>
                       <TableCell className={`py-2 text-right text-xs font-bold whitespace-nowrap ${solde >= 0 ? "text-success" : "text-danger"}`}>

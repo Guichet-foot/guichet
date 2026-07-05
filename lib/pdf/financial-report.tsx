@@ -244,7 +244,7 @@ export function FinancialReport({ data }: { data: ReportData }) {
                 <Text style={{ flex: 2.5, fontSize: 6, fontFamily: "Helvetica-Bold" }}>Match</Text>
                 <Text style={{ flex: 0.7, fontSize: 6, fontFamily: "Helvetica-Bold", textAlign: "right" }}>Impr.</Text>
                 <Text style={{ flex: 0.7, fontSize: 6, fontFamily: "Helvetica-Bold", textAlign: "right", color: "#DC2626" }}>Invendu</Text>
-                <Text style={{ flex: 0.7, fontSize: 6, fontFamily: "Helvetica-Bold", textAlign: "right", color: "#1D4ED8" }}>Vendus</Text>
+                <Text style={{ flex: 0.7, fontSize: 6, fontFamily: "Helvetica-Bold", textAlign: "right", color: "#15803D" }}>Facturés</Text>
                 <Text style={{ flex: 1.3, fontSize: 6, fontFamily: "Helvetica-Bold", textAlign: "right" }}>Recettes</Text>
                 <Text style={{ flex: 1.3, fontSize: 6, fontFamily: "Helvetica-Bold", textAlign: "right", color: "#DC2626" }}>Dépenses</Text>
                 <Text style={{ flex: 1.3, fontSize: 6, fontFamily: "Helvetica-Bold", textAlign: "right" }}>Solde</Text>
@@ -257,7 +257,7 @@ export function FinancialReport({ data }: { data: ReportData }) {
                   </View>
                   <Text style={{ flex: 0.7, fontSize: 7, textAlign: "right" }}>{item.printed}</Text>
                   <Text style={{ flex: 0.7, fontSize: 7, textAlign: "right", color: "#DC2626" }}>{item.unsold}</Text>
-                  <Text style={{ flex: 0.7, fontSize: 7, textAlign: "right", color: "#1D4ED8" }}>{item.validated}</Text>
+                  <Text style={{ flex: 0.7, fontSize: 7, textAlign: "right", color: "#15803D" }}>{item.printed - item.unsold}</Text>
                   <Text style={{ flex: 1.3, fontSize: 7, textAlign: "right", color: "#0D5C3F" }}>{formatAmount(item.revenue)}</Text>
                   <Text style={{ flex: 1.3, fontSize: 7, textAlign: "right", color: "#DC2626" }}>
                     {item.matchExpenses > 0 ? `-${formatAmount(item.matchExpenses)}` : "—"}
