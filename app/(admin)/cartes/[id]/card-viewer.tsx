@@ -35,13 +35,6 @@ interface CardViewerProps {
 
 const GREEN = "#1a5c2a";
 
-function getSaison(createdAt: string): string {
-  const d = new Date(createdAt);
-  const y = d.getFullYear();
-  const m = d.getMonth() + 1;
-  return m >= 8 ? `${y} - ${y + 1}` : `${y - 1} - ${y}`;
-}
-
 function drawRoundRect(
   ctx: CanvasRenderingContext2D,
   x: number, y: number, w: number, h: number, r: number
@@ -75,7 +68,11 @@ export function CardViewer({ card, qrDataUrl, printUrl }: CardViewerProps) {
   const [deleting, setDeleting] = useState(false);
   const [pngLoading, setPngLoading] = useState(false);
 
-  const saison = getSaison(card.created_at);
+  const saison = card.saison || (() => {
+    const d = new Date(card.created_at);
+    const y = d.getFullYear();
+    return d.getMonth() + 1 >= 8 ? `${y} - ${y + 1}` : `${y - 1} - ${y}`;
+  })();
 
   const infoRows = [
     { Icon: User,      label: "NOM COMPLET", value: card.full_name },

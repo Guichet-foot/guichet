@@ -33,6 +33,11 @@ export function CardForm({
   const [zoneId, setZoneId] = useState(defaultZoneId);
   const [zoneName, setZoneName] = useState(defaultZoneName);
   const [poste, setPoste] = useState("");
+  const [saison, setSaison] = useState(() => {
+    const now = new Date();
+    const y = now.getFullYear();
+    return now.getMonth() + 1 >= 8 ? `${y} - ${y + 1}` : `${y - 1} - ${y}`;
+  });
   const [ascMode, setAscMode] = useState<"list" | "manual">("list");
   const [ascSelected, setAscSelected] = useState("");
   const [ascManual, setAscManual] = useState("");
@@ -100,6 +105,7 @@ export function CardForm({
       zone_id: zoneId,
       zone_name: zoneName,
       poste: poste.trim(),
+      saison: saison.trim() || undefined,
       asc_name: ascName || undefined,
       photo_url: photoUrl,
     });
@@ -244,6 +250,16 @@ export function CardForm({
               onChange={(e) => setPoste(e.target.value)}
               placeholder="ex : Secrétaire Général"
               required
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="saison">Saison</Label>
+            <Input
+              id="saison"
+              value={saison}
+              onChange={(e) => setSaison(e.target.value)}
+              placeholder="ex : 2025 - 2026"
             />
           </div>
 

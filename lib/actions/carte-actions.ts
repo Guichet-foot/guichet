@@ -11,6 +11,7 @@ export async function createAccessCard(data: {
   zone_name: string;
   poste: string;
   asc_name?: string;
+  saison?: string;
   photo_url?: string;
 }): Promise<{ card?: AccessCard; error?: string }> {
   const supabase = await createClient();

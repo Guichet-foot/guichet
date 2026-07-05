@@ -146,6 +146,7 @@ export interface AccessCard {
   zone_name: string;
   poste: string;
   asc_name: string | null;
+  saison: string | null;
   photo_url: string | null;
   created_by: string | null;
   created_at: string;

@@ -6,11 +6,11 @@ import { join } from "path";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-function getSaison(createdAt: string): string {
-  const d = new Date(createdAt);
+function getSaison(card: { saison?: string | null; created_at: string }): string {
+  if (card.saison) return card.saison;
+  const d = new Date(card.created_at);
   const y = d.getFullYear();
-  const m = d.getMonth() + 1;
-  return m >= 8 ? `${y} - ${y + 1}` : `${y - 1} - ${y}`;
+  return d.getMonth() + 1 >= 8 ? `${y} - ${y + 1}` : `${y - 1} - ${y}`;
 }
 
 async function fetchBase64(url: string): Promise<string | null> {
@@ -60,7 +60,7 @@ export async function GET(
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://guichet-pi.vercel.app";
   const qrContent = `${appUrl}/carte/${card.qr_token}`;
-  const saison = getSaison(card.created_at);
+  const saison = getSaison(card);
 
   // Embed logo
   let logoDataUrl: string;
