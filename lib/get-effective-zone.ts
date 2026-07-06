@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import type { Profile, Zone } from "@/lib/types";
 
 export interface EffectiveZone {
@@ -35,11 +35,18 @@ export async function getEffectiveZone(
     };
   }
 
+  // Use admin client for ODCAV roles to bypass RLS (president_odcav would be blocked
+  // by policies that only list 'super_admin'). Data isolation is enforced by the
+  // created_by filter at the app level.
+  const adminClient = await createAdminClient();
   const supabase = await createClient();
 
-  // Fondateur sees ALL zones; super_admin sees only their own
+  // Fondateur sees ALL zones; super_admin/president_odcav see only their own
+  const isOdcavRole = profile.role === "super_admin" || profile.role === "president_odcav";
   const zonesQuery = profile.role === "fondateur"
     ? supabase.from("zones").select("*").order("name")
+    : isOdcavRole
+    ? adminClient.from("zones").select("*").eq("created_by", profile.id).order("name")
     : supabase.from("zones").select("*").eq("created_by", profile.id).order("name");
 
   const { data: zones } = await zonesQuery;
