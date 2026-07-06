@@ -1,6 +1,6 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import type { ZoneMember } from "@/lib/types";
 
@@ -37,9 +37,27 @@ export async function updateZoneSettings(
     oncav: string;
   }
 ) {
+  // Verify caller is authenticated and owns / belongs to this zone
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Non authentifié" };
 
-  const { error } = await supabase
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role, zone_id")
+    .eq("id", user.id)
+    .single();
+
+  if (!profile) return { error: "Profil introuvable" };
+
+  const isOdcav = profile.role === "super_admin" || profile.role === "president_odcav" || profile.role === "fondateur";
+  const isZoneMember = profile.role === "admin_zone" && profile.zone_id === zoneId;
+
+  if (!isOdcav && !isZoneMember) return { error: "Non autorisé" };
+
+  // Use admin client to bypass RLS (authorization already verified above)
+  const adminClient = await createAdminClient();
+  const { error } = await adminClient
     .from("zones")
     .update({
       name: formData.name,
