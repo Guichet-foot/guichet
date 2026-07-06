@@ -133,8 +133,16 @@ export async function updateSession(request: NextRequest) {
     "/invendus", "/cartes", "/parametres-odcav", "/parametres-c3",
   ];
 
-  // Fondateur may access their own dashboard (/fondateur/*) OR admin zone routes (/matchs, /billets, etc.)
-  const isAdminRouteForFondateur = adminRoutes.some((r) => pathname.startsWith(r));
+  // Fondateur has their own dashboard — redirect them away from the admin /dashboard
+  // (which would create a loop: page calls requireRole without fondateur → redirect /dashboard → repeat)
+  if (profile.role === "fondateur" && pathname === "/dashboard") {
+    return NextResponse.redirect(new URL("/fondateur/dashboard", request.url));
+  }
+
+  // Fondateur may access their own routes (/fondateur/*) OR other admin routes (/matchs, /billets, etc.)
+  // but NOT /dashboard (handled above)
+  const fondateurAllowedAdminRoutes = adminRoutes.filter((r) => r !== "/dashboard");
+  const isAdminRouteForFondateur = fondateurAllowedAdminRoutes.some((r) => pathname.startsWith(r));
   if (profile.role === "fondateur" && !isFondateurRoute && !isAdminRouteForFondateur) {
     return NextResponse.redirect(new URL("/fondateur/dashboard", request.url));
   }
@@ -172,8 +180,9 @@ export async function updateSession(request: NextRequest) {
   }
 
   if (pathname === "/") {
-    const redirectUrl =
-      profile.role === "caissier" ? "/vente" : "/dashboard";
+    let redirectUrl = "/dashboard";
+    if (profile.role === "caissier") redirectUrl = "/vente";
+    if (profile.role === "fondateur") redirectUrl = "/fondateur/dashboard";
     return NextResponse.redirect(new URL(redirectUrl, request.url));
   }
 
