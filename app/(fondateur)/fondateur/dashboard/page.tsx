@@ -34,7 +34,7 @@ export default async function FondateurDashboardPage({
   const { data: allTickets } = await supabase
     .from("tickets")
     .select("price, sold_at, match:matches(zone_id)")
-    .neq("status", "annule") as { data: any[] | null };
+    .eq("counts_as_revenue", true) as { data: any[] | null };
 
   let filteredTickets = allTickets || [];
 

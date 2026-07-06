@@ -52,7 +52,7 @@ export async function POST(request: Request) {
     .select("price, match_id, match:matches(home_team, away_team, zone_id, c3_account_id)")
     .gte("sold_at", `${date}T00:00:00`)
     .lte("sold_at", `${date}T23:59:59`)
-    .neq("status", "annule") as { data: any[] | null };
+    .eq("counts_as_revenue", true) as { data: any[] | null };
 
   const filteredTickets = effectiveC3Id
     ? tickets?.filter((t: any) => t.match?.c3_account_id === effectiveC3Id)

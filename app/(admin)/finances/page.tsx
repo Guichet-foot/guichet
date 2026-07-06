@@ -81,7 +81,7 @@ export default async function FinancesPage({
 
   const { data: tickets } = (await supabase
     .from("tickets")
-    .select("price, status, match_id, sold_at, match:matches(home_team, away_team, match_date, zone_id, c3_account_id)")
+    .select("price, status, counts_as_revenue, match_id, sold_at, match:matches(home_team, away_team, match_date, zone_id, c3_account_id)")
     .gte("sold_at", dateStart.toISOString())
     .lte("sold_at", dateEnd.toISOString())) as { data: any[] | null };
 
@@ -91,9 +91,9 @@ export default async function FinancesPage({
     ? tickets?.filter((t: any) => t.match?.zone_id === zoneId)
     : tickets) || [];
 
-  const totalSold = filteredTickets.filter((t: any) => t.status !== "annule").length;
+  const totalSold = filteredTickets.filter((t: any) => t.counts_as_revenue).length;
   const totalRevenue = filteredTickets
-    .filter((t: any) => t.status !== "annule")
+    .filter((t: any) => t.counts_as_revenue)
     .reduce((sum: number, t: any) => sum + t.price, 0);
   const odcavCommission = Math.round(totalRevenue * odcavRate);
   const totalBlocks = totalSold > 0 ? Math.ceil(totalSold / 100) : 0;
@@ -114,7 +114,7 @@ export default async function FinancesPage({
       };
     }
     revenueByMatch[t.match_id].printed++;
-    if (t.status === "annule") {
+    if (!t.counts_as_revenue) {
       revenueByMatch[t.match_id].unsold++;
     } else {
       revenueByMatch[t.match_id].revenue += t.price;

@@ -138,7 +138,7 @@ export async function updateSession(request: NextRequest) {
   if (profile.role === "fondateur" && !isFondateurRoute && !isAdminRouteForFondateur) {
     return NextResponse.redirect(new URL("/fondateur/dashboard", request.url));
   }
-  const caissierRoutes = ["/vente", "/scanner", "/mes-ventes"];
+  const caissierRoutes = ["/vente", "/mes-ventes"];
   const portierRoutes = ["/scanner"];
 
   const isAdminRoute = adminRoutes.some((r) => pathname.startsWith(r));
@@ -155,7 +155,7 @@ export async function updateSession(request: NextRequest) {
     return supabaseResponse;
   }
 
-  if (isAdminRoute && profile.role === "caissier") {
+  if (profile.role === "caissier" && (isAdminRoute || pathname.startsWith("/scanner"))) {
     return NextResponse.redirect(new URL("/vente", request.url));
   }
 

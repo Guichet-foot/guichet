@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { createTickets } from "@/lib/actions/ticket-actions";
+import { createTickets, sellBlocTickets } from "@/lib/actions/ticket-actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Printer, ShoppingCart, Minus, Plus } from "lucide-react";
+import { Loader2, Printer, ShoppingCart, Minus, Plus, Banknote } from "lucide-react";
 import { toast } from "sonner";
 import { formatFCFA } from "@/lib/format";
 import { CATEGORY_COLORS } from "@/lib/constants";
@@ -52,6 +52,7 @@ function VenteContent() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [quantity, setQuantity] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [vendrLoading, setVendreLoading] = useState(false);
   const [todaySales, setTodaySales] = useState({ count: 0, total: 0 });
   const [initialLoading, setInitialLoading] = useState(true);
   const [printFormat, setPrintFormat] = useState<PrintFormat>("80");
@@ -148,9 +149,7 @@ function VenteContent() {
         setMatches(matchList);
         const firstActive = matchList.find((m: any) => m.vente_active) || matchList[0];
         setSelectedMatchId(firstActive.id);
-        if (firstActive.vente_active) {
-          await loadCategories(firstActive.id);
-        }
+        await loadCategories(firstActive.id);
       }
 
       const todayStart = new Date();
@@ -196,12 +195,7 @@ function VenteContent() {
 
   async function handleMatchChange(matchId: string) {
     setSelectedMatchId(matchId);
-    const match = matches.find((m) => m.id === matchId);
-    if (match?.vente_active) {
-      await loadCategories(matchId);
-    } else {
-      setCategories([]);
-    }
+    await loadCategories(matchId);
   }
 
   function handleCategoryClick(cat: CategoryOption) {
@@ -223,7 +217,7 @@ function VenteContent() {
       return;
     }
 
-    toast.success(quantity > 1 ? `${quantity} billets vendus !` : "Billet vendu !");
+    toast.success(quantity > 1 ? `${quantity} billets imprimés !` : "Billet imprimé !");
     setTodaySales((prev) => ({
       count: prev.count + quantity,
       total: prev.total + selectedCategory.price * quantity,
@@ -245,6 +239,39 @@ function VenteContent() {
     if (result.batchId) {
       window.open(`/api/tickets/print-batch?batch=${result.batchId}&fmt=${printFormat}`, "_blank");
     }
+  }
+
+  async function handleVendre() {
+    if (!selectedCategory || vendrLoading) return;
+    setVendreLoading(true);
+
+    const result = await sellBlocTickets(selectedMatchId, selectedCategory.id, quantity);
+
+    if (result.error) {
+      toast.error(result.error);
+      setVendreLoading(false);
+      return;
+    }
+
+    const sold = (result as { sold: number }).sold;
+    toast.success(sold > 1 ? `${sold} billets enregistrés !` : "Vente enregistrée !");
+    setTodaySales((prev) => ({
+      count: prev.count + sold,
+      total: prev.total + selectedCategory.price * sold,
+    }));
+
+    setCategories((prev) =>
+      prev.map((c) =>
+        c.id === selectedCategory.id
+          ? { ...c, sold_count: c.sold_count + sold }
+          : c
+      )
+    );
+
+    setSheetOpen(false);
+    setSelectedCategory(null);
+    setQuantity(1);
+    setVendreLoading(false);
   }
 
   if (initialLoading) {
@@ -322,38 +349,14 @@ function VenteContent() {
         </SelectContent>
       </Select>
 
-      {(() => {
-        const selectedMatch = matches.find((m) => m.id === selectedMatchId);
-        if (selectedMatch && !selectedMatch.vente_active) {
-          return (
-            <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-              <ShoppingCart className="h-16 w-16 mb-4 opacity-30" />
-              <p className="text-lg font-semibold">Match à venir</p>
-              <p className="text-sm mt-1">La vente n&apos;est pas encore ouverte pour ce match</p>
-              <p className="text-xs mt-2">Contactez votre administrateur</p>
-            </div>
-          );
-        }
-        return null;
-      })()}
+      {categories.length === 0 && (
+        <div className="text-center py-8 text-muted-foreground">
+          <p>Aucune catégorie de billets configurée pour ce match</p>
+        </div>
+      )}
 
       {(() => {
-        const selectedMatch = matches.find((m) => m.id === selectedMatchId);
-        if (!selectedMatch?.vente_active) return null;
-
-        if (categories.length === 0) {
-          return (
-            <div className="text-center py-8 text-muted-foreground">
-              <p>Aucune catégorie de billets configurée pour ce match</p>
-            </div>
-          );
-        }
-        return null;
-      })()}
-
-      {(() => {
-        const selectedMatch = matches.find((m) => m.id === selectedMatchId);
-        if (!selectedMatch?.vente_active || categories.length === 0) return null;
+        if (categories.length === 0) return null;
         return (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {categories.map((cat, index) => {
@@ -444,22 +447,40 @@ function VenteContent() {
                   )}
                 </div>
 
+                {/* VENDRE — enregistre la vente sans imprimer (billets ODCAV pré-imprimés) */}
                 <Button
-                  onClick={handleConfirm}
-                  disabled={loading}
-                  className="w-full h-16 text-lg font-bold bg-brand hover:bg-brand/90"
+                  onClick={handleVendre}
+                  disabled={vendrLoading || loading}
+                  className="w-full h-16 text-xl font-bold bg-green-600 hover:bg-green-700 text-white"
                 >
-                  {loading ? (
-                    <Loader2 className="h-6 w-6 animate-spin" />
+                  {vendrLoading ? (
+                    <Loader2 className="h-7 w-7 animate-spin" />
                   ) : (
                     <>
-                      <Printer className="h-6 w-6 mr-3" />
-                      IMPRIMER {quantity > 1 ? `${quantity} BILLETS` : "LE BILLET"}
+                      <Banknote className="h-7 w-7 mr-3" />
+                      VENDRE {quantity > 1 ? `${quantity} BILLETS` : ""}
+                    </>
+                  )}
+                </Button>
+
+                {/* IMPRIMER — crée et imprime un nouveau billet (vente_active requise) */}
+                <Button
+                  onClick={handleConfirm}
+                  disabled={loading || vendrLoading}
+                  variant="outline"
+                  className="w-full h-11 text-sm font-semibold border-brand text-brand hover:bg-brand/10"
+                >
+                  {loading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <>
+                      <Printer className="h-4 w-4 mr-2" />
+                      Imprimer {quantity > 1 ? `${quantity} billets` : "le billet"}
                     </>
                   )}
                 </Button>
                 <p className="text-center text-xs text-muted-foreground">
-                  Appuyez sur Entrée pour confirmer — max {maxQty} billet(s) disponible(s)
+                  Max {maxQty} billet(s) disponible(s)
                 </p>
               </div>
             );

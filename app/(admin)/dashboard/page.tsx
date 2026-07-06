@@ -41,7 +41,7 @@ export default async function DashboardPage({
     .from("tickets")
     .select("price, sold_at, match_id, match:matches(zone_id, c3_account_id)")
     .gte("sold_at", todayStart.toISOString())
-    .neq("status", "annule")) as { data: any[] | null };
+    .eq("counts_as_revenue", true)) as { data: any[] | null };
 
   const filteredTodayTickets = c3AccountId
     ? todayTickets?.filter((t: any) => t.match?.c3_account_id === c3AccountId)
@@ -75,7 +75,7 @@ export default async function DashboardPage({
     .from("tickets")
     .select("price, match:matches(zone_id)")
     .gte("sold_at", monthStart.toISOString())
-    .neq("status", "annule")) as { data: any[] | null };
+    .eq("counts_as_revenue", true)) as { data: any[] | null };
 
   const filteredMonthTickets = zoneFilter
     ? monthTickets?.filter((t: any) => t.match?.zone_id === zoneFilter)
@@ -104,7 +104,7 @@ export default async function DashboardPage({
     .from("tickets")
     .select("price, sold_at, match:matches(zone_id)")
     .gte("sold_at", sevenDaysAgo.toISOString())
-    .neq("status", "annule")) as { data: any[] | null };
+    .eq("counts_as_revenue", true)) as { data: any[] | null };
 
   const filteredWeekTickets = zoneFilter
     ? weekTickets?.filter((t: any) => t.match?.zone_id === zoneFilter)
@@ -143,7 +143,7 @@ export default async function DashboardPage({
       .from("tickets")
       .select("match_id")
       .in("match_id", matchIds)
-      .neq("status", "annule");
+      .eq("counts_as_revenue", true);
 
     const soldCounts: Record<string, number> = {};
     (matchTickets as any[])?.forEach((t: any) => {
@@ -188,7 +188,7 @@ export default async function DashboardPage({
       .from("tickets")
       .select("match_id, price")
       .in("match_id", last5MatchIds)
-      .neq("status", "annule")) as { data: any[] | null };
+      .eq("counts_as_revenue", true)) as { data: any[] | null };
 
     const revMap: Record<string, number> = {};
     l5Tickets?.forEach((t: any) => {

@@ -136,6 +136,7 @@ export async function printTicketBloc(matchId: string, categoryId: string, blocs
     sold_by: user.id,
     status: "vendu",
     sale_batch_id: batchId,
+    bloc_printed: true,
   }));
 
   // Insert in chunks of 100 to stay within request limits
@@ -146,6 +147,90 @@ export async function printTicketBloc(matchId: string, categoryId: string, blocs
 
   revalidatePath("/matchs");
   return { batchId };
+}
+
+// ── sellBlocTickets ───────────────────────────────────────────────
+// Caissier records a sale WITHOUT printing.
+// Claims N pre-printed ODCAV bloc tickets (bloc_printed=true) by updating
+// caissier_claimed_at + caissier_id + sold_by so they count as revenue.
+// If fewer bloc tickets are available than requested, claims what's available
+// and creates the remainder as new tickets (no print).
+export async function sellBlocTickets(matchId: string, categoryId: string, quantity: number) {
+  const qty = Math.max(1, Math.min(100, quantity || 1));
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Non authentifié" };
+
+  const adminClient = await createAdminClient();
+
+  const { data: match } = await adminClient
+    .from("matches").select("status").eq("id", matchId).single();
+  if (!match) return { error: "Match introuvable" };
+  if (match.status === "termine" || match.status === "annule") {
+    return { error: "Ce match est terminé" };
+  }
+
+  const { data: category } = await adminClient
+    .from("ticket_categories").select("price").eq("id", categoryId).single();
+  if (!category) return { error: "Catégorie introuvable" };
+
+  // Find available bloc tickets (printed by ODCAV, not yet claimed by a caissier)
+  const { data: availableBlocs } = await adminClient
+    .from("tickets")
+    .select("id")
+    .eq("match_id", matchId)
+    .eq("category_id", categoryId)
+    .eq("bloc_printed", true)
+    .is("caissier_claimed_at", null)
+    .neq("status", "annule")
+    .limit(qty);
+
+  const now = new Date().toISOString();
+  const today = format(new Date(), "yyyyMMdd");
+  let soldCount = 0;
+
+  // Claim however many bloc tickets are available
+  if (availableBlocs && availableBlocs.length > 0) {
+    const claimIds = availableBlocs.map((t) => t.id);
+    const { error: claimErr } = await adminClient
+      .from("tickets")
+      .update({ caissier_claimed_at: now, caissier_id: user.id, sold_by: user.id, sold_at: now })
+      .in("id", claimIds);
+    if (claimErr) return { error: claimErr.message };
+    soldCount += claimIds.length;
+  }
+
+  // If not enough bloc tickets, create the remainder as new (non-printed) tickets
+  const remaining = qty - soldCount;
+  if (remaining > 0) {
+    const { count: todayCount } = await adminClient
+      .from("tickets").select("*", { count: "exact", head: true })
+      .like("serial_number", `GF-${today}-%`);
+
+    const batchId = crypto.randomUUID();
+    const baseCount = todayCount || 0;
+    const newTickets = Array.from({ length: remaining }, (_, i) => ({
+      match_id: matchId,
+      category_id: categoryId,
+      price: category.price,
+      serial_number: `GF-${today}-${String(baseCount + i + 1).padStart(4, "0")}`,
+      sold_by: user.id,
+      sold_at: now,
+      status: "vendu",
+      sale_batch_id: batchId,
+      bloc_printed: false,
+      caissier_id: user.id,
+      caissier_claimed_at: now,
+    }));
+    const { error: insertErr } = await adminClient.from("tickets").insert(newTickets);
+    if (insertErr) return { error: insertErr.message };
+    soldCount += remaining;
+  }
+
+  revalidatePath("/vente");
+  revalidatePath("/mes-ventes");
+  return { sold: soldCount };
 }
 
 export async function validateTicket(qrToken: string): Promise<ScanResult> {

@@ -70,7 +70,7 @@ export async function POST(request: Request) {
   let ticketsQuery = supabase
     .from("tickets")
     .select(
-      "price, status, match_id, sold_at, match:matches(home_team, away_team, match_date, zone_id, c3_account_id)"
+      "price, status, counts_as_revenue, match_id, sold_at, match:matches(home_team, away_team, match_date, zone_id, c3_account_id)"
     )
     .gte("sold_at", `${startDate}T00:00:00`)
     .lte("sold_at", `${endDate}T23:59:59`);
@@ -103,7 +103,7 @@ export async function POST(request: Request) {
       };
     }
     revenueMap[t.match_id].printed++;
-    if (t.status === "annule") {
+    if (!t.counts_as_revenue) {
       revenueMap[t.match_id].unsold++;
     } else {
       revenueMap[t.match_id].revenue += t.price;
@@ -114,7 +114,7 @@ export async function POST(request: Request) {
   });
 
   const totalRevenue = filteredTickets
-    .filter((t: any) => t.status !== "annule")
+    .filter((t: any) => t.counts_as_revenue)
     .reduce((sum: number, t: any) => sum + t.price, 0);
 
   // Fetch expenses

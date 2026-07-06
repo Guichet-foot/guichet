@@ -39,7 +39,7 @@ export default async function MatchDetailPage({
 
   const { data: tickets } = await supabase
     .from("tickets")
-    .select("category_id, price, status")
+    .select("category_id, price, status, counts_as_revenue")
     .eq("match_id", id)
     .neq("status", "annule");
 
@@ -49,8 +49,10 @@ export default async function MatchDetailPage({
 
   tickets?.forEach((t) => {
     catStats[t.category_id] = (catStats[t.category_id] || 0) + 1;
-    totalRevenue += t.price;
-    totalSold++;
+    if (t.counts_as_revenue) {
+      totalRevenue += t.price;
+      totalSold++;
+    }
   });
 
   const totalCapacity =

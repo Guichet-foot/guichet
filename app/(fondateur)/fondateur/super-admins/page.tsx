@@ -58,7 +58,7 @@ export default async function SuperAdminsPage({
         const { data: tickets } = await supabase
           .from("tickets")
           .select("price, match:matches(zone_id)")
-          .neq("status", "annule") as { data: any[] | null };
+          .eq("counts_as_revenue", true) as { data: any[] | null };
 
         revenue = tickets
           ?.filter((t: any) => zoneIds.includes(t.match?.zone_id))

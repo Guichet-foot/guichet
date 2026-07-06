@@ -14,7 +14,6 @@ interface NavCaissierProps {
 
 const caissierLinks = [
   { href: "/vente", label: "Vente", icon: ShoppingCart },
-  { href: "/scanner", label: "Scanner", icon: ScanLine },
   { href: "/mes-ventes", label: "Mes ventes", icon: List },
 ];
 

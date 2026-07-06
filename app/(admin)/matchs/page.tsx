@@ -50,7 +50,7 @@ export default async function MatchsPage({
       .from("tickets")
       .select("match_id, price")
       .in("match_id", matchIds)
-      .neq("status", "annule");
+      .eq("counts_as_revenue", true);
 
     if (tickets) {
       ticketStats = tickets.reduce(

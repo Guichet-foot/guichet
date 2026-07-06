@@ -42,7 +42,7 @@ export default async function SuperAdminDetailPage({
       const { data: tickets } = await supabase
         .from("tickets")
         .select("price, match:matches(zone_id)")
-        .neq("status", "annule") as { data: any[] | null };
+        .eq("counts_as_revenue", true) as { data: any[] | null };
 
       const zoneTickets = tickets?.filter((t: any) => t.match?.zone_id === zId) || [];
 
