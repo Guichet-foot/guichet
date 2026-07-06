@@ -27,6 +27,7 @@ export interface Zone {
   president: string | null;
   members: ZoneMember[];
   odcav: string | null;
+  orcav: string | null;
   oncav: string | null;
   created_at: string;
 }

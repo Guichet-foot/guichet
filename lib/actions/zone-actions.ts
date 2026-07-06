@@ -33,6 +33,7 @@ export async function updateZoneSettings(
     president: string;
     members: ZoneMember[];
     odcav: string;
+    orcav: string;
     oncav: string;
   }
 ) {
@@ -47,6 +48,7 @@ export async function updateZoneSettings(
       president: formData.president || null,
       members: formData.members.filter((m) => m.name.trim() !== ""),
       odcav: formData.odcav || null,
+      orcav: formData.orcav || null,
       oncav: formData.oncav || null,
     })
     .eq("id", zoneId);

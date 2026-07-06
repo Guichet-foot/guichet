@@ -19,6 +19,7 @@ interface ZoneSettingsFormProps {
     president: string;
     members: ZoneMember[];
     odcav: string;
+    orcav: string;
     oncav: string;
   };
 }
@@ -35,6 +36,7 @@ export function ZoneSettingsForm({ zoneId, initialData }: ZoneSettingsFormProps)
       : [{ name: "", poste: "", phone: "" }]
   );
   const [odcav, setOdcav] = useState(initialData.odcav);
+  const [orcav, setOrcav] = useState(initialData.orcav);
   const [oncav, setOncav] = useState(initialData.oncav);
 
   function addMember() {
@@ -60,6 +62,7 @@ export function ZoneSettingsForm({ zoneId, initialData }: ZoneSettingsFormProps)
       president,
       members,
       odcav,
+      orcav,
       oncav,
     });
     if (result.error) {
@@ -100,6 +103,10 @@ export function ZoneSettingsForm({ zoneId, initialData }: ZoneSettingsFormProps)
           <div className="space-y-2">
             <Label>ODCAV</Label>
             <Input value={odcav} onChange={(e) => setOdcav(e.target.value)} placeholder="ODCAV de rattachement" />
+          </div>
+          <div className="space-y-2">
+            <Label>ORCAV</Label>
+            <Input value={orcav} onChange={(e) => setOrcav(e.target.value)} placeholder="ORCAV" />
           </div>
           <div className="space-y-2">
             <Label>ONCAV</Label>

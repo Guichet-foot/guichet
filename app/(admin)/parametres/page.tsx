@@ -49,6 +49,7 @@ export default async function ParametresPage({
           president: zone.president || "",
           members: zone.members || [],
           odcav: zone.odcav || "",
+          orcav: zone.orcav || "",
           oncav: zone.oncav || "",
         }}
       />
