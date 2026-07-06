@@ -31,6 +31,7 @@ interface SidebarProps {
   userName: string;
   userRole: UserRole;
   zoneName?: string;
+  permittedModules?: string[] | null;
 }
 
 const adminLinks = [
@@ -64,17 +65,26 @@ const c3Links = [
   { href: "/parametres-c3",  label: "Paramètre C3",      icon: Network },
 ];
 
-export function SidebarAdmin({ userName, userRole, zoneName }: SidebarProps) {
+export function SidebarAdmin({ userName, userRole, zoneName, permittedModules }: SidebarProps) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
 
-  const links =
+  const baseLinks =
     userRole === "c3"
       ? c3Links
-      : userRole === "super_admin" || userRole === "fondateur"
+      : userRole === "super_admin" || userRole === "president_odcav" || userRole === "fondateur"
       ? [...adminLinks, ...superAdminLinks]
       : adminLinks;
+
+  // Filter by permitted_modules when set (null = all modules visible)
+  const links =
+    permittedModules && permittedModules.length > 0
+      ? baseLinks.filter((l) => {
+          const key = l.href.replace(/^\//, "");
+          return key === "dashboard" || permittedModules.includes(key);
+        })
+      : baseLinks;
 
   async function handleLogout() {
     const supabase = createClient();

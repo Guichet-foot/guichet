@@ -1,4 +1,4 @@
-export type UserRole = "fondateur" | "super_admin" | "admin_zone" | "caissier" | "portier" | "c3";
+export type UserRole = "fondateur" | "president_odcav" | "super_admin" | "admin_zone" | "caissier" | "portier" | "c3";
 
 export type MatchStatus = "programme" | "en_cours" | "termine" | "annule";
 
@@ -43,6 +43,8 @@ export interface Profile {
   created_at: string;
   email?: string;
   zone?: Zone;
+  city?: string | null;
+  permitted_modules?: string[] | null;
 }
 
 export interface Team {

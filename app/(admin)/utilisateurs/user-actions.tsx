@@ -76,8 +76,12 @@ export function UserActions({
 
   const isSelf = user.id === currentUserId;
 
-  // A Président de zone can only be managed by super_admin
-  const isProtectedPresident = user.is_president && currentUserRole !== "super_admin";
+  // Président ODCAV can only be managed by fondateur (never shown here, but guard anyway)
+  const isProtectedOdcavPresident = user.role === "president_odcav";
+  // Président de zone can only be managed by super_admin or president_odcav
+  const isProtectedPresident =
+    isProtectedOdcavPresident ||
+    (user.is_president && currentUserRole !== "super_admin" && currentUserRole !== "president_odcav");
 
   // Roles available in the edit dialog
   const editableRoles = (() => {
@@ -254,16 +258,22 @@ export function UserActions({
     );
   }
 
-  // President account: show a lock indicator for non-super_admin
+  // Protected accounts — show lock indicator
   if (isProtectedPresident) {
+    const label = isProtectedOdcavPresident
+      ? "Protégé — seul le fondateur"
+      : "Protégé — seul le Super Admin";
+    const title = isProtectedOdcavPresident
+      ? "Seul le fondateur peut modifier ce compte"
+      : "Seul le Super Admin peut modifier ce compte";
     return (
       <div className="flex justify-end">
         <span
           className="flex items-center gap-1 text-xs text-amber-700 font-medium px-2 py-1 rounded bg-amber-50 border border-amber-200"
-          title="Seul le Super Admin peut modifier ce compte"
+          title={title}
         >
           <ShieldAlert className="h-3 w-3" />
-          Protégé
+          {label}
         </span>
       </div>
     );

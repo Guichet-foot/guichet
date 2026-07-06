@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { createUser } from "@/lib/actions/user-actions";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -19,10 +19,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowLeft, Copy, Loader2, Crown } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
+import { ADMIN_MODULES } from "@/lib/constants";
 import type { Zone } from "@/lib/types";
 
 export default function NewUserPage() {
-  const router = useRouter();
+  const searchParams = useSearchParams();
+  const zoneParam = searchParams.get("zone");
+  const tabParam = searchParams.get("tab"); // "directs" = comptes directs tab
+  const isDirectsMode = tabParam === "directs";
+
   const [loading, setLoading] = useState(false);
   const [zones, setZones] = useState<Zone[]>([]);
   const [tempPassword, setTempPassword] = useState<string | null>(null);
@@ -34,8 +39,11 @@ export default function NewUserPage() {
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [role, setRole] = useState<string>("");
-  const [zoneId, setZoneId] = useState<string>("");
+  const [zoneId, setZoneId] = useState<string>(zoneParam ?? "");
   const [isPresident, setIsPresident] = useState(false);
+  const [city, setCity] = useState("");
+  const [allModules, setAllModules] = useState(true);
+  const [selectedModules, setSelectedModules] = useState<string[]>([]);
 
   useEffect(() => {
     async function init() {
@@ -57,7 +65,8 @@ export default function NewUserPage() {
         }
       }
 
-      if (profile?.role === "super_admin") {
+      const isOdcav = profile?.role === "super_admin" || profile?.role === "president_odcav";
+      if (isOdcav) {
         const { data } = await supabase.from("zones").select("*").order("name");
         if (data) setZones(data);
       }
@@ -65,20 +74,29 @@ export default function NewUserPage() {
     init();
   }, []);
 
-  // Reset isPresident when role changes away from admin_zone
   useEffect(() => {
     if (role !== "admin_zone") setIsPresident(false);
+    if (role !== "c3") setCity("");
+    if (role !== "super_admin") { setAllModules(true); setSelectedModules([]); }
   }, [role]);
 
-  // Available roles depend on who is creating
+  const isOdcavRole = currentUserRole === "super_admin" || currentUserRole === "president_odcav";
+
+  // ── Available roles ─────────────────────────────────────────────
   const availableRoles = (() => {
-    if (currentUserRole === "super_admin") {
+    if (isOdcavRole) {
+      if (isDirectsMode) {
+        // Comptes directs: C3 and direct super_admin sub-accounts
+        return [
+          { value: "c3",         label: "Coordination C3" },
+          { value: "super_admin",label: "Super Admin (accès direct)" },
+        ];
+      }
+      // Zone-based creation (from ?zone=xxx or zone card): no C3, no super_admin
       return [
         { value: "admin_zone", label: "Admin Zone" },
-        { value: "c3",         label: "Coordination C3" },
         { value: "caissier",   label: "Caissier" },
         { value: "portier",    label: "Portier" },
-        { value: "super_admin",label: "Super Admin" },
       ];
     }
     if (currentUserRole === "admin_zone" && currentUserIsPresident) {
@@ -88,29 +106,42 @@ export default function NewUserPage() {
         { value: "portier",    label: "Portier" },
       ];
     }
-    // Regular admin_zone or c3: caissier/portier only
     return [
       { value: "caissier", label: "Caissier" },
       { value: "portier",  label: "Portier" },
     ];
   })();
 
-  // Show "Président de zone" checkbox only for super_admin creating an admin_zone
-  const showPresidentCheckbox = currentUserRole === "super_admin" && role === "admin_zone";
-  // C3 has no zone assignment — hide zone selector for c3 role
-  const hideZoneSelector = role === "c3" || role === "super_admin";
+  const showPresidentCheckbox = isOdcavRole && role === "admin_zone";
+  const showZoneSelector = isOdcavRole && !isDirectsMode && !zoneParam && role && role !== "c3" && role !== "super_admin";
+  const showCityField = role === "c3";
+  const showModuleSelector = isDirectsMode && role === "super_admin";
+
+  function toggleModule(key: string) {
+    setSelectedModules((prev) =>
+      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
+    );
+  }
+
+  const backHref = isDirectsMode ? "/utilisateurs?tab=directs" : zoneParam ? `/utilisateurs?zone=${zoneParam}` : "/utilisateurs";
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
 
+    const permittedModules = showModuleSelector && !allModules && selectedModules.length > 0
+      ? selectedModules
+      : null;
+
     const result = await createUser({
       email,
       fullName,
       phone,
-      role: role as "super_admin" | "admin_zone" | "caissier" | "portier",
-      zoneId: (role === "super_admin" || role === "c3") ? null : zoneId || null,
+      role: role as any,
+      zoneId: isDirectsMode || role === "c3" || role === "super_admin" ? null : zoneId || null,
       isPresident: role === "admin_zone" ? isPresident : false,
+      city: showCityField ? city || null : null,
+      permittedModules,
     });
 
     if (result.error) {
@@ -151,14 +182,15 @@ export default function NewUserPage() {
               </Button>
             </div>
             <div className="flex gap-2">
-              <Link href="/utilisateurs" className="flex-1">
+              <Link href={backHref} className="flex-1">
                 <Button variant="outline" className="w-full">Retour à la liste</Button>
               </Link>
               <Button
                 className="flex-1 bg-brand hover:bg-brand/90"
                 onClick={() => {
                   setTempPassword(null);
-                  setEmail(""); setFullName(""); setPhone(""); setRole(""); setZoneId(""); setIsPresident(false);
+                  setEmail(""); setFullName(""); setPhone(""); setRole(""); setZoneId(zoneParam ?? "");
+                  setIsPresident(false); setCity(""); setAllModules(true); setSelectedModules([]);
                 }}
               >
                 Créer un autre
@@ -173,7 +205,7 @@ export default function NewUserPage() {
   return (
     <div className="max-w-md mx-auto space-y-6">
       <div className="flex items-center gap-4">
-        <Link href="/utilisateurs">
+        <Link href={backHref}>
           <Button variant="ghost" size="sm">
             <ArrowLeft className="h-4 w-4 mr-1" />Retour
           </Button>
@@ -213,7 +245,50 @@ export default function NewUserPage() {
               </Select>
             </div>
 
-            {/* Président de zone — only super_admin creating an admin_zone */}
+            {/* Ville — only for C3 */}
+            {showCityField && (
+              <div className="space-y-2">
+                <Label htmlFor="city">Ville</Label>
+                <Input
+                  id="city"
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
+                  placeholder="ex: NGUEKOKH"
+                />
+                <p className="text-xs text-muted-foreground">Le compte s&apos;appellera C3 {city || "…"}</p>
+              </div>
+            )}
+
+            {/* Module permissions — for direct super_admin sub-accounts */}
+            {showModuleSelector && (
+              <div className="rounded-lg border p-4 space-y-3">
+                <p className="text-sm font-semibold">Modules accessibles</p>
+                <div className="flex items-center gap-3">
+                  <Checkbox
+                    id="allModules"
+                    checked={allModules}
+                    onCheckedChange={(v: boolean | "indeterminate") => setAllModules(v === true)}
+                  />
+                  <Label htmlFor="allModules" className="cursor-pointer font-medium">Tous les modules</Label>
+                </div>
+                {!allModules && (
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    {ADMIN_MODULES.map((mod) => (
+                      <div key={mod.key} className="flex items-center gap-2">
+                        <Checkbox
+                          id={`mod-${mod.key}`}
+                          checked={selectedModules.includes(mod.key)}
+                          onCheckedChange={() => toggleModule(mod.key)}
+                        />
+                        <Label htmlFor={`mod-${mod.key}`} className="cursor-pointer text-sm">{mod.label}</Label>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Président de zone */}
             {showPresidentCheckbox && (
               <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-1">
                 <div className="flex items-center gap-3">
@@ -233,8 +308,8 @@ export default function NewUserPage() {
               </div>
             )}
 
-            {/* Zone selector — super_admin only, for zone-based roles */}
-            {role && !hideZoneSelector && currentUserRole === "super_admin" && (
+            {/* Zone selector — super_admin creating zone-based role */}
+            {showZoneSelector && (
               <div className="space-y-2">
                 <Label>Zone</Label>
                 <Select value={zoneId} onValueChange={(v) => setZoneId(v ?? "")} required>

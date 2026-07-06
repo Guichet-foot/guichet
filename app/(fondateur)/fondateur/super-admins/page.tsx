@@ -3,7 +3,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Users } from "lucide-react";
+import { Users, Crown } from "lucide-react";
 import { formatFCFA } from "@/lib/format";
 import { CreateSuperAdminForm } from "./create-super-admin-form";
 import { SuperAdminActions } from "./super-admin-actions";
@@ -27,8 +27,8 @@ export default async function SuperAdminsPage({
 
   const { data: superAdmins } = await supabase
     .from("profiles")
-    .select("id, full_name, phone, active, created_at")
-    .eq("role", "super_admin")
+    .select("id, full_name, phone, active, role, created_at")
+    .in("role", ["super_admin", "president_odcav"])
     .eq("created_by_admin", profile.id)
     .order("created_at", { ascending: false });
 
@@ -73,7 +73,7 @@ export default async function SuperAdminsPage({
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold font-heading">Super Admins</h1>
+          <h1 className="text-2xl font-bold font-heading">Admins ODCAV</h1>
           <p className="text-muted-foreground">{superAdmins?.length || 0} compte(s)</p>
         </div>
         <CreateSuperAdminForm />
@@ -110,7 +110,14 @@ export default async function SuperAdminsPage({
                   const s = stats[sa.id] || { zones: 0, revenue: 0 };
                   return (
                     <TableRow key={sa.id}>
-                      <TableCell className="font-semibold">{sa.full_name}</TableCell>
+                      <TableCell className="font-semibold">
+                        <div className="flex items-center gap-2">
+                          {sa.role === "president_odcav" && (
+                            <Crown className="h-4 w-4 text-amber-500 shrink-0" />
+                          )}
+                          {sa.full_name}
+                        </div>
+                      </TableCell>
                       <TableCell className="hidden sm:table-cell">{sa.phone || "—"}</TableCell>
                       <TableCell className="text-center">{s.zones}</TableCell>
                       <TableCell className="text-right font-bold text-brand">{formatFCFA(s.revenue)}</TableCell>

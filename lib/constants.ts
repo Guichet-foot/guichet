@@ -40,6 +40,7 @@ export const EXPENSE_CATEGORY_LABELS: Record<string, string> = {
 
 export const ROLE_LABELS: Record<string, string> = {
   fondateur: "Fondateur",
+  president_odcav: "Président ODCAV",
   super_admin: "Super Admin",
   admin_zone: "Admin Zone",
   caissier: "Caissier",
@@ -49,12 +50,28 @@ export const ROLE_LABELS: Record<string, string> = {
 
 export const ROLE_COLORS: Record<string, string> = {
   fondateur: "bg-amber-100 text-amber-800",
+  president_odcav: "bg-amber-100 text-amber-800",
   super_admin: "bg-purple-100 text-purple-800",
   admin_zone: "bg-brand/10 text-brand",
   caissier: "bg-accent-gold/20 text-amber-800",
   portier: "bg-blue-100 text-blue-800",
   c3: "bg-teal-100 text-teal-800",
 };
+
+// Modules disponibles pour la sélection de permissions
+export const ADMIN_MODULES = [
+  { key: "equipes",          label: "Équipes" },
+  { key: "billets",          label: "Billets" },
+  { key: "matchs",           label: "Matchs" },
+  { key: "finances",         label: "Finances" },
+  { key: "invendus",         label: "Invendus" },
+  { key: "rapports",         label: "Rapports" },
+  { key: "utilisateurs",     label: "Utilisateurs" },
+  { key: "cartes",           label: "Cartes d'accès" },
+  { key: "parametres",       label: "Paramètres Zone" },
+  { key: "zones",            label: "Zones" },
+  { key: "parametres-odcav", label: "Paramètre ODCAV" },
+];
 
 export const CATEGORY_COLORS = [
   "bg-brand text-white",

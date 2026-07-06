@@ -28,10 +28,6 @@ async function canManage(targetUserId: string): Promise<
 
   if (!caller) return { error: "Profil introuvable" };
 
-  // super_admin may manage anyone
-  if (caller.role === "super_admin") return { caller: { id: currentUser.id, ...caller } };
-
-  // For all others we need to inspect the target
   const adminClient = await createAdminClient();
   const { data: target } = await adminClient
     .from("profiles")
@@ -40,6 +36,16 @@ async function canManage(targetUserId: string): Promise<
     .single();
 
   if (!target) return { error: "Utilisateur introuvable" };
+
+  // Président ODCAV can only be managed by fondateur
+  if (target.role === "president_odcav" && caller.role !== "fondateur") {
+    return { error: "Seul le fondateur peut modifier le compte d'un Président ODCAV" };
+  }
+
+  // super_admin and president_odcav may manage anyone below their level
+  if (caller.role === "super_admin" || caller.role === "president_odcav") {
+    return { caller: { id: currentUser.id, ...caller } };
+  }
 
   // C3 can only manage caissier/portier they themselves created
   if (caller.role === "c3") {
@@ -73,6 +79,8 @@ export async function createUser(formData: {
   role: UserRole;
   zoneId: string | null;
   isPresident?: boolean;
+  city?: string | null;
+  permittedModules?: string[] | null;
 }) {
   const supabase = await createClient();
   const { data: { user: currentUser } } = await supabase.auth.getUser();
@@ -84,8 +92,16 @@ export async function createUser(formData: {
     .eq("id", currentUser.id)
     .single();
 
-  if (!caller || !["super_admin", "admin_zone", "c3"].includes(caller.role)) {
+  if (!caller || !["super_admin", "president_odcav", "admin_zone", "c3"].includes(caller.role)) {
     return { error: "Non autorisé" };
+  }
+
+  // ── Rules for super_admin and president_odcav callers ─────────
+  if (caller.role === "super_admin" || caller.role === "president_odcav") {
+    // Neither can create another president_odcav (only fondateur can)
+    if (formData.role === "president_odcav") {
+      return { error: "Seul le fondateur peut créer un Président ODCAV" };
+    }
   }
 
   // ── Rules for C3 callers ──────────────────────────────────────
@@ -114,9 +130,10 @@ export async function createUser(formData: {
     formData.zoneId = caller.zone_id;
   }
 
-  // Only super_admin may set is_president, and only for admin_zone
+  // Only super_admin/president_odcav may set is_president, and only for admin_zone
   const isPresident =
-    caller.role === "super_admin" && formData.role === "admin_zone"
+    (caller.role === "super_admin" || caller.role === "president_odcav") &&
+    formData.role === "admin_zone"
       ? (formData.isPresident ?? false)
       : false;
 
@@ -142,6 +159,8 @@ export async function createUser(formData: {
     active: true,
     is_president: isPresident,
     created_by_admin: currentUser.id,
+    city: formData.city || null,
+    permitted_modules: formData.permittedModules || null,
   });
 
   if (profileError) {

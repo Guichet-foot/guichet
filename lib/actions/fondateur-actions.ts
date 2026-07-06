@@ -7,6 +7,7 @@ export async function createSuperAdmin(formData: {
   email: string;
   fullName: string;
   phone: string;
+  role?: "super_admin" | "president_odcav";
 }) {
   const supabase = await createClient();
   const { data: { user: currentUser } } = await supabase.auth.getUser();
@@ -40,7 +41,7 @@ export async function createSuperAdmin(formData: {
     id: authUser.user.id,
     full_name: formData.fullName,
     phone: formData.phone || null,
-    role: "super_admin",
+    role: formData.role ?? "super_admin",
     zone_id: null,
     active: true,
     created_by_admin: currentUser.id,
