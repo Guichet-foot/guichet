@@ -76,15 +76,26 @@ export async function updateSuperAdminInfo(userId: string, formData: {
   fullName: string;
   phone: string;
   email: string;
+  role?: "super_admin" | "president_odcav";
 }) {
+  const supabase = await createClient();
+  const { data: { user: currentUser } } = await supabase.auth.getUser();
+  if (!currentUser) return { error: "Non authentifié" };
+
+  const { data: caller } = await supabase.from("profiles").select("role").eq("id", currentUser.id).single();
+  if (caller?.role !== "fondateur") return { error: "Non autorisé" };
+
   const adminClient = await createAdminClient();
+
+  const updatePayload: Record<string, unknown> = {
+    full_name: formData.fullName,
+    phone: formData.phone || null,
+  };
+  if (formData.role) updatePayload.role = formData.role;
 
   const { error: profileError } = await adminClient
     .from("profiles")
-    .update({
-      full_name: formData.fullName,
-      phone: formData.phone || null,
-    })
+    .update(updatePayload)
     .eq("id", userId);
 
   if (profileError) return { error: profileError.message };

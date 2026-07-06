@@ -128,7 +128,7 @@ export default async function SuperAdminsPage({
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex gap-1 justify-end">
-                          <SuperAdminActions userId={sa.id} active={sa.active} name={sa.full_name} phone={sa.phone} email={emails[sa.id]} />
+                          <SuperAdminActions userId={sa.id} active={sa.active} name={sa.full_name} phone={sa.phone} email={emails[sa.id]} role={sa.role} />
                           <Link href={`/fondateur/super-admins/${sa.id}`}>
                             <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
                               <Eye className="h-3 w-3" />

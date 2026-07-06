@@ -11,6 +11,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -25,9 +32,10 @@ interface SuperAdminActionsProps {
   name: string;
   phone?: string;
   email?: string;
+  role: string;
 }
 
-export function SuperAdminActions({ userId, active, name, phone, email }: SuperAdminActionsProps) {
+export function SuperAdminActions({ userId, active, name, phone, email, role }: SuperAdminActionsProps) {
   const [loading, setLoading] = useState<string | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [passwordOpen, setPasswordOpen] = useState(false);
@@ -36,6 +44,17 @@ export function SuperAdminActions({ userId, active, name, phone, email }: SuperA
   const [editName, setEditName] = useState(name);
   const [editPhone, setEditPhone] = useState(phone || "");
   const [editEmail, setEditEmail] = useState(email || "");
+  const [editRole, setEditRole] = useState<"super_admin" | "president_odcav">(
+    role === "president_odcav" ? "president_odcav" : "super_admin"
+  );
+
+  function openEdit() {
+    setEditName(name);
+    setEditPhone(phone || "");
+    setEditEmail(email || "");
+    setEditRole(role === "president_odcav" ? "president_odcav" : "super_admin");
+    setEditOpen(true);
+  }
 
   async function handleToggle() {
     setLoading("toggle");
@@ -60,6 +79,7 @@ export function SuperAdminActions({ userId, active, name, phone, email }: SuperA
       fullName: editName,
       phone: editPhone,
       email: editEmail,
+      role: editRole,
     }) as any;
     if (result.error) toast.error(result.error);
     else { toast.success("Informations modifiées"); setEditOpen(false); }
@@ -76,7 +96,7 @@ export function SuperAdminActions({ userId, active, name, phone, email }: SuperA
 
   return (
     <>
-      <Button type="button" variant="ghost" size="sm" onClick={() => { setEditName(name); setEditPhone(phone || ""); setEditEmail(email || ""); setEditOpen(true); }}
+      <Button type="button" variant="ghost" size="sm" onClick={openEdit}
         className="h-7 w-7 p-0" title="Modifier">
         <Pencil className="h-3 w-3" />
       </Button>
@@ -96,8 +116,27 @@ export function SuperAdminActions({ userId, active, name, phone, email }: SuperA
       {/* Edit dialog */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Modifier le Super Admin</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Modifier le compte</DialogTitle>
+          </DialogHeader>
           <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Type de compte</Label>
+              <Select value={editRole} onValueChange={(v) => setEditRole(v as "super_admin" | "president_odcav")}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="super_admin">Super Admin</SelectItem>
+                  <SelectItem value="president_odcav">Président ODCAV</SelectItem>
+                </SelectContent>
+              </Select>
+              {editRole === "president_odcav" && (
+                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
+                  Le Président ODCAV a les mêmes droits que le Super Admin. Son compte est protégé — seul vous pouvez le modifier ou le supprimer.
+                </p>
+              )}
+            </div>
             <div className="space-y-2">
               <Label>Nom complet</Label>
               <Input value={editName} onChange={(e) => setEditName(e.target.value)} required />

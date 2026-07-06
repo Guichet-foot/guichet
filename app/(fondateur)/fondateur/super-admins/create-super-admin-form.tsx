@@ -81,12 +81,7 @@ export function CreateSuperAdminForm() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="super_admin">Super Admin</SelectItem>
-                  <SelectItem value="president_odcav">
-                    <span className="flex items-center gap-2">
-                      <Crown className="h-4 w-4 text-amber-500" />
-                      Président ODCAV
-                    </span>
-                  </SelectItem>
+                  <SelectItem value="president_odcav">Président ODCAV</SelectItem>
                 </SelectContent>
               </Select>
               {role === "president_odcav" && (
