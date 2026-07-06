@@ -91,6 +91,63 @@ export async function createTickets(matchId: string, categoryId: string, quantit
   };
 }
 
+// ── printTicketBloc ───────────────────────────────────────────────
+// ODCAV / fondateur pre-print physical ticket blocks (100 tickets = 1 bloc).
+// No vente_active check — ODCAV prints before the match starts.
+// No quantity_total limit — ODCAV decides how many to print.
+export async function printTicketBloc(matchId: string, categoryId: string, blocs: number) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Non authentifié" };
+
+  const { data: profile } = await supabase
+    .from("profiles").select("role").eq("id", user.id).single();
+
+  if (!profile || !["super_admin", "fondateur"].includes(profile.role)) {
+    return { error: "Non autorisé — réservé à l'ODCAV et au fondateur" };
+  }
+
+  const qty = Math.max(1, blocs) * 100;
+  const adminClient = await createAdminClient();
+
+  const { data: category } = await adminClient
+    .from("ticket_categories").select("price, name").eq("id", categoryId).single();
+  if (!category) return { error: "Catégorie introuvable" };
+
+  const { data: match } = await adminClient
+    .from("matches").select("status").eq("id", matchId).single();
+  if (!match) return { error: "Match introuvable" };
+  if (match.status === "termine" || match.status === "annule") {
+    return { error: "Ce match est terminé ou annulé" };
+  }
+
+  const today = format(new Date(), "yyyyMMdd");
+  const { count: todayCount } = await adminClient
+    .from("tickets").select("*", { count: "exact", head: true })
+    .like("serial_number", `GF-${today}-%`);
+
+  const batchId = crypto.randomUUID();
+  const baseCount = todayCount || 0;
+  const ticketsToInsert = Array.from({ length: qty }, (_, i) => ({
+    match_id: matchId,
+    category_id: categoryId,
+    price: category.price,
+    serial_number: `GF-${today}-${String(baseCount + i + 1).padStart(5, "0")}`,
+    sold_by: user.id,
+    status: "vendu",
+    sale_batch_id: batchId,
+  }));
+
+  // Insert in chunks of 100 to stay within request limits
+  for (let i = 0; i < ticketsToInsert.length; i += 100) {
+    const { error } = await adminClient.from("tickets").insert(ticketsToInsert.slice(i, i + 100));
+    if (error) return { error: error.message };
+  }
+
+  revalidatePath("/matchs");
+  return { batchId };
+}
+
 export async function validateTicket(qrToken: string): Promise<ScanResult> {
   const supabase = await createClient();
   const adminClient = await createAdminClient();

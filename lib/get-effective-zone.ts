@@ -37,12 +37,12 @@ export async function getEffectiveZone(
 
   const supabase = await createClient();
 
-  const { data: zones } = await supabase
-    .from("zones")
-    .select("*")
-    .eq("created_by", profile.id)
-    .order("name");
+  // Fondateur sees ALL zones; super_admin sees only their own
+  const zonesQuery = profile.role === "fondateur"
+    ? supabase.from("zones").select("*").order("name")
+    : supabase.from("zones").select("*").eq("created_by", profile.id).order("name");
 
+  const { data: zones } = await zonesQuery;
   const ownedZones = (zones || []) as Zone[];
 
   if (zoneParam) {

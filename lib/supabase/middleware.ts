@@ -126,15 +126,18 @@ export async function updateSession(request: NextRequest) {
   if (isFondateurRoute && profile.role !== "fondateur") {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
-  if (profile.role === "fondateur" && !isFondateurRoute) {
-    return NextResponse.redirect(new URL("/fondateur/dashboard", request.url));
-  }
 
   const adminRoutes = [
     "/dashboard", "/equipes", "/utilisateurs",
     "/zones", "/billets", "/matchs", "/finances", "/rapports", "/parametres",
     "/invendus", "/cartes", "/parametres-odcav", "/parametres-c3",
   ];
+
+  // Fondateur may access their own dashboard (/fondateur/*) OR admin zone routes (/matchs, /billets, etc.)
+  const isAdminRouteForFondateur = adminRoutes.some((r) => pathname.startsWith(r));
+  if (profile.role === "fondateur" && !isFondateurRoute && !isAdminRouteForFondateur) {
+    return NextResponse.redirect(new URL("/fondateur/dashboard", request.url));
+  }
   const caissierRoutes = ["/vente", "/scanner", "/mes-ventes"];
   const portierRoutes = ["/scanner"];
 

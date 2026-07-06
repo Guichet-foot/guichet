@@ -72,7 +72,7 @@ export function SidebarAdmin({ userName, userRole, zoneName }: SidebarProps) {
   const links =
     userRole === "c3"
       ? c3Links
-      : userRole === "super_admin"
+      : userRole === "super_admin" || userRole === "fondateur"
       ? [...adminLinks, ...superAdminLinks]
       : adminLinks;
 

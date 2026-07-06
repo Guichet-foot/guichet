@@ -189,9 +189,9 @@ export function MatchMobileActions({ match, stats, detailUrl }: MatchMobileActio
                     {loading === "vente" ? (
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                     ) : match.vente_active ? (
-                      <><ShoppingCartIcon className="h-4 w-4 mr-2" />Fermer la vente</>
+                      <><ShoppingCartIcon className="h-4 w-4 mr-2" />Arrêter la vente</>
                     ) : (
-                      <><ShoppingCart className="h-4 w-4 mr-2" />Ouvrir la vente</>
+                      <><ShoppingCart className="h-4 w-4 mr-2" />Démarrer la vente</>
                     )}
                   </Button>
                   <Button

@@ -122,19 +122,19 @@ export function MatchActionButtons({ matchId, zoneId, status, venteActive, homeT
           onClick={handleToggleVente}
           disabled={loading === "vente"}
           className={venteActive ? "text-danger border-danger" : "text-brand border-brand"}
-          title={venteActive ? "Fermer la vente" : "Ouvrir la vente"}
+          title={venteActive ? "Arrêter la vente" : "Démarrer la vente"}
         >
           {loading === "vente" ? (
             <Loader2 className="h-3 w-3 animate-spin" />
           ) : venteActive ? (
             <>
               <ShoppingCartIcon className="h-3 w-3 mr-1" />
-              Fermer vente
+              Arrêter
             </>
           ) : (
             <>
               <ShoppingCart className="h-3 w-3 mr-1" />
-              Ouvrir vente
+              Démarrer
             </>
           )}
         </Button>

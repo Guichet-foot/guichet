@@ -12,6 +12,7 @@ import { formatDateShort, formatFCFA } from "@/lib/format";
 import { buildZoneUrl } from "@/lib/zone-utils";
 import { MatchActionButtons } from "./match-action-buttons";
 import { MatchMobileActions } from "./match-mobile-actions";
+import { PrintBlocsButton } from "./print-blocs-button";
 import { ZoneCardGrid } from "@/components/zone-card-grid";
 import { ZoneBackHeader } from "@/components/zone-back-header";
 
@@ -24,7 +25,7 @@ export default async function MatchsPage({
 }: {
   searchParams: Promise<{ zone?: string }>;
 }) {
-  const profile = await requireRole(["super_admin", "admin_zone", "c3"]);
+  const profile = await requireRole(["super_admin", "admin_zone", "c3", "fondateur"]);
   const params = await searchParams;
   const { effectiveZoneId, selectedZone, ownedZones, needsZoneSelection, c3AccountId } =
     await getEffectiveZone(profile, params.zone);
@@ -121,11 +122,27 @@ export default async function MatchsPage({
                           <span className="text-muted-foreground text-xs">—</span>
                         )}
                       </TableCell>
-                      <TableCell className="hidden lg:table-cell text-right">{stats.count}</TableCell>
+                      <TableCell className="hidden lg:table-cell text-right">
+                        <div className="text-right leading-tight">
+                          <span>{stats.count}</span>
+                          {stats.count >= 100 && (
+                            <p className="text-xs text-muted-foreground">
+                              {Math.floor(stats.count / 100)} bloc{Math.floor(stats.count / 100) > 1 ? "s" : ""}
+                            </p>
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell className="hidden lg:table-cell text-right">{formatFCFA(stats.revenue)}</TableCell>
                       <TableCell className="text-right">
                         {/* Desktop: inline buttons */}
                         <div className="hidden sm:flex items-center gap-1 justify-end">
+                          {(profile.role === "super_admin" || profile.role === "fondateur") &&
+                            match.status !== "termine" && match.status !== "annule" && (
+                              <PrintBlocsButton
+                                matchId={match.id}
+                                matchName={`${match.home_team} vs ${match.away_team}`}
+                              />
+                          )}
                           <MatchActionButtons matchId={match.id} zoneId={match.zone_id} status={match.status} venteActive={match.vente_active ?? false} homeTeam={match.home_team} awayTeam={match.away_team} />
                           <Link href={buildZoneUrl(`/matchs/${match.id}`, params.zone)}>
                             <Button variant="ghost" size="sm"><Eye className="h-4 w-4" /></Button>

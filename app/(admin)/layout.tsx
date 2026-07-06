@@ -6,7 +6,7 @@ export default async function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const profile = await requireRole(["super_admin", "admin_zone", "c3"]);
+  const profile = await requireRole(["super_admin", "admin_zone", "c3", "fondateur"]);
 
   return (
     <div className="flex min-h-screen">
