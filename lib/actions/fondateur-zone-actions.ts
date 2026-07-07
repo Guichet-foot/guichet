@@ -52,16 +52,21 @@ export async function deleteZoneComplete(zoneId: string): Promise<{ error?: stri
   // 9. Delete access cards
   await adminClient.from("access_cards").delete().eq("zone_id", zoneId);
 
-  // 10. Delete zone member accounts (admin_zone, caissier, portier) — auth user + profile
+  // 10. Delete zone member accounts (admin_zone, caissier, portier)
   const { data: zoneProfiles } = await adminClient
     .from("profiles")
     .select("id")
     .eq("zone_id", zoneId);
 
-  if (zoneProfiles && zoneProfiles.length > 0) {
-    for (const p of zoneProfiles as { id: string }[]) {
-      // Delete from auth (may fail silently if already gone)
-      await adminClient.auth.admin.deleteUser(p.id);
+  const profileIds = (zoneProfiles || []).map((p: { id: string }) => p.id);
+
+  if (profileIds.length > 0) {
+    // Delete profile rows first — this removes the FK reference to zones
+    await adminClient.from("profiles").delete().in("id", profileIds);
+
+    // Then delete the auth users (no cascade issue now)
+    for (const uid of profileIds) {
+      await adminClient.auth.admin.deleteUser(uid);
     }
   }
 
