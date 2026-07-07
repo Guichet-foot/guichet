@@ -9,17 +9,18 @@ VALUES (
 )
 ON CONFLICT (id) DO NOTHING;
 
--- Permettre aux utilisateurs authentifiés d'uploader des photos de carte
-CREATE POLICY IF NOT EXISTS "auth upload card photos"
+-- Policies (DROP avant CREATE pour éviter les doublons)
+DROP POLICY IF EXISTS "auth upload card photos" ON storage.objects;
+CREATE POLICY "auth upload card photos"
 ON storage.objects FOR INSERT TO authenticated
 WITH CHECK (bucket_id = 'card-photos');
 
--- Accès public en lecture
-CREATE POLICY IF NOT EXISTS "public read card photos"
+DROP POLICY IF EXISTS "public read card photos" ON storage.objects;
+CREATE POLICY "public read card photos"
 ON storage.objects FOR SELECT TO public
 USING (bucket_id = 'card-photos');
 
--- Permettre la suppression par l'uploader
-CREATE POLICY IF NOT EXISTS "auth delete own card photos"
+DROP POLICY IF EXISTS "auth delete own card photos" ON storage.objects;
+CREATE POLICY "auth delete own card photos"
 ON storage.objects FOR DELETE TO authenticated
 USING (bucket_id = 'card-photos' AND auth.uid() = owner);
