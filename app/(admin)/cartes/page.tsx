@@ -1,16 +1,15 @@
 import { requireRole } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
+import { getEffectiveZone } from "@/lib/get-effective-zone";
 import { getAccessCards } from "@/lib/actions/carte-actions";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CreditCard, Plus } from "lucide-react";
 import Link from "next/link";
 import QRCode from "qrcode";
 import { CartesClient } from "./cartes-grid";
+import { ZoneCardGrid } from "@/components/zone-card-grid";
+import { ZoneBackHeader } from "@/components/zone-back-header";
 
 export const metadata = { title: "Cartes d'accès" };
-
-/* eslint-disable @typescript-eslint/no-explicit-any */
 
 export default async function CartesPage({
   searchParams,
@@ -20,29 +19,15 @@ export default async function CartesPage({
   const profile = await requireRole(["super_admin", "admin_zone"]);
   const params = await searchParams;
 
-  const supabase = await createClient();
+  const { effectiveZoneId, selectedZone, ownedZones, needsZoneSelection } =
+    await getEffectiveZone(profile, params.zone);
 
-  const isSuperAdmin = profile.role === "super_admin";
-
-  // RLS ensures super_admin only sees their own zones (created_by = auth.uid())
-  const { data: zonesRaw } = isSuperAdmin
-    ? await supabase.from("zones").select("id, name").order("name")
-    : { data: null };
-  const zones = (zonesRaw || []) as { id: string; name: string }[];
-
-  let filterZoneId: string | undefined;
-  if (isSuperAdmin) {
-    filterZoneId = params.zone || undefined;
-  } else {
-    const { data: prof } = await supabase
-      .from("profiles")
-      .select("zone_id")
-      .eq("id", profile.id)
-      .single();
-    filterZoneId = prof?.zone_id ?? undefined;
+  // ODCAV (super_admin / president_odcav) sans zone sélectionnée → grille de zones
+  if (needsZoneSelection) {
+    return <ZoneCardGrid zones={ownedZones} title="Cartes d'accès" />;
   }
 
-  const cards = await getAccessCards(filterZoneId);
+  const cards = await getAccessCards(effectiveZoneId ?? undefined);
 
   // Generate QR codes server-side
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://guichet-pi.vercel.app";
@@ -56,8 +41,19 @@ export default async function CartesPage({
     })
   );
 
+  // Build the "Créer une carte" link — pass zone param for ODCAV roles so the form pre-selects it
+  const isOdcavRole = profile.role === "super_admin" || profile.role === "president_odcav";
+  const createHref = isOdcavRole && effectiveZoneId
+    ? `/cartes/nouveau?zone=${effectiveZoneId}`
+    : "/cartes/nouveau";
+
   return (
     <div className="space-y-6">
+      {/* Back header for ODCAV navigating into a specific zone */}
+      {isOdcavRole && selectedZone && (
+        <ZoneBackHeader zoneName={selectedZone.name} />
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
@@ -71,31 +67,13 @@ export default async function CartesPage({
             </p>
           </div>
         </div>
-        <Link href="/cartes/nouveau">
+        <Link href={createHref}>
           <Button className="bg-green-700 hover:bg-green-800 text-white">
             <Plus className="h-4 w-4 mr-2" />
             Créer une carte
           </Button>
         </Link>
       </div>
-
-      {/* Zone filter */}
-      {isSuperAdmin && zones.length > 0 && (
-        <div className="flex gap-2 flex-wrap">
-          <Link href="/cartes">
-            <Badge variant={!filterZoneId ? "default" : "secondary"} className="cursor-pointer px-3 py-1">
-              Toutes les zones
-            </Badge>
-          </Link>
-          {zones.map((z) => (
-            <Link key={z.id} href={`/cartes?zone=${z.id}`}>
-              <Badge variant={filterZoneId === z.id ? "default" : "secondary"} className="cursor-pointer px-3 py-1">
-                {z.name}
-              </Badge>
-            </Link>
-          ))}
-        </div>
-      )}
 
       {/* Client: stats + tabs + grid */}
       <CartesClient items={items} />

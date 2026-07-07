@@ -9,22 +9,46 @@ export const metadata = { title: "Nouvelle carte d'accès" };
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-export default async function NouvelleCartePage() {
+export default async function NouvelleCartePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ zone?: string }>;
+}) {
   const profile = await requireRole(["super_admin", "admin_zone"]);
+  const params = await searchParams;
   const supabase = await createClient();
   const adminClient = await createAdminClient();
 
-  const isSuperAdmin = profile.role === "super_admin";
+  const isOdcavRole = profile.role === "super_admin" || profile.role === "president_odcav";
 
-  // Zones list
   let zones: { id: string; name: string }[] = [];
   let defaultZoneId = "";
   let defaultZoneName = "";
   let teams: { id: string; name: string }[] = [];
 
-  if (isSuperAdmin) {
-    const { data } = await adminClient.from("zones").select("id, name").order("name");
+  if (isOdcavRole) {
+    // Load zones owned by this ODCAV user
+    const { data } = await adminClient
+      .from("zones")
+      .select("id, name")
+      .eq("created_by", profile.id)
+      .order("name");
     zones = (data || []) as { id: string; name: string }[];
+
+    // If a zone was pre-selected from the cartes list page, load its teams
+    if (params.zone) {
+      const found = zones.find((z) => z.id === params.zone);
+      if (found) {
+        defaultZoneId = found.id;
+        defaultZoneName = found.name;
+        const { data: teamsData } = await adminClient
+          .from("teams")
+          .select("id, name")
+          .eq("zone_id", defaultZoneId)
+          .order("name");
+        teams = (teamsData || []) as { id: string; name: string }[];
+      }
+    }
   } else {
     // admin_zone: their own zone
     const { data: prof } = await supabase
@@ -47,10 +71,15 @@ export default async function NouvelleCartePage() {
     }
   }
 
+  // Back link: return to zone-specific cartes list for ODCAV, or generic list
+  const backHref = isOdcavRole && defaultZoneId
+    ? `/cartes?zone=${defaultZoneId}`
+    : "/cartes";
+
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       <div className="flex items-center gap-3">
-        <Link href="/cartes">
+        <Link href={backHref}>
           <Button variant="outline" size="sm">
             <ArrowLeft className="h-4 w-4 mr-1" />Retour
           </Button>
@@ -66,7 +95,7 @@ export default async function NouvelleCartePage() {
         zones={zones}
         defaultZoneId={defaultZoneId}
         defaultZoneName={defaultZoneName}
-        isSuperAdmin={isSuperAdmin}
+        isSuperAdmin={isOdcavRole}
         initialTeams={teams}
       />
     </div>
