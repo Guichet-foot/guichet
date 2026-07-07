@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { updateAccessCard, getZoneTeamsForCard, uploadCardPhoto, deleteAccessCard } from "@/lib/actions/carte-actions";
+import { updateAccessCard, getZoneTeamsForCard, deleteAccessCard } from "@/lib/actions/carte-actions";
+import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -116,15 +117,19 @@ export function CardEditForm({ card, zones, isSuperAdmin, initialTeams }: CardEd
 
     let finalPhotoUrl: string | null = card.photo_url ?? null;
     if (photoFile) {
-      const fd = new FormData();
-      fd.append("photo", photoFile);
-      const uploadResult = await uploadCardPhoto(fd);
-      if (uploadResult.error) {
-        toast.error("Erreur upload photo : " + uploadResult.error);
+      const supabase = createClient();
+      const ext = photoFile.name.split(".").pop() || "jpg";
+      const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+      const { error: uploadError } = await supabase.storage
+        .from("card-photos")
+        .upload(path, photoFile, { contentType: photoFile.type });
+      if (uploadError) {
+        toast.error("Erreur upload photo : " + uploadError.message);
         setLoading(false);
         return;
       }
-      finalPhotoUrl = uploadResult.url ?? null;
+      const { data: { publicUrl } } = supabase.storage.from("card-photos").getPublicUrl(path);
+      finalPhotoUrl = publicUrl;
     } else if (photoRemoved) {
       finalPhotoUrl = null;
     }

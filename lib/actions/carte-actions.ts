@@ -26,7 +26,7 @@ export async function createAccessCard(data: {
     .eq("id", user.id)
     .single();
 
-  if (!profile || !["super_admin", "admin_zone", "fondateur"].includes(profile.role)) {
+  if (!profile || !["super_admin", "president_odcav", "admin_zone", "fondateur"].includes(profile.role)) {
     return { error: "Non autorisé" };
   }
   if (profile.role === "admin_zone" && profile.zone_id !== data.zone_id) {
@@ -181,18 +181,7 @@ export async function uploadCardPhoto(
   const file = formData.get("photo") as File;
   if (!file || file.size === 0) return { error: "Aucun fichier" };
 
-  // Ensure bucket exists
   const adminClient = await createAdminClient();
-  const { data: buckets } = await adminClient.storage.listBuckets();
-  const exists = (buckets || []).some((b: any) => b.name === "card-photos");
-  if (!exists) {
-    await adminClient.storage.createBucket("card-photos", {
-      public: true,
-      allowedMimeTypes: ["image/jpeg", "image/png", "image/webp"],
-      fileSizeLimit: 5 * 1024 * 1024,
-    });
-  }
-
   const ext = file.name.split(".").pop() || "jpg";
   const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
   const buffer = Buffer.from(await file.arrayBuffer());

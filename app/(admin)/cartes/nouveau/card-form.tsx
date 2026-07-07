@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { createAccessCard, getZoneTeamsForCard, uploadCardPhoto } from "@/lib/actions/carte-actions";
+import { createAccessCard, getZoneTeamsForCard } from "@/lib/actions/carte-actions";
+import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -108,15 +109,19 @@ export function CardForm({
 
     let photoUrl: string | undefined;
     if (photoFile) {
-      const fd = new FormData();
-      fd.append("photo", photoFile);
-      const uploadResult = await uploadCardPhoto(fd);
-      if (uploadResult.error) {
-        toast.error("Erreur upload photo : " + uploadResult.error);
+      const supabase = createClient();
+      const ext = photoFile.name.split(".").pop() || "jpg";
+      const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+      const { error: uploadError } = await supabase.storage
+        .from("card-photos")
+        .upload(path, photoFile, { contentType: photoFile.type });
+      if (uploadError) {
+        toast.error("Erreur upload photo : " + uploadError.message);
         setLoading(false);
         return;
       }
-      photoUrl = uploadResult.url;
+      const { data: { publicUrl } } = supabase.storage.from("card-photos").getPublicUrl(path);
+      photoUrl = publicUrl;
     }
 
     const ascName = ascMode === "manual" ? ascManual.trim() : ascSelected;
