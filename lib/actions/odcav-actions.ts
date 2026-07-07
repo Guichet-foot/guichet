@@ -47,10 +47,11 @@ export async function getOdcavSettings(): Promise<OdcavSettings> {
 export async function updateOdcavSettings(settings: OdcavSettings) {
   const profile = await requireRole(["super_admin", "fondateur", "c3"]);
   const supabase = await createClient();
+  const adminClient = await createAdminClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Non authentifié" };
 
-  const { error } = await supabase.from("odcav_settings").upsert(
+  const { error } = await adminClient.from("odcav_settings").upsert(
     {
       id: user.id,
       logo_url: settings.logoUrl,

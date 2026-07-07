@@ -1,5 +1,5 @@
 import { requireRole } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { getEffectiveZone } from "@/lib/get-effective-zone";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -50,20 +50,27 @@ export default async function EquipesPage({
 
   const supabase = await createClient();
 
-  let query = supabase.from("teams").select("*").order("name");
+  let teams: any[] | null = null;
+
   if (c3AccountId) {
-    // C3 : filtre par les zones autorisées si définies, sinon aucun résultat
     const allowedZones = profile.allowed_zones;
     if (allowedZones && allowedZones.length > 0) {
-      query = query.in("zone_id", allowedZones);
+      // Migration lancée et zones assignées : requête admin par zones
+      const adminClient = await createAdminClient();
+      const { data } = await adminClient.from("teams").select("*").in("zone_id", allowedZones).order("name");
+      teams = data;
     } else {
-      query = query.eq("zone_id", "00000000-0000-0000-0000-000000000000"); // aucun résultat
+      // Ancien compte C3 sans allowed_zones : RLS gère la restriction
+      const { data } = await supabase.from("teams").select("*").order("name");
+      teams = data;
     }
-  } else if (effectiveZoneId) {
-    query = query.eq("zone_id", effectiveZoneId);
+  } else {
+    const baseQuery = supabase.from("teams").select("*").order("name");
+    const { data } = effectiveZoneId
+      ? await baseQuery.eq("zone_id", effectiveZoneId)
+      : await baseQuery;
+    teams = data;
   }
-
-  const { data: teams } = (await query) as { data: any[] | null };
 
   return (
     <div className="space-y-6">

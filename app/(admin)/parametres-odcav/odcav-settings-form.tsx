@@ -13,9 +13,10 @@ import { toast } from "sonner";
 
 interface OdcavSettingsFormProps {
   initialData: OdcavSettings;
+  showLogo?: boolean;
 }
 
-export function OdcavSettingsForm({ initialData }: OdcavSettingsFormProps) {
+export function OdcavSettingsForm({ initialData, showLogo = true }: OdcavSettingsFormProps) {
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [logoUrl, setLogoUrl] = useState(initialData.logoUrl);
@@ -136,7 +137,7 @@ export function OdcavSettingsForm({ initialData }: OdcavSettingsFormProps) {
           </div>
 
           {/* Logo upload */}
-          <div className="space-y-2">
+          {showLogo && <div className="space-y-2">
             <Label>Logo</Label>
             <input
               ref={fileInputRef}
@@ -200,7 +201,7 @@ export function OdcavSettingsForm({ initialData }: OdcavSettingsFormProps) {
                 <span className="text-xs text-muted-foreground">PNG, JPG, SVG — max 2 Mo</span>
               </button>
             )}
-          </div>
+          </div>}
         </CardContent>
       </Card>
 

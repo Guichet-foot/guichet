@@ -6,7 +6,7 @@ import { PackageX } from "lucide-react";
 export const metadata = { title: "Invendus" };
 
 export default async function InvendusPage() {
-  await requireRole(["super_admin", "admin_zone"]);
+  await requireRole(["super_admin", "admin_zone", "c3"]);
 
   const matches = await getFinishedMatches();
   const matchIds = matches.map((m: { id: string }) => m.id);
