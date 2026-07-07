@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, MapPin, Banknote, Ticket, Trophy } from "lucide-react";
 import { formatFCFA } from "@/lib/format";
+import { DeleteZoneButton } from "./delete-zone-button";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -23,7 +24,7 @@ export default async function SuperAdminDetailPage({
     .from("profiles")
     .select("id, full_name, phone, role, active, created_at")
     .eq("id", id)
-    .eq("role", "super_admin")
+    .in("role", ["super_admin", "president_odcav"])
     .single();
 
   if (!sa) notFound();
@@ -73,7 +74,7 @@ export default async function SuperAdminDetailPage({
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold font-heading">{sa.full_name}</h1>
-          <p className="text-muted-foreground">Super Admin</p>
+          <p className="text-muted-foreground">{sa.role === "president_odcav" ? "Président ODCAV" : "Super Admin"}</p>
         </div>
         <Badge variant="secondary" className={sa.active ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}>
           {sa.active ? "Actif" : "Suspendu"}
@@ -117,21 +118,29 @@ export default async function SuperAdminDetailPage({
               {zones.map((zone: any) => {
                 const s = zoneStats[zone.id] || { tickets: 0, revenue: 0, matches: 0 };
                 return (
-                  <div key={zone.id} className="flex items-center justify-between py-3 border-b last:border-0">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-lg bg-brand/10 flex items-center justify-center">
+                  <div key={zone.id} className="flex items-center justify-between py-3 border-b last:border-0 gap-3">
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <div className="w-10 h-10 rounded-lg bg-brand/10 flex items-center justify-center shrink-0">
                         <MapPin className="h-5 w-5 text-brand" />
                       </div>
-                      <div>
-                        <p className="font-semibold">{zone.name}</p>
+                      <div className="min-w-0">
+                        <p className="font-semibold truncate">{zone.name}</p>
                         <p className="text-xs text-muted-foreground">{zone.region || "—"}</p>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className="font-bold text-brand">{formatFCFA(s.revenue)}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {s.tickets} billets · {s.matches} matchs
-                      </p>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <div className="text-right">
+                        <p className="font-bold text-brand">{formatFCFA(s.revenue)}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {s.tickets} billets · {s.matches} matchs
+                        </p>
+                      </div>
+                      <DeleteZoneButton
+                        zoneId={zone.id}
+                        zoneName={zone.name}
+                        tickets={s.tickets}
+                        matches={s.matches}
+                      />
                     </div>
                   </div>
                 );
