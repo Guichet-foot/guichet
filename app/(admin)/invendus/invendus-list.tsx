@@ -49,9 +49,10 @@ type ConfirmType = "tout_vendus" | "terminer";
 interface Props {
   matches: Match[];
   unsoldMap: Record<string, UnsoldEntry>;
+  readOnly?: boolean;
 }
 
-export function InvendusList({ matches, unsoldMap }: Props) {
+export function InvendusList({ matches, unsoldMap, readOnly = false }: Props) {
   const router = useRouter();
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<{ match: Match; type: ConfirmType } | null>(null);
@@ -140,7 +141,7 @@ export function InvendusList({ matches, unsoldMap }: Props) {
 
                   {/* Status + actions */}
                   <div className="flex flex-wrap items-center gap-2 shrink-0">
-                    {/* Status badge */}
+                    {/* Status badge — always visible */}
                     {isClosed ? (
                       <Badge className="bg-slate-600 text-white gap-1 text-xs">
                         <Lock className="h-3 w-3" />Clôturé
@@ -159,52 +160,57 @@ export function InvendusList({ matches, unsoldMap }: Props) {
                       </Badge>
                     )}
 
-                    {/* Ajouter invendus */}
-                    <Link href={`/invendus/${match.id}/scanner`}
-                      aria-disabled={isClosed}
-                      tabIndex={isClosed ? -1 : undefined}
-                      onClick={(e) => isClosed && e.preventDefault()}
-                    >
-                      <Button size="sm" variant="outline" className="gap-1 text-xs h-8" disabled={isClosed}>
-                        <ScanLine className="h-3.5 w-3.5" />
-                        {isDeclared && hasUnsold ? "Scanner +" : "Ajouter invendus"}
-                      </Button>
-                    </Link>
+                    {/* Action buttons — hidden in read-only mode */}
+                    {!readOnly && (
+                      <>
+                        {/* Ajouter invendus */}
+                        <Link href={`/invendus/${match.id}/scanner`}
+                          aria-disabled={isClosed}
+                          tabIndex={isClosed ? -1 : undefined}
+                          onClick={(e) => isClosed && e.preventDefault()}
+                        >
+                          <Button size="sm" variant="outline" className="gap-1 text-xs h-8" disabled={isClosed}>
+                            <ScanLine className="h-3.5 w-3.5" />
+                            {isDeclared && hasUnsold ? "Scanner +" : "Ajouter invendus"}
+                          </Button>
+                        </Link>
 
-                    {/* Tout vendus */}
-                    <Button
-                      size="sm"
-                      variant={isToutVendus ? "ghost" : "outline"}
-                      className={`gap-1 text-xs h-8 ${
-                        isToutVendus || isClosed
-                          ? "text-muted-foreground"
-                          : "border-green-600 text-green-700 hover:bg-green-50"
-                      }`}
-                      onClick={() => setConfirmDialog({ match, type: "tout_vendus" })}
-                      disabled={isLoading || isToutVendus || isClosed}
-                    >
-                      {isLoading && loadingId === match.id + "_tv"
-                        ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        : <CheckCircle2 className="h-3.5 w-3.5" />
-                      }
-                      Tout vendus
-                    </Button>
+                        {/* Tout vendus */}
+                        <Button
+                          size="sm"
+                          variant={isToutVendus ? "ghost" : "outline"}
+                          className={`gap-1 text-xs h-8 ${
+                            isToutVendus || isClosed
+                              ? "text-muted-foreground"
+                              : "border-green-600 text-green-700 hover:bg-green-50"
+                          }`}
+                          onClick={() => setConfirmDialog({ match, type: "tout_vendus" })}
+                          disabled={isLoading || isToutVendus || isClosed}
+                        >
+                          {isLoading && loadingId === match.id + "_tv"
+                            ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            : <CheckCircle2 className="h-3.5 w-3.5" />
+                          }
+                          Tout vendus
+                        </Button>
 
-                    {/* Terminer */}
-                    <Button
-                      size="sm"
-                      variant={isClosed ? "ghost" : "outline"}
-                      className={`gap-1 text-xs h-8 ${
-                        isClosed
-                          ? "text-muted-foreground"
-                          : "border-slate-500 text-slate-700 hover:bg-slate-50"
-                      }`}
-                      onClick={() => setConfirmDialog({ match, type: "terminer" })}
-                      disabled={isLoading || isClosed}
-                    >
-                      {isLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Lock className="h-3.5 w-3.5" />}
-                      Terminer
-                    </Button>
+                        {/* Terminer */}
+                        <Button
+                          size="sm"
+                          variant={isClosed ? "ghost" : "outline"}
+                          className={`gap-1 text-xs h-8 ${
+                            isClosed
+                              ? "text-muted-foreground"
+                              : "border-slate-500 text-slate-700 hover:bg-slate-50"
+                          }`}
+                          onClick={() => setConfirmDialog({ match, type: "terminer" })}
+                          disabled={isLoading || isClosed}
+                        >
+                          {isLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Lock className="h-3.5 w-3.5" />}
+                          Terminer
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </div>
               </CardContent>

@@ -5,6 +5,19 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 
+// Lecture seule pour president_odcav : matchs terminés d'une zone spécifique
+export async function getFinishedMatchesForZone(zoneId: string): Promise<any[]> {
+  await requireRole(["super_admin"]);
+  const adminClient = await createAdminClient();
+  const { data } = await adminClient
+    .from("matches")
+    .select("id, home_team, away_team, match_date, venue, zone_id, zone:zones!matches_zone_id_fkey(name)")
+    .eq("status", "termine")
+    .eq("zone_id", zoneId)
+    .order("match_date", { ascending: false });
+  return (data || []) as any[];
+}
+
 export async function getFinishedMatches() {
   const profile = await requireRole(["super_admin", "admin_zone", "fondateur", "c3"]);
   const adminClient = await createAdminClient();
