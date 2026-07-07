@@ -1,6 +1,6 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
 export async function createTeam(formData: {
@@ -55,6 +55,14 @@ export async function updateTeam(
 
 export async function deleteTeam(teamId: string) {
   const supabase = await createClient();
+  const adminClient = await createAdminClient();
+
+  // Supprimer les références tournoi avant de supprimer l'équipe
+  await adminClient.from("tournament_group_teams").delete().eq("team_id", teamId);
+  await adminClient
+    .from("tournament_matches")
+    .delete()
+    .or(`home_team_id.eq.${teamId},away_team_id.eq.${teamId}`);
 
   const { error } = await supabase.from("teams").delete().eq("id", teamId);
 

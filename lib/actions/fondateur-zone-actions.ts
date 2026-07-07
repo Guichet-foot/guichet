@@ -46,13 +46,53 @@ export async function deleteZoneComplete(zoneId: string): Promise<{ error?: stri
   // 7. Delete ticket templates
   await adminClient.from("ticket_templates").delete().eq("zone_id", zoneId);
 
-  // 8. Delete teams
+  // 8. Supprimer les données de tournoi liées à cette zone
+  const { data: tournaments } = await adminClient
+    .from("tournaments")
+    .select("id")
+    .eq("zone_id", zoneId);
+
+  const tournamentIds = (tournaments || []).map((t: { id: string }) => t.id);
+
+  if (tournamentIds.length > 0) {
+    const { data: groups } = await adminClient
+      .from("tournament_groups")
+      .select("id")
+      .in("tournament_id", tournamentIds);
+
+    const groupIds = (groups || []).map((g: { id: string }) => g.id);
+
+    if (groupIds.length > 0) {
+      await adminClient.from("tournament_group_teams").delete().in("group_id", groupIds);
+    }
+
+    await adminClient.from("tournament_matches").delete().in("tournament_id", tournamentIds);
+    await adminClient.from("tournament_groups").delete().in("tournament_id", tournamentIds);
+    await adminClient.from("tournaments").delete().in("id", tournamentIds);
+  }
+
+  // Aussi supprimer tournament_group_teams orphelins liés aux équipes de cette zone
+  const { data: zoneTeams } = await adminClient
+    .from("teams")
+    .select("id")
+    .eq("zone_id", zoneId);
+
+  const teamIds = (zoneTeams || []).map((t: { id: string }) => t.id);
+  if (teamIds.length > 0) {
+    await adminClient.from("tournament_group_teams").delete().in("team_id", teamIds);
+    await adminClient
+      .from("tournament_matches")
+      .delete()
+      .or(teamIds.map((id: string) => `home_team_id.eq.${id},away_team_id.eq.${id}`).join(","));
+  }
+
+  // 9. Delete teams
   await adminClient.from("teams").delete().eq("zone_id", zoneId);
 
-  // 9. Delete access cards
+  // 10. Delete access cards
   await adminClient.from("access_cards").delete().eq("zone_id", zoneId);
 
-  // 10. Delete zone member accounts (admin_zone, caissier, portier)
+  // 11. Delete zone member accounts (admin_zone, caissier, portier)
   const { data: zoneProfiles } = await adminClient
     .from("profiles")
     .select("id")
@@ -77,7 +117,7 @@ export async function deleteZoneComplete(zoneId: string): Promise<{ error?: stri
     }
   }
 
-  // 11. Delete the zone itself
+  // 12. Delete the zone itself
   const { error } = await adminClient.from("zones").delete().eq("id", zoneId);
   if (error) return { error: error.message };
 
