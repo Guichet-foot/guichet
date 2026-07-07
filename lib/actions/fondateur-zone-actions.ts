@@ -61,10 +61,17 @@ export async function deleteZoneComplete(zoneId: string): Promise<{ error?: stri
   const profileIds = (zoneProfiles || []).map((p: { id: string }) => p.id);
 
   if (profileIds.length > 0) {
-    // Delete profile rows first — this removes the FK reference to zones
+    // Supprimer d'abord la référence auto-référentielle created_by_admin
+    // (caissier/portier pointent vers admin_zone — FK bloque la suppression en masse)
+    await adminClient
+      .from("profiles")
+      .update({ created_by_admin: null })
+      .in("id", profileIds);
+
+    // Supprimer les lignes profiles (enlève la FK zone_id → zones)
     await adminClient.from("profiles").delete().in("id", profileIds);
 
-    // Then delete the auth users (no cascade issue now)
+    // Supprimer les comptes auth
     for (const uid of profileIds) {
       await adminClient.auth.admin.deleteUser(uid);
     }
