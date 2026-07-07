@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { LayoutDashboard, Users, LogOut, Menu, X, CreditCard, Settings2 } from "lucide-react";
+import { LayoutDashboard, Users, LogOut, Menu, X, CreditCard, Settings2, Trophy, IdCard, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 
@@ -15,6 +15,9 @@ interface SidebarFondateurProps {
 const links = [
   { href: "/fondateur/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/fondateur/super-admins", label: "Super Admins", icon: Users },
+  { href: "/fondateur/matchs", label: "Matchs", icon: Trophy },
+  { href: "/fondateur/cartes", label: "Cartes d'accès", icon: IdCard },
+  { href: "/fondateur/equipes", label: "Équipes", icon: Shield },
   { href: "/fondateur/abonnements", label: "Abonnements", icon: CreditCard },
   { href: "/fondateur/parametres", label: "Paramètres", icon: Settings2 },
 ];
