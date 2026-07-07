@@ -1,4 +1,5 @@
 import { createServerClient } from "@supabase/ssr";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
 
 export async function updateSession(request: NextRequest) {
@@ -104,13 +105,34 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(new URL(loginUrl, request.url));
   }
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role, active")
-    .eq("id", user.id)
-    .single();
+  // Use admin client to read profile — bypasses RLS, avoids query failures
+  // causing session destruction via signOut()
+  let profile: { role: string; active: boolean } | null = null;
+  try {
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (serviceKey && supabaseUrl) {
+      const adminDb = createSupabaseClient(supabaseUrl, serviceKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      });
+      const { data } = await adminDb
+        .from("profiles")
+        .select("role, active")
+        .eq("id", user.id)
+        .single();
+      profile = data;
+    }
+  } catch {
+    // DB unreachable — let the request through; page-level auth will handle it
+  }
 
-  if (!profile || !profile.active) {
+  // Profile genuinely not found or DB unavailable — redirect without destroying session
+  // (user can reload and session will still be valid)
+  if (!profile) {
+    return NextResponse.redirect(new URL("/login", request.url));
+  }
+
+  // Account explicitly deactivated by an admin — revoke session
+  if (!profile.active) {
     await supabase.auth.signOut();
     const signOutResponse = NextResponse.redirect(new URL("/login", request.url));
     request.cookies.getAll().forEach((cookie) => {
