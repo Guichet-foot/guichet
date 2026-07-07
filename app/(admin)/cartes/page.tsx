@@ -76,7 +76,7 @@ export default async function CartesPage({
       </div>
 
       {/* Client: stats + tabs + grid */}
-      <CartesClient items={items} />
+      <CartesClient items={items} zoneLogo={selectedZone?.logo ?? undefined} />
     </div>
   );
 }

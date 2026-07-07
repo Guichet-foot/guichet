@@ -62,7 +62,7 @@ function getSaison(card: AccessCard): string {
 }
 
 /** Card design — scales via container queries (cqi). */
-function CardDesign({ card, qrDataUrl }: { card: AccessCard; qrDataUrl: string }) {
+function CardDesign({ card, qrDataUrl, zoneLogo }: { card: AccessCard; qrDataUrl: string; zoneLogo?: string }) {
   const saison = getSaison(card);
   const type = card.card_type || "zone";
   const price = card.price;
@@ -91,8 +91,8 @@ function CardDesign({ card, qrDataUrl }: { card: AccessCard; qrDataUrl: string }
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src="/logoodcavdes.png"
-          alt="ODCAV"
+          src={zoneLogo || "/logoodcavdes.png"}
+          alt="Logo"
           style={{ height: "80%", width: "auto", objectFit: "contain", flexShrink: 0 }}
         />
         <div style={{ flex: 1, textAlign: "center", paddingRight: "25%" }}>
@@ -213,9 +213,10 @@ function CardDesign({ card, qrDataUrl }: { card: AccessCard; qrDataUrl: string }
 
 interface CartesGridProps {
   items: CardWithQR[];
+  zoneLogo?: string;
 }
 
-function CartesGrid({ items }: CartesGridProps) {
+function CartesGrid({ items, zoneLogo }: CartesGridProps) {
   const [selected, setSelected] = useState<CardWithQR | null>(null);
 
   return (
@@ -229,7 +230,7 @@ function CartesGrid({ items }: CartesGridProps) {
             onClick={() => setSelected(item)}
           >
             <div className="hover:scale-[1.015] hover:shadow-lg transition-all duration-150 rounded-xl">
-              <CardDesign card={item.card} qrDataUrl={item.qrDataUrl} />
+              <CardDesign card={item.card} qrDataUrl={item.qrDataUrl} zoneLogo={zoneLogo} />
             </div>
           </button>
         ))}
@@ -240,7 +241,7 @@ function CartesGrid({ items }: CartesGridProps) {
           {selected && (
             <>
               <div style={{ containerType: "inline-size" }}>
-                <CardDesign card={selected.card} qrDataUrl={selected.qrDataUrl} />
+                <CardDesign card={selected.card} qrDataUrl={selected.qrDataUrl} zoneLogo={zoneLogo} />
               </div>
               <div className="flex gap-2">
                 <Link href={`/cartes/${selected.card.id}/edit`} className="flex-1">
@@ -263,7 +264,7 @@ function CartesGrid({ items }: CartesGridProps) {
 }
 
 /** Main client component: stats cards + tabs + filtered grid */
-export function CartesClient({ items }: { items: CardWithQR[] }) {
+export function CartesClient({ items, zoneLogo }: { items: CardWithQR[]; zoneLogo?: string }) {
   const [activeTab, setActiveTab] = useState<Tab>("zone_delegue");
   const [downloading, setDownloading] = useState(false);
 
@@ -420,7 +421,7 @@ export function CartesClient({ items }: { items: CardWithQR[] }) {
           <p className="font-medium">Aucune carte dans cet onglet</p>
         </div>
       ) : (
-        <CartesGrid items={filteredItems} />
+        <CartesGrid items={filteredItems} zoneLogo={zoneLogo} />
       )}
     </div>
   );

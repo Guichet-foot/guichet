@@ -1,5 +1,6 @@
 import { requireRole } from "@/lib/auth";
 import { getAccessCard } from "@/lib/actions/carte-actions";
+import { createAdminClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import { CardViewer } from "./card-viewer";
 import QRCode from "qrcode";
@@ -20,12 +21,24 @@ export default async function CarteDetailPage({
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://guichet-pi.vercel.app";
   const qrContent = `${appUrl}/carte/${card.qr_token}`;
 
-  const qrDataUrl = await QRCode.toDataURL(qrContent, {
-    width: 300,
-    margin: 2,
-    errorCorrectionLevel: "M",
-    color: { dark: "#000000", light: "#FFFFFF" },
-  });
+  const [qrDataUrl, zoneLogo] = await Promise.all([
+    QRCode.toDataURL(qrContent, {
+      width: 300,
+      margin: 2,
+      errorCorrectionLevel: "M",
+      color: { dark: "#000000", light: "#FFFFFF" },
+    }),
+    (async () => {
+      if (!card.zone_id) return undefined;
+      const adminClient = await createAdminClient();
+      const { data } = await adminClient
+        .from("zones")
+        .select("logo")
+        .eq("id", card.zone_id)
+        .single();
+      return (data?.logo as string | null) ?? undefined;
+    })(),
+  ]);
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
@@ -33,7 +46,7 @@ export default async function CarteDetailPage({
         <h1 className="text-2xl font-bold font-heading">Carte d&apos;accès</h1>
         <p className="text-muted-foreground text-sm mt-1">{card.full_name}</p>
       </div>
-      <CardViewer card={card} qrDataUrl={qrDataUrl} printUrl={`/api/cartes/${id}/print`} />
+      <CardViewer card={card} qrDataUrl={qrDataUrl} printUrl={`/api/cartes/${id}/print`} zoneLogo={zoneLogo} />
     </div>
   );
 }

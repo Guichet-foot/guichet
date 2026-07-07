@@ -46,9 +46,10 @@ interface CardViewerProps {
   card: AccessCard;
   qrDataUrl: string;
   printUrl: string;
+  zoneLogo?: string;
 }
 
-export function CardViewer({ card, qrDataUrl, printUrl }: CardViewerProps) {
+export function CardViewer({ card, qrDataUrl, printUrl, zoneLogo }: CardViewerProps) {
   const router = useRouter();
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -126,11 +127,11 @@ export function CardViewer({ card, qrDataUrl, printUrl }: CardViewerProps) {
               className="absolute inset-x-0 top-0 flex items-center bg-green-50 border-b-[1.5px] border-green-800"
               style={{ height: "30%", padding: "1% 2%" }}
             >
-              {/* ODCAV logo */}
+              {/* Logo zone ou ODCAV par défaut */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src="/logoodcavdes.png"
-                alt="ODCAV"
+                src={zoneLogo || "/logoodcavdes.png"}
+                alt="Logo"
                 style={{ height: "88%", width: "auto", objectFit: "contain", flexShrink: 0 }}
               />
 
