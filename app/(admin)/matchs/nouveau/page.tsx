@@ -27,6 +27,8 @@ import { formatFCFA } from "@/lib/format";
 interface TeamOption {
   id: string;
   name: string;
+  zoneId?: string;
+  zoneAbbrev?: string;
 }
 
 interface TemplateOption {
@@ -35,6 +37,10 @@ interface TemplateOption {
   price: number;
   default_quantity: number;
   color: string;
+}
+
+function makeZoneAbbrev(zoneName: string): string {
+  return "Z" + zoneName.replace(/^Zone\s+/i, "").replace(/\s+/g, "").toUpperCase();
 }
 
 export default function NewMatchPage() {
@@ -46,11 +52,19 @@ export default function NewMatchPage() {
   const [templates, setTemplates] = useState<TemplateOption[]>([]);
   const [selectedTemplates, setSelectedTemplates] = useState<Set<string>>(new Set());
 
+  // For non-C3: homeTeam/awayTeam are team names (direct text or select value = name)
   const [homeTeam, setHomeTeam] = useState("");
   const [awayTeam, setAwayTeam] = useState("");
+  // For C3: track by team ID to resolve zone abbreviations at submit time
+  const [homeTeamId, setHomeTeamId] = useState("");
+  const [awayTeamId, setAwayTeamId] = useState("");
+
   const [venue, setVenue] = useState("");
   const [matchDate, setMatchDate] = useState("");
   const [notes, setNotes] = useState("");
+
+  // Whether teams span multiple zones (C3 only)
+  const isMultiZone = new Set(teams.map((t) => t.zoneId).filter(Boolean)).size > 1;
 
   useEffect(() => {
     async function init() {
@@ -70,20 +84,42 @@ export default function NewMatchPage() {
       if (profile?.role === "c3") {
         setC3AccountId(profile.id);
         const allowedZones: string[] = profile.allowed_zones ?? [];
-        let teamQuery = supabase.from("teams").select("id, name").order("name");
+
         if (allowedZones.length > 0) {
-          teamQuery = teamQuery.in("zone_id", allowedZones);
+          // Load zones for abbreviation labels
+          const { data: zoneList } = await supabase
+            .from("zones")
+            .select("id, name")
+            .in("id", allowedZones);
+          const zoneMap = new Map((zoneList || []).map((z: any) => [z.id, z.name as string]));
+
+          const [{ data: teamList }, { data: templateList }] = await Promise.all([
+            supabase.from("teams").select("id, name, zone_id").in("zone_id", allowedZones).order("name"),
+            supabase.from("ticket_templates").select("id, name, price, default_quantity, color")
+              .eq("c3_account_id", profile.id).order("price"),
+          ]);
+
+          if (teamList) {
+            setTeams(
+              teamList.map((t: any) => ({
+                id: t.id,
+                name: t.name,
+                zoneId: t.zone_id,
+                zoneAbbrev: zoneMap.has(t.zone_id) ? makeZoneAbbrev(zoneMap.get(t.zone_id)!) : "",
+              }))
+            );
+          }
+          if (templateList) setTemplates(templateList);
         } else {
-          // Aucune zone assignée : pas d'équipes
-          teamQuery = teamQuery.eq("zone_id", "00000000-0000-0000-0000-000000000000");
+          // Ancien compte C3 sans zones assignées
+          const [{ data: teamList }, { data: templateList }] = await Promise.all([
+            supabase.from("teams").select("id, name").order("name"),
+            supabase.from("ticket_templates").select("id, name, price, default_quantity, color")
+              .eq("c3_account_id", profile.id).order("price"),
+          ]);
+          if (teamList) setTeams(teamList);
+          if (templateList) setTemplates(templateList);
         }
-        const [{ data: teamList }, { data: templateList }] = await Promise.all([
-          teamQuery,
-          supabase.from("ticket_templates").select("id, name, price, default_quantity, color")
-            .eq("c3_account_id", profile.id).order("price"),
-        ]);
-        if (teamList) setTeams(teamList);
-        if (templateList) setTemplates(templateList);
       } else {
         const effectiveZone = zoneParam || profile?.zone_id;
         if (effectiveZone) {
@@ -117,17 +153,46 @@ export default function NewMatchPage() {
     }
   }
 
+  // Compute display label for a team option in the dropdown
+  function teamLabel(t: TeamOption): string {
+    if (isMultiZone && t.zoneAbbrev) return `${t.name} (${t.zoneAbbrev})`;
+    return t.name;
+  }
+
+  // Compute final stored name for a team (with zone abbrev when opponents are from different zones)
+  function resolveTeamName(teamId: string, opponentId: string): string {
+    const t = teams.find((x) => x.id === teamId);
+    const opp = teams.find((x) => x.id === opponentId);
+    if (!t) return teamId;
+    const differentZones = t.zoneId && opp?.zoneId && t.zoneId !== opp.zoneId;
+    return differentZones ? `${t.name} (${t.zoneAbbrev})` : t.name;
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!zoneId && !c3AccountId) { toast.error("Zone non trouvée"); return; }
-    if (homeTeam === awayTeam) { toast.error("Les deux équipes doivent être différentes"); return; }
+
+    let finalHomeTeam: string;
+    let finalAwayTeam: string;
+
+    if (c3AccountId) {
+      if (!homeTeamId || !awayTeamId) { toast.error("Sélectionnez les deux équipes"); return; }
+      if (homeTeamId === awayTeamId) { toast.error("Les deux équipes doivent être différentes"); return; }
+      finalHomeTeam = resolveTeamName(homeTeamId, awayTeamId);
+      finalAwayTeam = resolveTeamName(awayTeamId, homeTeamId);
+    } else {
+      if (!zoneId && !c3AccountId) { toast.error("Zone non trouvée"); return; }
+      if (homeTeam === awayTeam) { toast.error("Les deux équipes doivent être différentes"); return; }
+      finalHomeTeam = homeTeam;
+      finalAwayTeam = awayTeam;
+    }
+
     setLoading(true);
 
     const result = await createMatch({
       zoneId: c3AccountId ? null : zoneId,
       c3AccountId,
-      homeTeam,
-      awayTeam,
+      homeTeam: finalHomeTeam,
+      awayTeam: finalAwayTeam,
       venue,
       matchDate: new Date(matchDate).toISOString(),
       notes,
@@ -139,7 +204,6 @@ export default function NewMatchPage() {
       return;
     }
 
-    // Apply selected ticket templates if any
     if (selectedTemplates.size > 0 && result.matchId) {
       const applyResult = await applyTemplatesToMatch(result.matchId, Array.from(selectedTemplates));
       if (applyResult.error) {
@@ -169,9 +233,26 @@ export default function NewMatchPage() {
       <Card>
         <CardContent className="pt-6">
           <form onSubmit={handleSubmit} className="space-y-4">
+
+            {/* Équipe domicile */}
             <div className="space-y-2">
               <Label>Équipe domicile</Label>
-              {teams.length > 0 ? (
+              {c3AccountId ? (
+                teams.length > 0 ? (
+                  <Select value={homeTeamId} onValueChange={(v) => setHomeTeamId(v ?? "")} required>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Sélectionner l'équipe" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {teams.map((t) => (
+                        <SelectItem key={t.id} value={t.id}>{teamLabel(t)}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input value={homeTeam} onChange={(e) => setHomeTeam(e.target.value)} required placeholder="ASC Ndiarème" />
+                )
+              ) : teams.length > 0 ? (
                 <Select value={homeTeam} onValueChange={(v) => setHomeTeam(v ?? "")} required>
                   <SelectTrigger>
                     <SelectValue placeholder="Sélectionner l'équipe" />
@@ -183,18 +264,31 @@ export default function NewMatchPage() {
                   </SelectContent>
                 </Select>
               ) : (
-                <Input
-                  value={homeTeam}
-                  onChange={(e) => setHomeTeam(e.target.value)}
-                  required
-                  placeholder="ASC Ndiarème"
-                />
+                <Input value={homeTeam} onChange={(e) => setHomeTeam(e.target.value)} required placeholder="ASC Ndiarème" />
               )}
             </div>
 
+            {/* Équipe visiteur */}
             <div className="space-y-2">
               <Label>Équipe visiteur</Label>
-              {teams.length > 0 ? (
+              {c3AccountId ? (
+                teams.length > 0 ? (
+                  <Select value={awayTeamId} onValueChange={(v) => setAwayTeamId(v ?? "")} required>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Sélectionner l'équipe" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {teams
+                        .filter((t) => t.id !== homeTeamId)
+                        .map((t) => (
+                          <SelectItem key={t.id} value={t.id}>{teamLabel(t)}</SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input value={awayTeam} onChange={(e) => setAwayTeam(e.target.value)} required placeholder="ASC Yeumbeul" />
+                )
+              ) : teams.length > 0 ? (
                 <Select value={awayTeam} onValueChange={(v) => setAwayTeam(v ?? "")} required>
                   <SelectTrigger>
                     <SelectValue placeholder="Sélectionner l'équipe" />
@@ -208,12 +302,7 @@ export default function NewMatchPage() {
                   </SelectContent>
                 </Select>
               ) : (
-                <Input
-                  value={awayTeam}
-                  onChange={(e) => setAwayTeam(e.target.value)}
-                  required
-                  placeholder="ASC Yeumbeul"
-                />
+                <Input value={awayTeam} onChange={(e) => setAwayTeam(e.target.value)} required placeholder="ASC Yeumbeul" />
               )}
             </div>
 
@@ -249,7 +338,7 @@ export default function NewMatchPage() {
               />
             </div>
 
-            {/* Ticket category selection */}
+            {/* Catégories de billets */}
             {templates.length > 0 && (
               <div className="space-y-3 pt-2 border-t border-border">
                 <div className="flex items-center justify-between">

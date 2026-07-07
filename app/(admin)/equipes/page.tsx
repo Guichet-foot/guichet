@@ -1,7 +1,7 @@
 import { requireRole } from "@/lib/auth";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { getEffectiveZone } from "@/lib/get-effective-zone";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Shield } from "lucide-react";
@@ -50,21 +50,95 @@ export default async function EquipesPage({
 
   const supabase = await createClient();
 
-  let teams: any[] | null = null;
-
+  // ── C3 : vue 2 colonnes par zone ──────────────────────────────
   if (c3AccountId) {
     const allowedZones = profile.allowed_zones;
+    let zonesData: { id: string; name: string }[] = [];
+    let allTeams: any[] = [];
+
     if (allowedZones && allowedZones.length > 0) {
-      // Migration lancée et zones assignées : requête admin par zones
       const adminClient = await createAdminClient();
-      const { data } = await adminClient.from("teams").select("*").in("zone_id", allowedZones).order("name");
-      teams = data;
+      const [{ data: zd }, { data: td }] = await Promise.all([
+        adminClient.from("zones").select("id, name").in("id", allowedZones).order("name"),
+        adminClient.from("teams").select("*").in("zone_id", allowedZones).order("name"),
+      ]);
+      zonesData = zd || [];
+      allTeams = td || [];
     } else {
-      // Ancien compte C3 sans allowed_zones : RLS gère la restriction
-      const { data } = await supabase.from("teams").select("*").order("name");
-      teams = data;
+      // Ancien compte C3 sans allowed_zones — RLS gère la restriction
+      const { data: td } = await supabase.from("teams").select("*").order("name");
+      allTeams = td || [];
     }
-  } else {
+
+    const teamsByZone = zonesData.map((zone) => ({
+      zone,
+      teams: allTeams.filter((t: any) => t.zone_id === zone.id),
+    }));
+
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold font-heading">Équipes</h1>
+          <p className="text-muted-foreground">{allTeams.length} équipe(s)</p>
+        </div>
+
+        {allTeams.length === 0 ? (
+          <Card>
+            <CardContent className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+              <Shield className="h-12 w-12 mb-4" />
+              <p>Aucune équipe enregistrée</p>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {teamsByZone.map(({ zone, teams: zoneTeams }) => (
+              <Card key={zone.id}>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base font-semibold flex items-center gap-2">
+                    <Shield className="h-4 w-4 text-brand" />
+                    {zone.name}
+                    <Badge variant="secondary" className="ml-auto text-xs font-normal">
+                      {zoneTeams.length} équipe{zoneTeams.length !== 1 ? "s" : ""}
+                    </Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  {zoneTeams.length === 0 ? (
+                    <p className="text-sm text-muted-foreground px-4 pb-4">Aucune équipe dans cette zone</p>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Nom ASC</TableHead>
+                          <TableHead className="hidden sm:table-cell">Président</TableHead>
+                          <TableHead>Couleurs</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {zoneTeams.map((team: any) => (
+                          <TableRow key={team.id}>
+                            <TableCell className="font-semibold">{team.name}</TableCell>
+                            <TableCell className="hidden sm:table-cell text-sm">{team.president || "—"}</TableCell>
+                            <TableCell>
+                              {team.colors ? <TeamColorSwatches colors={team.colors} /> : "—"}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ── Vue normale (admin_zone / super_admin) ────────────────────
+  let teams: any[] | null = null;
+  {
     const baseQuery = supabase.from("teams").select("*").order("name");
     const { data } = effectiveZoneId
       ? await baseQuery.eq("zone_id", effectiveZoneId)
