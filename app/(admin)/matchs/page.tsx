@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent } from "@/components/ui/card";
-import { Plus, Trophy, Eye } from "lucide-react";
+import { Plus, Trophy, Eye, Pencil } from "lucide-react";
 import { MATCH_STATUS_LABELS, MATCH_STATUS_COLORS } from "@/lib/constants";
 import { formatDateShort, formatFCFA } from "@/lib/format";
 import { buildZoneUrl } from "@/lib/zone-utils";
@@ -144,8 +144,15 @@ export default async function MatchsPage({
                               />
                           )}
                           <MatchActionButtons matchId={match.id} zoneId={match.zone_id} status={match.status} venteActive={match.vente_active ?? false} homeTeam={match.home_team} awayTeam={match.away_team} />
+                          {match.status !== "termine" && match.status !== "annule" && profile.role !== "fondateur" && (
+                            <Link href={buildZoneUrl(`/matchs/${match.id}/modifier`, params.zone)}>
+                              <Button variant="ghost" size="sm" title="Modifier le match">
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                            </Link>
+                          )}
                           <Link href={buildZoneUrl(`/matchs/${match.id}`, params.zone)}>
-                            <Button variant="ghost" size="sm"><Eye className="h-4 w-4" /></Button>
+                            <Button variant="ghost" size="sm" title="Voir les détails"><Eye className="h-4 w-4" /></Button>
                           </Link>
                         </div>
                         {/* Mobile: single button → popup */}
@@ -154,6 +161,7 @@ export default async function MatchsPage({
                             match={{ id: match.id, zone_id: match.zone_id, home_team: match.home_team, away_team: match.away_team, venue: match.venue || "", match_date: match.match_date, status: match.status, vente_active: match.vente_active ?? false, home_score: match.home_score, away_score: match.away_score }}
                             stats={stats}
                             detailUrl={buildZoneUrl(`/matchs/${match.id}`, params.zone)}
+                            editUrl={profile.role !== "fondateur" ? buildZoneUrl(`/matchs/${match.id}/modifier`, params.zone) : undefined}
                           />
                         </div>
                       </TableCell>

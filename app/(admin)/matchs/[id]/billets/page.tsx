@@ -1,5 +1,5 @@
 import { requireRole } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient, createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -11,22 +11,27 @@ import { ApplyTemplatesButton } from "./apply-templates-button";
 
 export default async function BilletsPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ zone?: string }>;
 }) {
   const { id } = await params;
-  await requireRole(["super_admin", "admin_zone"]);
+  const { zone } = await searchParams;
+  const profile = await requireRole(["super_admin", "admin_zone", "c3", "fondateur"]);
+
+  const adminClient = await createAdminClient();
   const supabase = await createClient();
 
-  const { data: match } = await supabase
+  const { data: match } = await adminClient
     .from("matches")
-    .select("id, home_team, away_team, zone_id")
+    .select("id, home_team, away_team, zone_id, c3_account_id")
     .eq("id", id)
     .single();
 
   if (!match) notFound();
 
-  const { data: categories } = await supabase
+  const { data: categories } = await adminClient
     .from("ticket_categories")
     .select("*")
     .eq("match_id", id)
@@ -36,7 +41,7 @@ export default async function BilletsPage({
   let soldCounts: Record<string, number> = {};
 
   if (categoryIds.length > 0) {
-    const { data: tickets } = await supabase
+    const { data: tickets } = await adminClient
       .from("tickets")
       .select("category_id")
       .in("category_id", categoryIds)
@@ -53,17 +58,30 @@ export default async function BilletsPage({
     }
   }
 
-  // Fetch ticket templates for the zone
-  const { data: templates } = await supabase
-    .from("ticket_templates")
-    .select("*")
-    .eq("zone_id", match.zone_id)
-    .order("price");
+  // Fetch ticket templates: by zone_id for zone accounts, by c3_account_id for C3
+  let templates: any[] = [];
+  if (match.zone_id) {
+    const { data } = await supabase
+      .from("ticket_templates")
+      .select("*")
+      .eq("zone_id", match.zone_id)
+      .order("price");
+    templates = data || [];
+  } else if (match.c3_account_id) {
+    const { data } = await adminClient
+      .from("ticket_templates")
+      .select("*")
+      .eq("c3_account_id", match.c3_account_id)
+      .order("price");
+    templates = data || [];
+  }
+
+  const backUrl = zone ? `/matchs/${id}?zone=${zone}` : `/matchs/${id}`;
 
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
-        <Link href={`/matchs/${id}`}>
+        <Link href={backUrl}>
           <Button variant="ghost" size="sm">
             <ArrowLeft className="h-4 w-4 mr-1" />
             Retour
@@ -79,11 +97,10 @@ export default async function BilletsPage({
         </div>
       </div>
 
-      {/* Apply templates button */}
-      {templates && templates.length > 0 && (
+      {templates.length > 0 && (
         <ApplyTemplatesButton
           matchId={id}
-          templates={templates as any[]}
+          templates={templates}
           hasExistingCategories={(categories?.length || 0) > 0}
         />
       )}

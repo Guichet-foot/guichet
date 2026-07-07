@@ -168,6 +168,35 @@ export async function deleteTicketCategory(categoryId: string, matchId: string) 
   return { success: true };
 }
 
+export async function updateMatch(matchId: string, formData: {
+  homeTeam: string;
+  awayTeam: string;
+  venue: string;
+  matchDate: string;
+  notes: string;
+}) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Non authentifié" };
+
+  const { error } = await supabase
+    .from("matches")
+    .update({
+      home_team: formData.homeTeam,
+      away_team: formData.awayTeam,
+      venue: formData.venue,
+      match_date: formData.matchDate,
+      notes: formData.notes || null,
+    })
+    .eq("id", matchId);
+
+  if (error) return { error: error.message };
+
+  revalidatePath("/matchs");
+  revalidatePath(`/matchs/${matchId}`);
+  return { success: true };
+}
+
 export async function toggleMatchVente(matchId: string, venteActive: boolean) {
   const supabase = await createClient();
 

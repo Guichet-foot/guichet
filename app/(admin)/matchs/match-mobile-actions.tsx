@@ -18,6 +18,7 @@ import {
   CheckCircle,
   MoreVertical,
   Eye,
+  Pencil,
   Ticket,
   Calendar,
   MapPin,
@@ -42,9 +43,10 @@ interface MatchMobileActionsProps {
   };
   stats: { count: number; revenue: number };
   detailUrl: string;
+  editUrl?: string;
 }
 
-export function MatchMobileActions({ match, stats, detailUrl }: MatchMobileActionsProps) {
+export function MatchMobileActions({ match, stats, detailUrl, editUrl }: MatchMobileActionsProps) {
   const [open, setOpen] = useState(false);
   const [scoreOpen, setScoreOpen] = useState(false);
   const [loading, setLoading] = useState<string | null>(null);
@@ -163,6 +165,14 @@ export function MatchMobileActions({ match, stats, detailUrl }: MatchMobileActio
                     Terminer le match
                   </Button>
                 </>
+              )}
+              {editUrl && !isFinished && (
+                <Link href={editUrl} onClick={() => setOpen(false)}>
+                  <Button variant="outline" className="w-full justify-start">
+                    <Pencil className="h-4 w-4 mr-2" />
+                    Modifier le match
+                  </Button>
+                </Link>
               )}
               <Link href={detailUrl} onClick={() => setOpen(false)}>
                 <Button variant="outline" className="w-full justify-start">

@@ -1,12 +1,12 @@
 import { requireRole } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { ArrowLeft, Settings, Ticket } from "lucide-react";
+import { ArrowLeft, Pencil, Settings, Ticket } from "lucide-react";
 import {
   MATCH_STATUS_LABELS,
   MATCH_STATUS_COLORS,
@@ -16,14 +16,18 @@ import { MatchStatusSelect } from "./match-status-select";
 
 export default async function MatchDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ zone?: string }>;
 }) {
   const { id } = await params;
-  await requireRole(["super_admin", "admin_zone"]);
-  const supabase = await createClient();
+  const { zone } = await searchParams;
+  const profile = await requireRole(["super_admin", "admin_zone", "c3", "fondateur"]);
 
-  const { data: match } = await supabase
+  const adminClient = await createAdminClient();
+
+  const { data: match } = await adminClient
     .from("matches")
     .select("*")
     .eq("id", id)
@@ -31,13 +35,13 @@ export default async function MatchDetailPage({
 
   if (!match) notFound();
 
-  const { data: categories } = await supabase
+  const { data: categories } = await adminClient
     .from("ticket_categories")
     .select("*")
     .eq("match_id", id)
     .order("display_order");
 
-  const { data: tickets } = await supabase
+  const { data: tickets } = await adminClient
     .from("tickets")
     .select("category_id, price, status, counts_as_revenue")
     .eq("match_id", id)
@@ -58,10 +62,16 @@ export default async function MatchDetailPage({
   const totalCapacity =
     categories?.reduce((sum, c) => sum + c.quantity_total, 0) || 0;
 
+  const backUrl = zone ? `/matchs?zone=${zone}` : "/matchs";
+  const editUrl = zone ? `/matchs/${id}/modifier?zone=${zone}` : `/matchs/${id}/modifier`;
+  const billetsUrl = zone ? `/matchs/${id}/billets?zone=${zone}` : `/matchs/${id}/billets`;
+
+  const canEdit = profile.role !== "fondateur";
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
-        <Link href="/matchs">
+        <Link href={backUrl}>
           <Button variant="ghost" size="sm">
             <ArrowLeft className="h-4 w-4 mr-1" />
             Matchs
@@ -83,14 +93,24 @@ export default async function MatchDetailPage({
             </p>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Badge
             variant="secondary"
             className={MATCH_STATUS_COLORS[match.status]}
           >
             {MATCH_STATUS_LABELS[match.status]}
           </Badge>
-          <MatchStatusSelect matchId={match.id} currentStatus={match.status} />
+          {canEdit && match.status !== "termine" && match.status !== "annule" && (
+            <Link href={editUrl}>
+              <Button variant="outline" size="sm">
+                <Pencil className="h-4 w-4 mr-1" />
+                Modifier
+              </Button>
+            </Link>
+          )}
+          {(profile.role === "super_admin" || profile.role === "admin_zone") && (
+            <MatchStatusSelect matchId={match.id} currentStatus={match.status} />
+          )}
         </div>
       </div>
 
@@ -125,12 +145,14 @@ export default async function MatchDetailPage({
 
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold font-heading">Catégories de billets</h2>
-        <Link href={`/matchs/${id}/billets`}>
-          <Button variant="outline" size="sm">
-            <Settings className="h-4 w-4 mr-2" />
-            Configurer
-          </Button>
-        </Link>
+        {canEdit && (
+          <Link href={billetsUrl}>
+            <Button variant="outline" size="sm">
+              <Settings className="h-4 w-4 mr-2" />
+              Configurer
+            </Button>
+          </Link>
+        )}
       </div>
 
       {categories && categories.length > 0 ? (
@@ -166,11 +188,13 @@ export default async function MatchDetailPage({
           <CardContent className="py-8 text-center text-muted-foreground">
             <Ticket className="h-8 w-8 mx-auto mb-2" />
             <p>Aucune catégorie de billets configurée</p>
-            <Link href={`/matchs/${id}/billets`}>
-              <Button variant="outline" size="sm" className="mt-4">
-                Configurer les billets
-              </Button>
-            </Link>
+            {canEdit && (
+              <Link href={billetsUrl}>
+                <Button variant="outline" size="sm" className="mt-4">
+                  Configurer les billets
+                </Button>
+              </Link>
+            )}
           </CardContent>
         </Card>
       )}
