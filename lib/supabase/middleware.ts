@@ -168,7 +168,9 @@ export async function updateSession(request: NextRequest) {
   }
 
   // president_odcav redirect for non-admin, non-fondateur routes
-  if (profile.role === "president_odcav" && !isFondateurRoute && !isAdminRouteForFondateur) {
+  // Use isAdminRoute (includes /dashboard) not isAdminRouteForFondateur (excludes /dashboard)
+  // to avoid a loop when president_odcav is already at /dashboard
+  if (profile.role === "president_odcav" && !isFondateurRoute && !isAdminRoute) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 

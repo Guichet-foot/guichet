@@ -45,6 +45,7 @@ export async function requireRole(roles: UserRole[]): Promise<Profile> {
   if (!effectiveRoles.includes(profile.role)) {
     if (profile.role === "caissier") redirect("/vente");
     if (profile.role === "portier") redirect("/scanner");
+    if (profile.role === "fondateur") redirect("/fondateur/dashboard");
     redirect("/dashboard");
   }
   return profile;
