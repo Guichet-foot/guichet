@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { createMatch } from "@/lib/actions/match-actions";
+import { createMatch, getC3TeamsAndZones } from "@/lib/actions/match-actions";
 import { applyTemplatesToMatch } from "@/lib/actions/ticket-template-actions";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -83,43 +83,28 @@ export default function NewMatchPage() {
 
       if (profile?.role === "c3") {
         setC3AccountId(profile.id);
-        const allowedZones: string[] = profile.allowed_zones ?? [];
+
+        // Utiliser adminClient via server action (le client user est bloqué par RLS)
+        const { teams: teamList, zones: zoneList, allowedZones } = await getC3TeamsAndZones();
 
         if (allowedZones.length > 0) {
-          // Load zones for abbreviation labels
-          const { data: zoneList } = await supabase
-            .from("zones")
-            .select("id, name")
-            .in("id", allowedZones);
-          const zoneMap = new Map((zoneList || []).map((z: any) => [z.id, z.name as string]));
-
-          const [{ data: teamList }, { data: templateList }] = await Promise.all([
-            supabase.from("teams").select("id, name, zone_id").in("zone_id", allowedZones).order("name"),
-            supabase.from("ticket_templates").select("id, name, price, default_quantity, color")
-              .eq("c3_account_id", profile.id).order("price"),
-          ]);
-
-          if (teamList) {
-            setTeams(
-              teamList.map((t: any) => ({
-                id: t.id,
-                name: t.name,
-                zoneId: t.zone_id,
-                zoneAbbrev: zoneMap.has(t.zone_id) ? makeZoneAbbrev(zoneMap.get(t.zone_id)!) : "",
-              }))
-            );
-          }
-          if (templateList) setTemplates(templateList);
-        } else {
-          // Ancien compte C3 sans zones assignées
-          const [{ data: teamList }, { data: templateList }] = await Promise.all([
-            supabase.from("teams").select("id, name").order("name"),
-            supabase.from("ticket_templates").select("id, name, price, default_quantity, color")
-              .eq("c3_account_id", profile.id).order("price"),
-          ]);
-          if (teamList) setTeams(teamList);
-          if (templateList) setTemplates(templateList);
+          const zoneMap = new Map(zoneList.map((z) => [z.id, z.name]));
+          setTeams(
+            teamList.map((t) => ({
+              id: t.id,
+              name: t.name,
+              zoneId: t.zone_id,
+              zoneAbbrev: zoneMap.has(t.zone_id) ? makeZoneAbbrev(zoneMap.get(t.zone_id)!) : "",
+            }))
+          );
         }
+        // Templates (pas bloqués par RLS — filtrés sur c3_account_id de l'utilisateur lui-même)
+        const { data: templateList } = await supabase
+          .from("ticket_templates")
+          .select("id, name, price, default_quantity, color")
+          .eq("c3_account_id", profile.id)
+          .order("price");
+        if (templateList) setTemplates(templateList);
       } else {
         const effectiveZone = zoneParam || profile?.zone_id;
         if (effectiveZone) {

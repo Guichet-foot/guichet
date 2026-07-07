@@ -1,8 +1,47 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import type { MatchStatus } from "@/lib/types";
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
+/**
+ * Charge les équipes et zones d'un compte C3 via adminClient (bypass RLS).
+ * Le client Supabase user est bloqué par RLS car C3 n'a pas de zone_id.
+ */
+export async function getC3TeamsAndZones(): Promise<{
+  teams: { id: string; name: string; zone_id: string }[];
+  zones: { id: string; name: string }[];
+  allowedZones: string[];
+}> {
+  const supabase = await createClient();
+  const adminClient = await createAdminClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { teams: [], zones: [], allowedZones: [] };
+
+  const { data: profile } = await adminClient
+    .from("profiles")
+    .select("role, allowed_zones")
+    .eq("id", user.id)
+    .single();
+
+  if (profile?.role !== "c3") return { teams: [], zones: [], allowedZones: [] };
+
+  const allowedZones: string[] = (profile.allowed_zones as string[] | null) ?? [];
+  if (allowedZones.length === 0) return { teams: [], zones: [], allowedZones: [] };
+
+  const [{ data: zoneList }, { data: teamList }] = await Promise.all([
+    adminClient.from("zones").select("id, name").in("id", allowedZones).order("name"),
+    adminClient.from("teams").select("id, name, zone_id").in("zone_id", allowedZones).order("name"),
+  ]);
+
+  return {
+    zones: (zoneList || []) as { id: string; name: string }[],
+    teams: (teamList || []) as { id: string; name: string; zone_id: string }[],
+    allowedZones,
+  };
+}
 
 export async function createMatch(formData: {
   zoneId?: string | null;
