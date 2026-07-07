@@ -16,7 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Copy, Loader2, Crown } from "lucide-react";
+import { ArrowLeft, Copy, Loader2, Crown, Clock } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
 import { ADMIN_MODULES } from "@/lib/constants";
@@ -45,6 +45,8 @@ export default function NewUserPage() {
   const [selectedZones, setSelectedZones] = useState<string[]>([]);
   const [allModules, setAllModules] = useState(true);
   const [selectedModules, setSelectedModules] = useState<string[]>([]);
+  const [pwUnit, setPwUnit] = useState<"jamais" | "minutes" | "heures" | "24h">("jamais");
+  const [pwValue, setPwValue] = useState<number>(30);
 
   useEffect(() => {
     async function init() {
@@ -79,6 +81,7 @@ export default function NewUserPage() {
     if (role !== "admin_zone") setIsPresident(false);
     if (role !== "c3") { setCity(""); setSelectedZones([]); }
     if (role !== "super_admin") { setAllModules(true); setSelectedModules([]); }
+    if (role !== "caissier" && role !== "portier") { setPwUnit("jamais"); setPwValue(30); }
   }, [role]);
 
   const isOdcavRole = currentUserRole === "super_admin" || currentUserRole === "president_odcav";
@@ -113,6 +116,7 @@ export default function NewUserPage() {
     ];
   })();
 
+  const showPwExpiry = role === "caissier" || role === "portier";
   const showPresidentCheckbox = isOdcavRole && role === "admin_zone";
   const showZoneSelector = isOdcavRole && !isDirectsMode && !zoneParam && role && role !== "c3" && role !== "super_admin";
   const showCityField = role === "c3";
@@ -123,6 +127,13 @@ export default function NewUserPage() {
     setSelectedZones((prev) =>
       prev.includes(id) ? prev.filter((z) => z !== id) : [...prev, id]
     );
+  }
+
+  function getPwDurationMinutes(): number | null {
+    if (pwUnit === "jamais") return null;
+    if (pwUnit === "24h") return 1440;
+    if (pwUnit === "heures") return Math.max(1, pwValue) * 60;
+    return Math.max(1, pwValue); // minutes
   }
 
   function toggleModule(key: string) {
@@ -151,6 +162,7 @@ export default function NewUserPage() {
       city: showCityField ? city || null : null,
       permittedModules,
       allowedZones: showZoneCheckboxes && selectedZones.length > 0 ? selectedZones : null,
+      passwordDurationMinutes: showPwExpiry ? getPwDurationMinutes() : null,
     });
 
     if (result.error) {
@@ -200,6 +212,7 @@ export default function NewUserPage() {
                   setTempPassword(null);
                   setEmail(""); setFullName(""); setPhone(""); setRole(""); setZoneId(zoneParam ?? "");
                   setIsPresident(false); setCity(""); setSelectedZones([]); setAllModules(true); setSelectedModules([]);
+                  setPwUnit("jamais"); setPwValue(30);
                 }}
               >
                 Créer un autre
@@ -330,6 +343,49 @@ export default function NewUserPage() {
                     ))}
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Durée d'expiration du mot de passe — caissier / portier */}
+            {showPwExpiry && (
+              <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-blue-600" />
+                  <p className="text-sm font-semibold text-blue-900">Durée du mot de passe</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {(pwUnit === "minutes" || pwUnit === "heures") && (
+                    <Input
+                      type="number"
+                      min={1}
+                      max={pwUnit === "minutes" ? 1440 : 72}
+                      value={pwValue}
+                      onChange={(e) => setPwValue(Math.max(1, Number(e.target.value)))}
+                      className="w-24 bg-white"
+                    />
+                  )}
+                  <Select value={pwUnit} onValueChange={(v) => {
+                    setPwUnit(v as typeof pwUnit);
+                    if (v === "minutes") setPwValue(30);
+                    if (v === "heures") setPwValue(8);
+                  }}>
+                    <SelectTrigger className="flex-1 bg-white">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="jamais">Jamais (pas d&apos;expiration)</SelectItem>
+                      <SelectItem value="minutes">Minutes</SelectItem>
+                      <SelectItem value="heures">Heures</SelectItem>
+                      <SelectItem value="24h">24 heures</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <p className="text-xs text-blue-700">
+                  {pwUnit === "jamais" && "Le mot de passe n'expirera jamais."}
+                  {pwUnit === "minutes" && `Le mot de passe expirera ${pwValue} minute${pwValue > 1 ? "s" : ""} après la création.`}
+                  {pwUnit === "heures" && `Le mot de passe expirera ${pwValue} heure${pwValue > 1 ? "s" : ""} après la création.`}
+                  {pwUnit === "24h" && "Le mot de passe expirera 24 heures après la création."}
+                </p>
               </div>
             )}
 

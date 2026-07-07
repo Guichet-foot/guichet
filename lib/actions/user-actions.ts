@@ -82,6 +82,7 @@ export async function createUser(formData: {
   city?: string | null;
   permittedModules?: string[] | null;
   allowedZones?: string[] | null;
+  passwordDurationMinutes?: number | null;
 }) {
   const supabase = await createClient();
   const { data: { user: currentUser } } = await supabase.auth.getUser();
@@ -151,6 +152,11 @@ export async function createUser(formData: {
     return { error: authError?.message || "Erreur lors de la création" };
   }
 
+  const passwordDurationMinutes = formData.passwordDurationMinutes ?? null;
+  const passwordExpiresAt = passwordDurationMinutes
+    ? new Date(Date.now() + passwordDurationMinutes * 60 * 1000).toISOString()
+    : null;
+
   const { error: profileError } = await adminClient.from("profiles").insert({
     id: authUser.user.id,
     full_name: formData.fullName,
@@ -163,6 +169,8 @@ export async function createUser(formData: {
     city: formData.city || null,
     permitted_modules: formData.permittedModules || null,
     allowed_zones: formData.allowedZones && formData.allowedZones.length > 0 ? formData.allowedZones : null,
+    password_duration_minutes: passwordDurationMinutes,
+    password_expires_at: passwordExpiresAt,
   });
 
   if (profileError) {
@@ -217,6 +225,21 @@ export async function resetUserPassword(userId: string) {
   const newPassword = generatePassword();
   const { error } = await adminClient.auth.admin.updateUserById(userId, { password: newPassword });
   if (error) return { error: error.message };
+
+  // Reset expiration clock from stored duration
+  const { data: prof } = await adminClient
+    .from("profiles")
+    .select("password_duration_minutes")
+    .eq("id", userId)
+    .single();
+  const duration = prof?.password_duration_minutes ?? null;
+  const newExpiresAt = duration
+    ? new Date(Date.now() + duration * 60 * 1000).toISOString()
+    : null;
+  await adminClient
+    .from("profiles")
+    .update({ password_expires_at: newExpiresAt })
+    .eq("id", userId);
 
   return { password: newPassword };
 }

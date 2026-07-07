@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -10,10 +10,13 @@ import { Label } from "@/components/ui/label";
 import { Loader2, Mail, Lock, Eye, EyeOff } from "lucide-react";
 
 export default function LoginPage() {
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState(
+    searchParams.get("expired") === "1" ? "Mot de passe expiré. Contactez votre administrateur." : ""
+  );
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
@@ -47,7 +50,7 @@ export default function LoginPage() {
 
     const { data: profile } = await supabase
       .from("profiles")
-      .select("role, active")
+      .select("role, active, password_expires_at")
       .eq("id", user.id)
       .single();
 
@@ -61,6 +64,13 @@ export default function LoginPage() {
     if (!profile.active) {
       await supabase.auth.signOut();
       setError("Compte désactivé. Contactez votre administrateur.");
+      setLoading(false);
+      return;
+    }
+
+    if (profile.password_expires_at && new Date(profile.password_expires_at) < new Date()) {
+      await supabase.auth.signOut();
+      setError("Mot de passe expiré. Contactez votre administrateur.");
       setLoading(false);
       return;
     }

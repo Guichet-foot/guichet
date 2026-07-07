@@ -107,7 +107,7 @@ export async function updateSession(request: NextRequest) {
 
   // Use admin client to read profile — bypasses RLS, avoids query failures
   // causing session destruction via signOut()
-  let profile: { role: string; active: boolean } | null = null;
+  let profile: { role: string; active: boolean; password_expires_at?: string | null } | null = null;
   try {
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     if (serviceKey && supabaseUrl) {
@@ -116,7 +116,7 @@ export async function updateSession(request: NextRequest) {
       });
       const { data } = await adminDb
         .from("profiles")
-        .select("role, active")
+        .select("role, active, password_expires_at")
         .eq("id", user.id)
         .single();
       profile = data;
@@ -141,6 +141,18 @@ export async function updateSession(request: NextRequest) {
       }
     });
     return signOutResponse;
+  }
+
+  // Password expiration — revoke session and redirect with error param
+  if (profile.password_expires_at && new Date(profile.password_expires_at) < new Date()) {
+    await supabase.auth.signOut();
+    const expiredResponse = NextResponse.redirect(new URL("/login?expired=1", request.url));
+    request.cookies.getAll().forEach((cookie) => {
+      if (cookie.name.includes("supabase") || cookie.name.includes("sb-")) {
+        expiredResponse.cookies.delete(cookie.name);
+      }
+    });
+    return expiredResponse;
   }
 
   // Fondateur routes
