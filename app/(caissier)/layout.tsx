@@ -1,6 +1,5 @@
 import { requireAuth } from "@/lib/auth";
 import { NavCaissier } from "@/components/nav-caissier";
-import { BilletterieBanner } from "@/components/billetterie-banner";
 
 export default async function CaissierLayout({
   children,
@@ -8,7 +7,6 @@ export default async function CaissierLayout({
   children: React.ReactNode;
 }) {
   const profile = await requireAuth();
-  const showBanner = profile.role === "caissier" || profile.role === "portier";
 
   return (
     <div className="min-h-screen bg-cream">
@@ -17,11 +15,6 @@ export default async function CaissierLayout({
         userRole={profile.role}
       />
       <main className="pt-16 pb-20 px-4">
-        {showBanner && (
-          <div className="pt-3">
-            <BilletterieBanner canPay={false} />
-          </div>
-        )}
         {children}
       </main>
     </div>

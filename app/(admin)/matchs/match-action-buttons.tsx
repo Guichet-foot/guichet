@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { updateMatchStatus, toggleMatchVente } from "@/lib/actions/match-actions";
-import { checkZonePaymentById, initiatePaytechPaymentForZone } from "@/lib/actions/payment-actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,11 +10,9 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
 } from "@/components/ui/dialog";
-import { Loader2, ShoppingCart, ShoppingCartIcon, CheckCircle, Lock, CreditCard } from "lucide-react";
+import { Loader2, ShoppingCart, ShoppingCartIcon, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
-import Link from "next/link";
 
 interface MatchActionButtonsProps {
   matchId: string;
@@ -26,60 +23,18 @@ interface MatchActionButtonsProps {
   awayTeam?: string;
 }
 
-function formatFCFA(n: number) {
-  return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ") + " FCFA";
-}
-
-export function MatchActionButtons({ matchId, zoneId, status, venteActive, homeTeam, awayTeam }: MatchActionButtonsProps) {
+export function MatchActionButtons({ matchId, zoneId: _zoneId, status, venteActive, homeTeam, awayTeam }: MatchActionButtonsProps) {
   const [loading, setLoading] = useState<string | null>(null);
   const [scoreOpen, setScoreOpen] = useState(false);
-  const [paymentOpen, setPaymentOpen] = useState(false);
-  const [paymentAmount, setPaymentAmount] = useState(0);
-  const [paying, setPaying] = useState(false);
   const [homeScore, setHomeScore] = useState("");
   const [awayScore, setAwayScore] = useState("");
 
   async function handleToggleVente() {
-    if (venteActive) {
-      // Fermer la vente directement
-      setLoading("vente");
-      const result = await toggleMatchVente(matchId, false);
-      if (result.error) toast.error(result.error);
-      else toast.success("Vente fermée");
-      setLoading(null);
-      return;
-    }
-
-    // Ouvrir la vente — vérifier le paiement pour cette zone
     setLoading("vente");
-    const payStatus = await checkZonePaymentById(zoneId);
+    const result = await toggleMatchVente(matchId, !venteActive);
+    if (result.error) toast.error(result.error);
+    else toast.success(venteActive ? "Vente fermée" : "Vente ouverte !");
     setLoading(null);
-
-    if (payStatus.isPaid) {
-      // Paiement OK → ouvrir directement
-      setLoading("vente");
-      const result = await toggleMatchVente(matchId, true);
-      if (result.error) toast.error(result.error);
-      else toast.success("Vente ouverte !");
-      setLoading(null);
-    } else {
-      // Paiement requis → afficher le modal
-      setPaymentAmount(payStatus.amount);
-      setPaymentOpen(true);
-    }
-  }
-
-  async function handlePayNow() {
-    setPaying(true);
-    const result = await initiatePaytechPaymentForZone(zoneId);
-    if (result.error) {
-      toast.error(result.error);
-      setPaying(false);
-      return;
-    }
-    if (result.redirectUrl) {
-      window.location.href = result.redirectUrl;
-    }
   }
 
   function handleTerminerClick() {
@@ -157,46 +112,6 @@ export function MatchActionButtons({ matchId, zoneId, status, venteActive, homeT
           )}
         </Button>
       </div>
-
-      {/* Modal paiement requis */}
-      <Dialog open={paymentOpen} onOpenChange={setPaymentOpen}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <div className="flex justify-center mb-2">
-              <div className="w-14 h-14 rounded-full bg-amber-100 flex items-center justify-center">
-                <Lock className="h-7 w-7 text-amber-600" />
-              </div>
-            </div>
-            <DialogTitle className="text-center">Billetterie non activée</DialogTitle>
-            <DialogDescription className="text-center">
-              Pour ouvrir la vente, activez d&apos;abord la billetterie du jour.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 pt-2">
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-center">
-              <p className="text-xs text-amber-700 font-semibold uppercase tracking-wide mb-1">Frais journaliers</p>
-              <p className="text-3xl font-bold text-amber-700">{formatFCFA(paymentAmount)}</p>
-              <p className="text-xs text-amber-600 mt-1">Valable 24h · Débloque caisse + scanner</p>
-            </div>
-            <Button
-              onClick={handlePayNow}
-              disabled={paying}
-              className="w-full h-11 bg-amber-600 hover:bg-amber-700 text-white font-semibold"
-            >
-              {paying ? (
-                <><Loader2 className="h-4 w-4 animate-spin mr-2" />Redirection…</>
-              ) : (
-                <><CreditCard className="h-4 w-4 mr-2" />Payer avec Paytech</>
-              )}
-            </Button>
-            <Link href="/abonnements" className="block">
-              <Button variant="outline" className="w-full h-9 text-sm" onClick={() => setPaymentOpen(false)}>
-                Voir les abonnements
-              </Button>
-            </Link>
-          </div>
-        </DialogContent>
-      </Dialog>
 
       {/* Modal score */}
       <Dialog open={scoreOpen} onOpenChange={setScoreOpen}>
