@@ -63,15 +63,22 @@ export default function NewMatchPage() {
 
       const { data: profile } = await supabase
         .from("profiles")
-        .select("zone_id, role, id")
+        .select("zone_id, role, id, allowed_zones")
         .eq("id", user.id)
         .single();
 
       if (profile?.role === "c3") {
-        // C3: load ALL teams from their ODCAV (RLS handles the restriction)
         setC3AccountId(profile.id);
+        const allowedZones: string[] = profile.allowed_zones ?? [];
+        let teamQuery = supabase.from("teams").select("id, name").order("name");
+        if (allowedZones.length > 0) {
+          teamQuery = teamQuery.in("zone_id", allowedZones);
+        } else {
+          // Aucune zone assignée : pas d'équipes
+          teamQuery = teamQuery.eq("zone_id", "00000000-0000-0000-0000-000000000000");
+        }
         const [{ data: teamList }, { data: templateList }] = await Promise.all([
-          supabase.from("teams").select("id, name").order("name"),
+          teamQuery,
           supabase.from("ticket_templates").select("id, name, price, default_quantity, color")
             .eq("c3_account_id", profile.id).order("price"),
         ]);

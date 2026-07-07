@@ -50,9 +50,18 @@ export default async function EquipesPage({
 
   const supabase = await createClient();
 
-  // C3: RLS returns all teams from their ODCAV's zones (no explicit filter needed)
   let query = supabase.from("teams").select("*").order("name");
-  if (!c3AccountId && effectiveZoneId) query = query.eq("zone_id", effectiveZoneId);
+  if (c3AccountId) {
+    // C3 : filtre par les zones autorisées si définies, sinon aucun résultat
+    const allowedZones = profile.allowed_zones;
+    if (allowedZones && allowedZones.length > 0) {
+      query = query.in("zone_id", allowedZones);
+    } else {
+      query = query.eq("zone_id", "00000000-0000-0000-0000-000000000000"); // aucun résultat
+    }
+  } else if (effectiveZoneId) {
+    query = query.eq("zone_id", effectiveZoneId);
+  }
 
   const { data: teams } = (await query) as { data: any[] | null };
 

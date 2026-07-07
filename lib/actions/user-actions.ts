@@ -81,6 +81,7 @@ export async function createUser(formData: {
   isPresident?: boolean;
   city?: string | null;
   permittedModules?: string[] | null;
+  allowedZones?: string[] | null;
 }) {
   const supabase = await createClient();
   const { data: { user: currentUser } } = await supabase.auth.getUser();
@@ -161,6 +162,7 @@ export async function createUser(formData: {
     created_by_admin: currentUser.id,
     city: formData.city || null,
     permitted_modules: formData.permittedModules || null,
+    allowed_zones: formData.allowedZones && formData.allowedZones.length > 0 ? formData.allowedZones : null,
   });
 
   if (profileError) {

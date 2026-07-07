@@ -42,6 +42,7 @@ export default function NewUserPage() {
   const [zoneId, setZoneId] = useState<string>(zoneParam ?? "");
   const [isPresident, setIsPresident] = useState(false);
   const [city, setCity] = useState("");
+  const [selectedZones, setSelectedZones] = useState<string[]>([]);
   const [allModules, setAllModules] = useState(true);
   const [selectedModules, setSelectedModules] = useState<string[]>([]);
 
@@ -76,7 +77,7 @@ export default function NewUserPage() {
 
   useEffect(() => {
     if (role !== "admin_zone") setIsPresident(false);
-    if (role !== "c3") setCity("");
+    if (role !== "c3") { setCity(""); setSelectedZones([]); }
     if (role !== "super_admin") { setAllModules(true); setSelectedModules([]); }
   }, [role]);
 
@@ -115,7 +116,14 @@ export default function NewUserPage() {
   const showPresidentCheckbox = isOdcavRole && role === "admin_zone";
   const showZoneSelector = isOdcavRole && !isDirectsMode && !zoneParam && role && role !== "c3" && role !== "super_admin";
   const showCityField = role === "c3";
+  const showZoneCheckboxes = isDirectsMode && role === "c3";
   const showModuleSelector = isDirectsMode && role === "super_admin";
+
+  function toggleZone(id: string) {
+    setSelectedZones((prev) =>
+      prev.includes(id) ? prev.filter((z) => z !== id) : [...prev, id]
+    );
+  }
 
   function toggleModule(key: string) {
     setSelectedModules((prev) =>
@@ -142,6 +150,7 @@ export default function NewUserPage() {
       isPresident: role === "admin_zone" ? isPresident : false,
       city: showCityField ? city || null : null,
       permittedModules,
+      allowedZones: showZoneCheckboxes && selectedZones.length > 0 ? selectedZones : null,
     });
 
     if (result.error) {
@@ -190,7 +199,7 @@ export default function NewUserPage() {
                 onClick={() => {
                   setTempPassword(null);
                   setEmail(""); setFullName(""); setPhone(""); setRole(""); setZoneId(zoneParam ?? "");
-                  setIsPresident(false); setCity(""); setAllModules(true); setSelectedModules([]);
+                  setIsPresident(false); setCity(""); setSelectedZones([]); setAllModules(true); setSelectedModules([]);
                 }}
               >
                 Créer un autre
@@ -256,6 +265,42 @@ export default function NewUserPage() {
                   placeholder="ex: NGUEKOKH"
                 />
                 <p className="text-xs text-muted-foreground">Le compte s&apos;appellera C3 {city || "…"}</p>
+              </div>
+            )}
+
+            {/* Zones accessibles — for C3 in directs mode */}
+            {showZoneCheckboxes && (
+              <div className="rounded-lg border p-4 space-y-3">
+                <div>
+                  <p className="text-sm font-semibold">Zones accessibles</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Sélectionnez les zones dont ce C3 pourra voir les équipes et créer des matchs
+                  </p>
+                </div>
+                {zones.length === 0 ? (
+                  <p className="text-xs text-muted-foreground italic">Aucune zone disponible</p>
+                ) : (
+                  <div className="space-y-2">
+                    {zones.map((zone) => (
+                      <div key={zone.id} className="flex items-center gap-3">
+                        <Checkbox
+                          id={`zone-${zone.id}`}
+                          checked={selectedZones.includes(zone.id)}
+                          onCheckedChange={() => toggleZone(zone.id)}
+                        />
+                        <Label htmlFor={`zone-${zone.id}`} className="cursor-pointer text-sm font-normal">
+                          {zone.name}
+                          {zone.region && <span className="text-muted-foreground ml-1 text-xs">({zone.region})</span>}
+                        </Label>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {selectedZones.length > 0 && (
+                  <p className="text-xs text-brand font-medium">
+                    {selectedZones.length} zone(s) sélectionnée(s)
+                  </p>
+                )}
               </div>
             )}
 

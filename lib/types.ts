@@ -46,6 +46,7 @@ export interface Profile {
   zone?: Zone;
   city?: string | null;
   permitted_modules?: string[] | null;
+  allowed_zones?: string[] | null;
 }
 
 export interface Team {
