@@ -239,8 +239,8 @@ export function UnsoldModal({ matchId, matchName, open, onClose }: Props) {
               <h3 className="text-sm font-semibold">Attribuer les billets à un autre match</h3>
             </div>
             <p className="text-xs text-muted-foreground">
-              Les billets non scannés de ce match seront transférés avec de nouveaux QR codes.
-              Les billets physiques déjà imprimés devront être réimprimés.
+              Les billets physiques non scannés (entre les mains des caissiers) seront rattachés à ce nouveau match.
+              Les QR codes ne changent pas — les billets déjà imprimés restent valides pour le match B.
             </p>
 
             <Select value={reassignMatchId} onValueChange={(v) => { setReassignMatchId(v ?? ""); setConfirmReassign(false); }}>
@@ -273,8 +273,8 @@ export function UnsoldModal({ matchId, matchName, open, onClose }: Props) {
                 <div className="flex items-start gap-2 text-sm text-orange-800">
                   <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
                   <p>
-                    Tous les billets non scannés de <strong>{matchName}</strong> seront transférés.
-                    Les anciens QR codes ne fonctionneront plus. Confirmez ?
+                    Tous les billets non scannés de <strong>{matchName}</strong> seront rattachés au match de destination.
+                    Les mêmes QR codes imprimés seront valides pour le nouveau match. Confirmez ?
                   </p>
                 </div>
                 <div className="flex gap-2">

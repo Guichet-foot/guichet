@@ -320,16 +320,17 @@ export async function reassignTicketsToMatch(
     return { error: "Aucun billet non scanné trouvé pour ce match" };
   }
 
-  // Met à jour par lots de 100 : nouveau match + nouveau QR code
-  const updates = (tickets as any[]).map((t) => ({
-    id: t.id,
-    match_id: toMatchId,
-    qr_token: crypto.randomUUID(),
-    status: "vendu",
-  }));
+  // On transfère les données vers match B sans changer le QR code :
+  // les billets physiques restent valides à la caisse du match B.
+  // Les billets "annule" (invendus déclarés) redeviennent "vendu" dans match B.
+  const ids = (tickets as any[]).map((t) => t.id);
 
-  for (let i = 0; i < updates.length; i += 100) {
-    const { error } = await adminClient.from("tickets").upsert(updates.slice(i, i + 100));
+  for (let i = 0; i < ids.length; i += 500) {
+    const batch = ids.slice(i, i + 500);
+    const { error } = await adminClient
+      .from("tickets")
+      .update({ match_id: toMatchId, status: "vendu" })
+      .in("id", batch);
     if (error) return { error: error.message };
   }
 
