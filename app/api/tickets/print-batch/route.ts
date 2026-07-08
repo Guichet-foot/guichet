@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -20,7 +20,9 @@ export async function GET(request: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return new NextResponse("Non authentifié", { status: 401 });
 
-  const { data: tickets } = await supabase
+  // adminClient bypasses RLS — needed for C3 accounts where matches have zone_id=null
+  const adminClient = await createAdminClient();
+  const { data: tickets } = await adminClient
     .from("tickets")
     .select("*, match:matches(home_team, away_team, venue, match_date), category:ticket_categories(name), seller:profiles!tickets_sold_by_fkey(full_name)")
     .eq("sale_batch_id", batchId)
