@@ -3,6 +3,45 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { format } from "date-fns";
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
+export async function getMatchCategoriesForSale(matchId: string): Promise<{
+  id: string;
+  name: string;
+  price: number;
+  sold_count: number;
+}[]> {
+  const adminClient = await createAdminClient();
+
+  const { data: cats } = await adminClient
+    .from("ticket_categories")
+    .select("id, name, price")
+    .eq("match_id", matchId)
+    .eq("active", true)
+    .order("display_order");
+
+  if (!cats || cats.length === 0) return [];
+
+  const catIds = cats.map((c: any) => c.id);
+  const { data: tickets } = await adminClient
+    .from("tickets")
+    .select("category_id")
+    .in("category_id", catIds)
+    .neq("status", "annule");
+
+  const soldMap: Record<string, number> = {};
+  tickets?.forEach((t: any) => {
+    soldMap[t.category_id] = (soldMap[t.category_id] || 0) + 1;
+  });
+
+  return cats.map((c: any) => ({
+    id: c.id as string,
+    name: c.name as string,
+    price: c.price as number,
+    sold_count: soldMap[c.id] || 0,
+  }));
+}
 import type { ScanResult } from "@/lib/types";
 
 export async function createTicket(matchId: string, categoryId: string) {
@@ -21,7 +60,7 @@ export async function createTickets(matchId: string, categoryId: string, quantit
 
   const { data: category } = await supabase
     .from("ticket_categories")
-    .select("price, quantity_total, match_id")
+    .select("price, match_id")
     .eq("id", categoryId)
     .single();
 
@@ -36,20 +75,6 @@ export async function createTickets(matchId: string, categoryId: string, quantit
   if (!match) return { error: "Match introuvable" };
   if (match.status === "termine" || match.status === "annule") {
     return { error: "Ce match est terminé" };
-  }
-
-  const { count: soldCount } = await supabase
-    .from("tickets")
-    .select("*", { count: "exact", head: true })
-    .eq("category_id", categoryId)
-    .neq("status", "annule");
-
-  const remaining = category.quantity_total - (soldCount || 0);
-  if (remaining <= 0) {
-    return { error: "Plus de billets disponibles dans cette catégorie" };
-  }
-  if (qty > remaining) {
-    return { error: `Seulement ${remaining} billet(s) disponible(s)` };
   }
 
   const today = format(new Date(), "yyyyMMdd");

@@ -110,7 +110,6 @@ export async function upsertTicketCategory(formData: {
   matchId: string;
   name: string;
   price: number;
-  quantityTotal: number;
   displayOrder: number;
 }) {
   const supabase = await createClient();
@@ -121,7 +120,7 @@ export async function upsertTicketCategory(formData: {
       .update({
         name: formData.name,
         price: formData.price,
-        quantity_total: formData.quantityTotal,
+        quantity_total: 999999,
         display_order: formData.displayOrder,
       })
       .eq("id", formData.id);
@@ -132,7 +131,7 @@ export async function upsertTicketCategory(formData: {
       match_id: formData.matchId,
       name: formData.name,
       price: formData.price,
-      quantity_total: formData.quantityTotal,
+      quantity_total: 999999,
       display_order: formData.displayOrder,
       active: true,
     });

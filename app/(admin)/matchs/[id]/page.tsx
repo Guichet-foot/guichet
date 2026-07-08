@@ -5,7 +5,6 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
 import { ArrowLeft, Pencil, Settings, Ticket } from "lucide-react";
 import {
   MATCH_STATUS_LABELS,
@@ -58,9 +57,6 @@ export default async function MatchDetailPage({
       totalSold++;
     }
   });
-
-  const totalCapacity =
-    categories?.reduce((sum, c) => sum + c.quantity_total, 0) || 0;
 
   const backUrl = zone ? `/matchs?zone=${zone}` : "/matchs";
   const editUrl = zone ? `/matchs/${id}/modifier?zone=${zone}` : `/matchs/${id}/modifier`;
@@ -118,13 +114,7 @@ export default async function MatchDetailPage({
         <Card>
           <CardContent className="pt-6">
             <p className="text-sm text-muted-foreground">Billets vendus</p>
-            <p className="text-2xl font-bold">
-              {totalSold} / {totalCapacity}
-            </p>
-            <Progress
-              value={totalCapacity > 0 ? (totalSold / totalCapacity) * 100 : 0}
-              className="mt-2"
-            />
+            <p className="text-2xl font-bold">{totalSold}</p>
           </CardContent>
         </Card>
         <Card>
@@ -162,22 +152,15 @@ export default async function MatchDetailPage({
             return (
               <Card key={cat.id}>
                 <CardContent className="pt-6">
-                  <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center justify-between mb-1">
                     <span className="font-semibold">{cat.name}</span>
                     <span className="font-bold text-brand">
                       {formatFCFA(cat.price)}
                     </span>
                   </div>
-                  <p className="text-sm text-muted-foreground mb-2">
-                    {sold} / {cat.quantity_total} vendus
+                  <p className="text-sm text-muted-foreground">
+                    {sold} vendus
                   </p>
-                  <Progress
-                    value={
-                      cat.quantity_total > 0
-                        ? (sold / cat.quantity_total) * 100
-                        : 0
-                    }
-                  />
                 </CardContent>
               </Card>
             );

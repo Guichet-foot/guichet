@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { createTickets, sellBlocTickets } from "@/lib/actions/ticket-actions";
+import { createTickets, sellBlocTickets, getMatchCategoriesForSale } from "@/lib/actions/ticket-actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -39,7 +39,6 @@ interface CategoryOption {
   id: string;
   name: string;
   price: number;
-  quantity_total: number;
   sold_count: number;
 }
 
@@ -67,52 +66,10 @@ function VenteContent() {
     localStorage.setItem(PRINT_FORMAT_KEY, fmt);
   }
 
-  const loadCategories = useCallback(
-    async (matchId: string) => {
-      const supabase = createClient();
-
-      const { data: cats } = await supabase
-        .from("ticket_categories")
-        .select("*")
-        .eq("match_id", matchId)
-        .eq("active", true)
-        .order("display_order");
-
-      if (!cats) return;
-
-      const catIds = cats.map((c) => c.id);
-      let soldMap: Record<string, number> = {};
-
-      if (catIds.length > 0) {
-        const { data: tickets } = await supabase
-          .from("tickets")
-          .select("category_id")
-          .in("category_id", catIds)
-          .neq("status", "annule");
-
-        if (tickets) {
-          soldMap = tickets.reduce(
-            (acc, t) => {
-              acc[t.category_id] = (acc[t.category_id] || 0) + 1;
-              return acc;
-            },
-            {} as Record<string, number>
-          );
-        }
-      }
-
-      setCategories(
-        cats.map((c) => ({
-          id: c.id,
-          name: c.name,
-          price: c.price,
-          quantity_total: c.quantity_total,
-          sold_count: soldMap[c.id] || 0,
-        }))
-      );
-    },
-    []
-  );
+  const loadCategories = useCallback(async (matchId: string) => {
+    const cats = await getMatchCategoriesForSale(matchId);
+    setCategories(cats);
+  }, []);
 
   useEffect(() => {
     async function init() {
@@ -139,7 +96,6 @@ function VenteContent() {
       if (profile.zone_id) {
         matchQuery = matchQuery.eq("zone_id", profile.zone_id);
       } else {
-        // C3 caissier: load matches belonging to the C3 account
         matchQuery = matchQuery.eq("c3_account_id", profile.created_by_admin);
       }
 
@@ -182,11 +138,8 @@ function VenteContent() {
       }
       const num = parseInt(e.key);
       if (!sheetOpen && num >= 1 && num <= categories.length) {
-        const cat = categories[num - 1];
-        if (cat.sold_count < cat.quantity_total) {
-          setSelectedCategory(cat);
-          setSheetOpen(true);
-        }
+        setSelectedCategory(categories[num - 1]);
+        setSheetOpen(true);
       }
     }
     window.addEventListener("keydown", handleKeyDown);
@@ -199,7 +152,6 @@ function VenteContent() {
   }
 
   function handleCategoryClick(cat: CategoryOption) {
-    if (cat.sold_count >= cat.quantity_total) return;
     setSelectedCategory(cat);
     setQuantity(1);
     setSheetOpen(true);
@@ -222,7 +174,6 @@ function VenteContent() {
       count: prev.count + quantity,
       total: prev.total + selectedCategory.price * quantity,
     }));
-
     setCategories((prev) =>
       prev.map((c) =>
         c.id === selectedCategory.id
@@ -230,7 +181,6 @@ function VenteContent() {
           : c
       )
     );
-
     setSheetOpen(false);
     setSelectedCategory(null);
     setQuantity(1);
@@ -259,7 +209,6 @@ function VenteContent() {
       count: prev.count + sold,
       total: prev.total + selectedCategory.price * sold,
     }));
-
     setCategories((prev) =>
       prev.map((c) =>
         c.id === selectedCategory.id
@@ -267,7 +216,6 @@ function VenteContent() {
           : c
       )
     );
-
     setSheetOpen(false);
     setSelectedCategory(null);
     setQuantity(1);
@@ -355,31 +303,22 @@ function VenteContent() {
         </div>
       )}
 
-      {(() => {
-        if (categories.length === 0) return null;
-        return (
+      {categories.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {categories.map((cat, index) => {
-            const remaining = cat.quantity_total - cat.sold_count;
-            const soldOut = remaining <= 0;
-            const colorClass =
-              CATEGORY_COLORS[index % CATEGORY_COLORS.length];
-
+            const colorClass = CATEGORY_COLORS[index % CATEGORY_COLORS.length];
             return (
               <button
                 key={cat.id}
                 onClick={() => handleCategoryClick(cat)}
-                disabled={soldOut}
-                className={`rounded-xl p-6 text-left transition-transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed ${colorClass} min-h-[120px]`}
+                className={`rounded-xl p-6 text-left transition-transform active:scale-95 ${colorClass} min-h-[120px]`}
               >
                 <p className="text-lg font-bold">{cat.name}</p>
                 <p className="text-3xl font-bold mt-1">
                   {formatFCFA(cat.price)}
                 </p>
                 <p className="text-sm mt-2 opacity-80">
-                  {soldOut
-                    ? "Épuisé"
-                    : `${remaining} restant${remaining > 1 ? "s" : ""}`}
+                  {cat.sold_count} vendus
                 </p>
                 <p className="text-xs opacity-60 mt-1">
                   Touche {index + 1}
@@ -388,8 +327,7 @@ function VenteContent() {
             );
           })}
         </div>
-        );
-      })()}
+      )}
 
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
         <SheetContent side="bottom" className="rounded-t-2xl">
@@ -399,8 +337,6 @@ function VenteContent() {
             </SheetTitle>
           </SheetHeader>
           {selectedCategory && (() => {
-            const remaining = selectedCategory.quantity_total - selectedCategory.sold_count;
-            const maxQty = Math.min(30, remaining);
             const totalPrice = selectedCategory.price * quantity;
             return (
               <div className="py-4 space-y-5">
@@ -428,8 +364,8 @@ function VenteContent() {
                   </div>
                   <button
                     type="button"
-                    onClick={() => setQuantity((q) => Math.min(maxQty, q + 1))}
-                    disabled={quantity >= maxQty}
+                    onClick={() => setQuantity((q) => Math.min(30, q + 1))}
+                    disabled={quantity >= 30}
                     className="w-12 h-12 rounded-full bg-muted flex items-center justify-center disabled:opacity-30 text-xl font-bold active:scale-95 transition-transform"
                   >
                     <Plus className="h-5 w-5" />
@@ -447,7 +383,6 @@ function VenteContent() {
                   )}
                 </div>
 
-                {/* VENDRE — enregistre la vente sans imprimer (billets ODCAV pré-imprimés) */}
                 <Button
                   onClick={handleVendre}
                   disabled={vendrLoading || loading}
@@ -463,7 +398,6 @@ function VenteContent() {
                   )}
                 </Button>
 
-                {/* IMPRIMER — crée et imprime un nouveau billet (vente_active requise) */}
                 <Button
                   onClick={handleConfirm}
                   disabled={loading || vendrLoading}
@@ -480,7 +414,7 @@ function VenteContent() {
                   )}
                 </Button>
                 <p className="text-center text-xs text-muted-foreground">
-                  Max {maxQty} billet(s) disponible(s)
+                  Max 30 billet(s) par opération
                 </p>
               </div>
             );
@@ -490,6 +424,8 @@ function VenteContent() {
     </div>
   );
 }
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 export default function VentePage() {
   return <VenteContent />;

@@ -38,13 +38,11 @@ export function CategoryManager({
 
   const [name, setName] = useState("");
   const [price, setPrice] = useState("");
-  const [quantityTotal, setQuantityTotal] = useState("");
   const [displayOrder, setDisplayOrder] = useState("0");
 
   function resetForm() {
     setName("");
     setPrice("");
-    setQuantityTotal("");
     setDisplayOrder("0");
     setEditingId(null);
   }
@@ -53,7 +51,6 @@ export function CategoryManager({
     setEditingId(cat.id);
     setName(cat.name);
     setPrice(String(cat.price));
-    setQuantityTotal(String(cat.quantity_total));
     setDisplayOrder(String(cat.display_order));
     setOpen(true);
   }
@@ -67,7 +64,6 @@ export function CategoryManager({
       matchId,
       name,
       price: parseInt(price),
-      quantityTotal: parseInt(quantityTotal),
       displayOrder: parseInt(displayOrder),
     });
 
@@ -137,17 +133,6 @@ export function CategoryManager({
                 />
               </div>
               <div className="space-y-2">
-                <Label>Quantité disponible</Label>
-                <Input
-                  type="number"
-                  value={quantityTotal}
-                  onChange={(e) => setQuantityTotal(e.target.value)}
-                  required
-                  min="1"
-                  placeholder="200"
-                />
-              </div>
-              <div className="space-y-2">
                 <Label>Ordre d&apos;affichage</Label>
                 <Input
                   type="number"
@@ -184,7 +169,6 @@ export function CategoryManager({
         <div className="grid gap-4">
           {categories.map((cat) => {
             const sold = soldCounts[cat.id] || 0;
-            const hasSales = sold > 0;
             return (
               <Card key={cat.id}>
                 <CardContent className="pt-6">
@@ -195,34 +179,26 @@ export function CategoryManager({
                         {formatFCFA(cat.price)}
                       </p>
                       <p className="text-sm text-muted-foreground">
-                        {sold} / {cat.quantity_total} vendus — Ordre :{" "}
-                        {cat.display_order}
+                        {sold} vendus · Ordre : {cat.display_order}
                       </p>
                     </div>
                     <div className="flex gap-2">
-                      {!hasSales && (
-                        <>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => openEdit(cat)}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="text-danger"
-                            onClick={() => handleDelete(cat.id)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </>
-                      )}
-                      {hasSales && (
-                        <span className="text-xs text-muted-foreground italic">
-                          Verrouillé
-                        </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => openEdit(cat)}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      {sold === 0 && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-danger"
+                          onClick={() => handleDelete(cat.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                       )}
                     </div>
                   </div>

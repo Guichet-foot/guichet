@@ -75,7 +75,7 @@ export async function applyTemplatesToMatch(matchId: string, templateIds: string
     match_id: matchId,
     name: t.name,
     price: t.price,
-    quantity_total: t.default_quantity,
+    quantity_total: 999999,
     display_order: i,
     active: true,
   }));
