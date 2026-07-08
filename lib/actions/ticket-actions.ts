@@ -58,7 +58,9 @@ export async function createTickets(matchId: string, categoryId: string, quantit
 
   if (!user) return { error: "Non authentifié" };
 
-  const { data: category } = await supabase
+  const adminClient = await createAdminClient();
+
+  const { data: category } = await adminClient
     .from("ticket_categories")
     .select("price, match_id")
     .eq("id", categoryId)
@@ -66,7 +68,7 @@ export async function createTickets(matchId: string, categoryId: string, quantit
 
   if (!category) return { error: "Catégorie introuvable" };
 
-  const { data: match } = await supabase
+  const { data: match } = await adminClient
     .from("matches")
     .select("status")
     .eq("id", matchId)
@@ -79,7 +81,7 @@ export async function createTickets(matchId: string, categoryId: string, quantit
 
   const today = format(new Date(), "yyyyMMdd");
 
-  const { count: todayCount } = await supabase
+  const { count: todayCount } = await adminClient
     .from("tickets")
     .select("*", { count: "exact", head: true })
     .like("serial_number", `GF-${today}-%`);
@@ -97,7 +99,7 @@ export async function createTickets(matchId: string, categoryId: string, quantit
     sale_batch_id: batchId,
   }));
 
-  const { data: inserted, error } = await supabase
+  const { data: inserted, error } = await adminClient
     .from("tickets")
     .insert(ticketsToInsert)
     .select("id");
