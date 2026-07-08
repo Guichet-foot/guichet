@@ -156,6 +156,190 @@ export async function resetUnsold(matchId: string): Promise<{ error?: string }> 
   return {};
 }
 
+// ── Nouvelle API invendus sans scan billet par billet ─────────────────────
+
+// Catégories d'un match avec comptes par statut de billet
+export async function getMatchCategoriesForUnsold(matchId: string): Promise<{
+  id: string; name: string; price: number;
+  vendu_count: number; scanne_count: number; annule_count: number;
+}[]> {
+  await requireRole(["super_admin", "admin_zone", "fondateur", "c3"]);
+  const adminClient = await createAdminClient();
+
+  const { data: cats } = await adminClient
+    .from("ticket_categories")
+    .select("id, name, price")
+    .eq("match_id", matchId)
+    .eq("active", true)
+    .order("display_order");
+
+  if (!cats || cats.length === 0) return [];
+
+  const catIds = cats.map((c: any) => c.id);
+  const { data: tickets } = await adminClient
+    .from("tickets")
+    .select("category_id, status")
+    .in("category_id", catIds);
+
+  const venduMap: Record<string, number> = {};
+  const scanneMap: Record<string, number> = {};
+  const annuleMap: Record<string, number> = {};
+
+  tickets?.forEach((t: any) => {
+    if (t.status === "vendu") venduMap[t.category_id] = (venduMap[t.category_id] || 0) + 1;
+    else if (t.status === "scanne") scanneMap[t.category_id] = (scanneMap[t.category_id] || 0) + 1;
+    else if (t.status === "annule") annuleMap[t.category_id] = (annuleMap[t.category_id] || 0) + 1;
+  });
+
+  return cats.map((c: any) => ({
+    id: c.id as string,
+    name: c.name as string,
+    price: c.price as number,
+    vendu_count: venduMap[c.id] || 0,
+    scanne_count: scanneMap[c.id] || 0,
+    annule_count: annuleMap[c.id] || 0,
+  }));
+}
+
+// Déclare les invendus par catégorie en entrant des nombres
+// Réinitialise les billets annulés existants puis réapplique les nouveaux comptes
+export async function declareUnsoldByCategory(
+  matchId: string,
+  categoryUnsolds: { categoryId: string; count: number }[]
+): Promise<{ error?: string; totalUnsold?: number }> {
+  await requireRole(["super_admin", "admin_zone", "fondateur", "c3"]);
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Non authentifié" };
+
+  const adminClient = await createAdminClient();
+
+  // Étape 1 : remettre tous les billets annulés de ce match en "vendu"
+  const { data: currentAnnule } = await adminClient
+    .from("tickets")
+    .select("id")
+    .eq("match_id", matchId)
+    .eq("status", "annule");
+
+  if (currentAnnule && currentAnnule.length > 0) {
+    await adminClient
+      .from("tickets")
+      .update({ status: "vendu" })
+      .in("id", currentAnnule.map((t: any) => t.id));
+  }
+
+  // Étape 2 : annuler le nombre déclaré par catégorie
+  let totalUnsold = 0;
+  for (const { categoryId, count } of categoryUnsolds) {
+    if (count <= 0) continue;
+    const { data: vendus } = await adminClient
+      .from("tickets")
+      .select("id")
+      .eq("match_id", matchId)
+      .eq("category_id", categoryId)
+      .eq("status", "vendu")
+      .limit(count);
+
+    if (!vendus || vendus.length === 0) continue;
+    await adminClient
+      .from("tickets")
+      .update({ status: "annule" })
+      .in("id", vendus.map((t: any) => t.id));
+    totalUnsold += vendus.length;
+  }
+
+  // Étape 3 : mettre à jour match_unsold
+  const { error: upsertErr } = await adminClient.from("match_unsold").upsert(
+    {
+      match_id: matchId,
+      unsold_count: totalUnsold,
+      tout_vendus: totalUnsold === 0,
+      is_closed: false,
+      declared_by: user.id,
+      declared_at: new Date().toISOString(),
+    },
+    { onConflict: "match_id" }
+  );
+  if (upsertErr) return { error: upsertErr.message };
+
+  revalidatePath("/invendus");
+  revalidatePath("/finances");
+  return { totalUnsold };
+}
+
+// Matchs disponibles pour la réattribution (même zone/C3, non terminés/annulés)
+export async function getMatchesForReassignment(excludeMatchId: string): Promise<{
+  id: string; home_team: string; away_team: string; match_date: string;
+}[]> {
+  const profile = await requireRole(["super_admin", "admin_zone", "fondateur", "c3"]);
+  const adminClient = await createAdminClient();
+
+  let query = adminClient
+    .from("matches")
+    .select("id, home_team, away_team, match_date")
+    .neq("id", excludeMatchId)
+    .not("status", "in", '("annule","termine")')
+    .order("match_date", { ascending: true });
+
+  if (profile.role === "admin_zone") {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return [];
+    const { data: prof } = await supabase.from("profiles").select("zone_id").eq("id", user.id).single();
+    if (prof?.zone_id) query = query.eq("zone_id", prof.zone_id as string);
+    else return [];
+  } else if (profile.role === "c3") {
+    query = query.eq("c3_account_id", profile.id);
+  } else if (profile.role === "super_admin") {
+    const { data: ownedZones } = await adminClient.from("zones").select("id").eq("created_by", profile.id);
+    const zoneIds = ((ownedZones || []) as any[]).map((z) => z.id);
+    if (zoneIds.length === 0) return [];
+    query = query.in("zone_id", zoneIds);
+  }
+
+  const { data } = await query;
+  return (data || []) as any[];
+}
+
+// Réattribue les billets non scannés d'un match vers un autre avec de nouveaux QR codes
+export async function reassignTicketsToMatch(
+  fromMatchId: string,
+  toMatchId: string
+): Promise<{ error?: string; count?: number }> {
+  await requireRole(["super_admin", "admin_zone", "fondateur", "c3"]);
+  const adminClient = await createAdminClient();
+
+  // Récupère les billets non scannés (vendu + annule, pas scanne)
+  const { data: tickets } = await adminClient
+    .from("tickets")
+    .select("id")
+    .eq("match_id", fromMatchId)
+    .neq("status", "scanne");
+
+  if (!tickets || tickets.length === 0) {
+    return { error: "Aucun billet non scanné trouvé pour ce match" };
+  }
+
+  // Met à jour par lots de 100 : nouveau match + nouveau QR code
+  const updates = (tickets as any[]).map((t) => ({
+    id: t.id,
+    match_id: toMatchId,
+    qr_token: crypto.randomUUID(),
+    status: "vendu",
+  }));
+
+  for (let i = 0; i < updates.length; i += 100) {
+    const { error } = await adminClient.from("tickets").upsert(updates.slice(i, i + 100));
+    if (error) return { error: error.message };
+  }
+
+  revalidatePath("/invendus");
+  revalidatePath("/matchs");
+  revalidatePath(`/matchs/${fromMatchId}`);
+  revalidatePath(`/matchs/${toMatchId}`);
+  return { count: updates.length };
+}
+
 // Scan unsold ticket: marks it as 'annule' in the DB
 export async function scanUnsoldTicket(qrToken: string): Promise<{ status: "ok" | "already_annule" | "already_scanned" | "not_found"; message: string; matchName?: string }> {
   await requireRole(["super_admin", "admin_zone", "fondateur", "c3"]);

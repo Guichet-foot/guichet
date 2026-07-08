@@ -3,6 +3,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState } from "react";
 import { declareToutVendus, closeMatchUnsold } from "@/lib/actions/invendus-actions";
+import { UnsoldModal } from "./unsold-modal";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -24,7 +25,6 @@ import {
 import { formatDate } from "@/lib/format";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 
 interface Match {
   id: string;
@@ -56,6 +56,7 @@ export function InvendusList({ matches, unsoldMap, readOnly = false }: Props) {
   const router = useRouter();
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<{ match: Match; type: ConfirmType } | null>(null);
+  const [unsoldModal, setUnsoldModal] = useState<{ match: Match } | null>(null);
 
   async function handleToutVendus(matchId: string) {
     setLoadingId(matchId);
@@ -164,16 +165,16 @@ export function InvendusList({ matches, unsoldMap, readOnly = false }: Props) {
                     {!readOnly && (
                       <>
                         {/* Ajouter invendus */}
-                        <Link href={`/invendus/${match.id}/scanner`}
-                          aria-disabled={isClosed}
-                          tabIndex={isClosed ? -1 : undefined}
-                          onClick={(e) => isClosed && e.preventDefault()}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="gap-1 text-xs h-8"
+                          disabled={isClosed}
+                          onClick={() => setUnsoldModal({ match })}
                         >
-                          <Button size="sm" variant="outline" className="gap-1 text-xs h-8" disabled={isClosed}>
-                            <ScanLine className="h-3.5 w-3.5" />
-                            {isDeclared && hasUnsold ? "Scanner +" : "Ajouter invendus"}
-                          </Button>
-                        </Link>
+                          <ScanLine className="h-3.5 w-3.5" />
+                          {isDeclared && hasUnsold ? "Modifier" : "Ajouter invendus"}
+                        </Button>
 
                         {/* Tout vendus */}
                         <Button
@@ -218,6 +219,16 @@ export function InvendusList({ matches, unsoldMap, readOnly = false }: Props) {
           );
         })}
       </div>
+
+      {/* Modal invendus par catégorie */}
+      {unsoldModal && (
+        <UnsoldModal
+          matchId={unsoldModal.match.id}
+          matchName={`${unsoldModal.match.home_team} vs ${unsoldModal.match.away_team}`}
+          open={!!unsoldModal}
+          onClose={() => setUnsoldModal(null)}
+        />
+      )}
 
       {/* Confirm dialogs */}
       <Dialog open={!!confirmDialog} onOpenChange={() => setConfirmDialog(null)}>
