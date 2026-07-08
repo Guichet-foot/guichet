@@ -52,7 +52,7 @@ function VenteContent() {
   const [quantity, setQuantity] = useState(1);
   const [loading, setLoading] = useState(false);
   const [vendrLoading, setVendreLoading] = useState(false);
-  const [todaySales, setTodaySales] = useState({ count: 0, total: 0 });
+  const [matchSales, setMatchSales] = useState({ count: 0, total: 0 });
   const [initialLoading, setInitialLoading] = useState(true);
   const [printFormat, setPrintFormat] = useState<PrintFormat>("80");
 
@@ -66,9 +66,21 @@ function VenteContent() {
     localStorage.setItem(PRINT_FORMAT_KEY, fmt);
   }
 
-  const loadCategories = useCallback(async (matchId: string) => {
-    const cats = await getMatchCategoriesForSale(matchId);
+  const loadMatchData = useCallback(async (matchId: string, supabase: ReturnType<typeof createClient>, userId: string) => {
+    const [cats, { data: mTickets }] = await Promise.all([
+      getMatchCategoriesForSale(matchId),
+      supabase
+        .from("tickets")
+        .select("price")
+        .eq("match_id", matchId)
+        .eq("sold_by", userId)
+        .neq("status", "annule"),
+    ]);
     setCategories(cats);
+    setMatchSales({
+      count: mTickets?.length || 0,
+      total: mTickets?.reduce((sum, t) => sum + (t as any).price, 0) || 0,
+    });
   }, []);
 
   useEffect(() => {
@@ -100,38 +112,20 @@ function VenteContent() {
           matchQuery = matchQuery.eq("c3_account_id", profile.created_by_admin);
         }
 
-        const todayStart = new Date();
-        todayStart.setHours(0, 0, 0, 0);
-
-        const [{ data: matchList }, { data: todayTickets }] = await Promise.all([
-          matchQuery,
-          supabase
-            .from("tickets")
-            .select("price")
-            .eq("sold_by", user.id)
-            .gte("sold_at", todayStart.toISOString())
-            .neq("status", "annule"),
-        ]);
+        const { data: matchList } = await matchQuery;
 
         if (matchList && matchList.length > 0) {
           setMatches(matchList);
           const firstActive = matchList.find((m: any) => m.vente_active) || matchList[0];
           setSelectedMatchId(firstActive.id);
-          await loadCategories(firstActive.id);
-        }
-
-        if (todayTickets) {
-          setTodaySales({
-            count: todayTickets.length,
-            total: todayTickets.reduce((sum, t) => sum + t.price, 0),
-          });
+          await loadMatchData(firstActive.id, supabase, user.id);
         }
       } finally {
         setInitialLoading(false);
       }
     }
     init();
-  }, [loadCategories]);
+  }, [loadMatchData]);
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -152,7 +146,9 @@ function VenteContent() {
 
   async function handleMatchChange(matchId: string) {
     setSelectedMatchId(matchId);
-    await loadCategories(matchId);
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) await loadMatchData(matchId, supabase, user.id);
   }
 
   function handleCategoryClick(cat: CategoryOption) {
@@ -174,7 +170,7 @@ function VenteContent() {
     }
 
     toast.success(quantity > 1 ? `${quantity} billets imprimés !` : "Billet imprimé !");
-    setTodaySales((prev) => ({
+    setMatchSales((prev) => ({
       count: prev.count + quantity,
       total: prev.total + selectedCategory.price * quantity,
     }));
@@ -209,7 +205,7 @@ function VenteContent() {
 
     const sold = (result as { sold: number }).sold;
     toast.success(sold > 1 ? `${sold} billets enregistrés !` : "Vente enregistrée !");
-    setTodaySales((prev) => ({
+    setMatchSales((prev) => ({
       count: prev.count + sold,
       total: prev.total + selectedCategory.price * sold,
     }));
@@ -250,9 +246,9 @@ function VenteContent() {
         <CardContent className="pt-4 pb-4">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-sm text-muted-foreground">Vos ventes du jour</p>
+              <p className="text-sm text-muted-foreground">Vos ventes de ce match</p>
               <p className="text-lg font-bold">
-                {todaySales.count} billets / {formatFCFA(todaySales.total)}
+                {matchSales.count} billets / {formatFCFA(matchSales.total)}
               </p>
             </div>
             {/* Sélecteur format d'impression */}
