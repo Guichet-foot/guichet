@@ -199,9 +199,14 @@ export async function updateMatch(matchId: string, formData: {
 export async function toggleMatchVente(matchId: string, venteActive: boolean) {
   const supabase = await createClient();
 
+  const updateData: Record<string, unknown> = { vente_active: venteActive };
+  if (venteActive) {
+    updateData.status = "en_cours";
+  }
+
   const { error } = await supabase
     .from("matches")
-    .update({ vente_active: venteActive })
+    .update(updateData)
     .eq("id", matchId);
 
   if (error) return { error: error.message };
