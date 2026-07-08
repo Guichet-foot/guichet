@@ -166,18 +166,28 @@ export function UnsoldModal({ matchId, matchName, open, onClose }: Props) {
                 Saisir le nombre de billets invendus par catégorie. Les billets scannés à l&apos;entrée ne peuvent pas être déclarés invendus.
               </p>
               {categories.map((cat) => {
-                const maxUnsold = cat.vendu_count + cat.annule_count;
+                const totalPrinted = cat.vendu_count + cat.scanne_count + cat.annule_count;
+                const maxUnsold = cat.vendu_count + cat.annule_count; // non scannés
+                const allScanned = totalPrinted > 0 && maxUnsold === 0;
                 const currentVal = parseInt(unsoldCounts[cat.id] || "0") || 0;
                 const isOver = currentVal > maxUnsold;
                 return (
-                  <div key={cat.id} className="bg-muted/40 rounded-lg p-3">
+                  <div
+                    key={cat.id}
+                    className={`rounded-lg p-3 ${allScanned ? "bg-green-50 border border-green-200" : "bg-muted/40"}`}
+                  >
                     <div className="flex items-start gap-3">
                       <div className="flex-1 min-w-0">
                         <p className="font-semibold text-sm">{cat.name}</p>
                         <p className="text-xs text-muted-foreground">
-                          {formatFCFA(cat.price)} · {cat.scanne_count} scannés · {cat.vendu_count} vendus
+                          {formatFCFA(cat.price)} · {totalPrinted} imprimés · {cat.scanne_count} scannés
                           {cat.annule_count > 0 && ` · ${cat.annule_count} invendus`}
                         </p>
+                        {allScanned && (
+                          <p className="text-xs text-green-700 font-medium mt-0.5">
+                            ✓ Tous les billets ont été validés à l&apos;entrée
+                          </p>
+                        )}
                         {isOver && (
                           <p className="text-xs text-red-600 mt-0.5">
                             Max : {maxUnsold} (billets non scannés)
@@ -185,12 +195,14 @@ export function UnsoldModal({ matchId, matchName, open, onClose }: Props) {
                         )}
                       </div>
                       <div className="flex flex-col items-end gap-1 shrink-0">
-                        <Label className="text-xs text-muted-foreground">Invendus</Label>
+                        <Label className={`text-xs ${allScanned ? "text-green-600" : "text-muted-foreground"}`}>
+                          Invendus
+                        </Label>
                         <Input
                           type="number"
                           min="0"
                           max={maxUnsold}
-                          value={unsoldCounts[cat.id] ?? ""}
+                          value={allScanned ? "0" : (unsoldCounts[cat.id] ?? "")}
                           onChange={(e) =>
                             setUnsoldCounts((prev) => ({
                               ...prev,
@@ -198,7 +210,14 @@ export function UnsoldModal({ matchId, matchName, open, onClose }: Props) {
                             }))
                           }
                           placeholder="0"
-                          className={`w-24 text-center ${isOver ? "border-red-400" : ""}`}
+                          disabled={allScanned}
+                          className={`w-24 text-center ${
+                            allScanned
+                              ? "opacity-40 cursor-not-allowed bg-green-100"
+                              : isOver
+                                ? "border-red-400"
+                                : ""
+                          }`}
                         />
                       </div>
                     </div>
