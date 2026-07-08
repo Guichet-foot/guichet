@@ -338,7 +338,7 @@ export async function reassignTicketsToMatch(
   revalidatePath("/matchs");
   revalidatePath(`/matchs/${fromMatchId}`);
   revalidatePath(`/matchs/${toMatchId}`);
-  return { count: updates.length };
+  return { count: ids.length };
 }
 
 // Scan unsold ticket: marks it as 'annule' in the DB
