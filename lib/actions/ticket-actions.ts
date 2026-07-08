@@ -275,7 +275,7 @@ export async function validateTicket(qrToken: string): Promise<ScanResult> {
   const { data: ticket } = await adminClient
     .from("tickets")
     .select(
-      "*, match:matches(zone_id, c3_account_id, home_team, away_team), category:ticket_categories(name)"
+      "*, match:matches(zone_id, c3_account_id, home_team, away_team, status), category:ticket_categories(name)"
     )
     .eq("qr_token", qrToken)
     .single();
@@ -297,6 +297,11 @@ export async function validateTicket(qrToken: string): Promise<ScanResult> {
 
   if (!isAuthorized) {
     return { status: "invalid", message: "Billet d'une autre zone" };
+  }
+
+  const matchStatus = (ticket as any).match?.status;
+  if (matchStatus !== "en_cours") {
+    return { status: "invalid", message: "Le match n'est pas encore démarré" };
   }
 
   if (ticket.status === "annule") {

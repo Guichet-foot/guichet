@@ -103,7 +103,7 @@ export async function POST(request: Request) {
       };
     }
     revenueMap[t.match_id].printed++;
-    if (!t.counts_as_revenue) {
+    if (t.status === "annule") {
       revenueMap[t.match_id].unsold++;
     } else {
       revenueMap[t.match_id].revenue += t.price;
@@ -114,7 +114,7 @@ export async function POST(request: Request) {
   });
 
   const totalRevenue = filteredTickets
-    .filter((t: any) => t.counts_as_revenue)
+    .filter((t: any) => t.counts_as_revenue && t.status !== "annule")
     .reduce((sum: number, t: any) => sum + t.price, 0);
 
   // Fetch expenses
