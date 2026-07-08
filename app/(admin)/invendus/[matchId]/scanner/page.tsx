@@ -13,7 +13,7 @@ export default async function InvendusScannerPage({
 }: {
   params: Promise<{ matchId: string }>;
 }) {
-  await requireRole(["super_admin", "admin_zone"]);
+  await requireRole(["super_admin", "admin_zone", "c3"]);
   const { matchId } = await params;
   const supabase = await createAdminClient();
 

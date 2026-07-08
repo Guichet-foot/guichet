@@ -89,7 +89,7 @@ export async function getMatchTicketStats(matchId: string): Promise<{ total: num
 }
 
 export async function declareToutVendus(matchId: string): Promise<{ error?: string }> {
-  await requireRole(["super_admin", "admin_zone", "fondateur"]);
+  await requireRole(["super_admin", "admin_zone", "fondateur", "c3"]);
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Non authentifié" };
@@ -113,7 +113,7 @@ export async function declareToutVendus(matchId: string): Promise<{ error?: stri
 }
 
 export async function closeMatchUnsold(matchId: string): Promise<{ error?: string }> {
-  await requireRole(["super_admin", "admin_zone", "fondateur"]);
+  await requireRole(["super_admin", "admin_zone", "fondateur", "c3"]);
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Non authentifié" };
@@ -144,7 +144,7 @@ export async function closeMatchUnsold(matchId: string): Promise<{ error?: strin
 }
 
 export async function resetUnsold(matchId: string): Promise<{ error?: string }> {
-  await requireRole(["super_admin", "admin_zone", "fondateur"]);
+  await requireRole(["super_admin", "admin_zone", "fondateur", "c3"]);
   const adminClient = await createAdminClient();
   const { error } = await adminClient
     .from("match_unsold")
@@ -158,7 +158,7 @@ export async function resetUnsold(matchId: string): Promise<{ error?: string }> 
 
 // Scan unsold ticket: marks it as 'annule' in the DB
 export async function scanUnsoldTicket(qrToken: string): Promise<{ status: "ok" | "already_annule" | "already_scanned" | "not_found"; message: string; matchName?: string }> {
-  await requireRole(["super_admin", "admin_zone", "fondateur"]);
+  await requireRole(["super_admin", "admin_zone", "fondateur", "c3"]);
   const adminClient = await createAdminClient();
 
   const { data: ticket } = await adminClient
