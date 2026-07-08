@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { updateMatchStatus, toggleMatchVente } from "@/lib/actions/match-actions";
+import { useRouter } from "next/navigation";
+import { updateMatchStatus, toggleMatchVente, deleteMatch } from "@/lib/actions/match-actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +23,7 @@ import {
   Ticket,
   Calendar,
   MapPin,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatFCFA, formatDateShort } from "@/lib/format";
@@ -47,8 +49,10 @@ interface MatchMobileActionsProps {
 }
 
 export function MatchMobileActions({ match, stats, detailUrl, editUrl }: MatchMobileActionsProps) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [scoreOpen, setScoreOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [loading, setLoading] = useState<string | null>(null);
   const [homeScore, setHomeScore] = useState("");
   const [awayScore, setAwayScore] = useState("");
@@ -85,21 +89,29 @@ export function MatchMobileActions({ match, stats, detailUrl, editUrl }: MatchMo
     setLoading(null);
   }
 
+  async function handleDelete() {
+    setLoading("delete");
+    const result = await deleteMatch(match.id);
+    setLoading(null);
+    if (result.error) {
+      toast.error(result.error);
+      setDeleteOpen(false);
+      return;
+    }
+    toast.success("Match supprimé");
+    setDeleteOpen(false);
+    router.refresh();
+  }
+
   const isFinished = match.status === "termine" || match.status === "annule";
 
   return (
     <>
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        onClick={() => setOpen(true)}
-        className="h-8 w-8 p-0"
-      >
+      <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(true)} className="h-8 w-8 p-0">
         <MoreVertical className="h-4 w-4" />
       </Button>
 
-      {/* Match actions dialog */}
+      {/* Menu actions */}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
           <DialogHeader>
@@ -140,27 +152,10 @@ export function MatchMobileActions({ match, stats, detailUrl, editUrl }: MatchMo
             <div className="space-y-2">
               {!isFinished && (
                 <>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={handleToggleVente}
-                    disabled={loading === "vente"}
-                    className={`w-full justify-start ${match.vente_active ? "text-danger border-danger" : "text-brand border-brand"}`}
-                  >
-                    {loading === "vente" ? (
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    ) : match.vente_active ? (
-                      <><ShoppingCartIcon className="h-4 w-4 mr-2" />Arrêter la vente</>
-                    ) : (
-                      <><ShoppingCart className="h-4 w-4 mr-2" />Démarrer la vente</>
-                    )}
+                  <Button type="button" variant="outline" onClick={handleToggleVente} disabled={loading === "vente"} className={`w-full justify-start ${match.vente_active ? "text-danger border-danger" : "text-brand border-brand"}`}>
+                    {loading === "vente" ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : match.vente_active ? <><ShoppingCartIcon className="h-4 w-4 mr-2" />Arrêter la vente</> : <><ShoppingCart className="h-4 w-4 mr-2" />Démarrer la vente</>}
                   </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={handleTerminer}
-                    className="w-full justify-start"
-                  >
+                  <Button type="button" variant="outline" onClick={handleTerminer} className="w-full justify-start">
                     <CheckCircle className="h-4 w-4 mr-2" />
                     Terminer le match
                   </Button>
@@ -180,6 +175,15 @@ export function MatchMobileActions({ match, stats, detailUrl, editUrl }: MatchMo
                   Voir les détails
                 </Button>
               </Link>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => { setOpen(false); setDeleteOpen(true); }}
+                className="w-full justify-start text-danger border-danger hover:bg-danger/10"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Supprimer le match
+              </Button>
             </div>
           </div>
         </DialogContent>
@@ -206,6 +210,34 @@ export function MatchMobileActions({ match, stats, detailUrl, editUrl }: MatchMo
             <Button type="button" onClick={handleSaveScore} disabled={loading === "terminer"} className="w-full h-12 bg-brand hover:bg-brand/90">
               {loading === "terminer" ? <Loader2 className="h-5 w-5 animate-spin" /> : "Enregistrer et terminer"}
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Suppression dialog */}
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-danger">
+              <Trash2 className="h-5 w-5" />
+              Supprimer le match ?
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Vous êtes sur le point de supprimer <strong>{match.home_team} vs {match.away_team}</strong>. Cette action est irréversible.
+            </p>
+            <p className="text-xs text-muted-foreground bg-muted rounded-lg p-3">
+              La suppression est bloquée si des billets ont déjà été émis pour ce match.
+            </p>
+            <div className="flex gap-3">
+              <Button variant="outline" className="flex-1" onClick={() => setDeleteOpen(false)} disabled={loading === "delete"}>
+                Annuler
+              </Button>
+              <Button className="flex-1 bg-danger hover:bg-danger/90 text-white" onClick={handleDelete} disabled={loading === "delete"}>
+                {loading === "delete" ? <Loader2 className="h-4 w-4 animate-spin" /> : "Supprimer"}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

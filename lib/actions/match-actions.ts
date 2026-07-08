@@ -196,6 +196,29 @@ export async function updateMatch(matchId: string, formData: {
   return { success: true };
 }
 
+export async function deleteMatch(matchId: string): Promise<{ error?: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Non authentifié" };
+
+  const adminClient = await createAdminClient();
+
+  const { count } = await adminClient
+    .from("tickets")
+    .select("*", { count: "exact", head: true })
+    .eq("match_id", matchId);
+
+  if (count && count > 0) {
+    return { error: `Impossible de supprimer : ${count} billet(s) ont été émis pour ce match` };
+  }
+
+  const { error } = await adminClient.from("matches").delete().eq("id", matchId);
+  if (error) return { error: error.message };
+
+  revalidatePath("/matchs");
+  return {};
+}
+
 export async function toggleMatchVente(matchId: string, venteActive: boolean) {
   const supabase = await createClient();
 
