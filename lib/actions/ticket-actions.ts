@@ -299,11 +299,9 @@ export async function validateTicket(qrToken: string): Promise<ScanResult> {
     return { status: "invalid", message: "Billet d'une autre zone" };
   }
 
-  const matchStatus = (ticket as any).match?.status;
-  if (matchStatus !== "en_cours") {
-    return { status: "invalid", message: "Le match n'est pas encore démarré" };
-  }
-
+  // Vérifier le statut du billet avant le statut du match :
+  // un billet déjà scanné doit retourner "already_scanned" même si le match
+  // source n'est plus "en_cours" (ex: billets réattribués depuis un match A).
   if (ticket.status === "annule") {
     return { status: "invalid", message: "Billet annulé" };
   }
@@ -315,6 +313,11 @@ export async function validateTicket(qrToken: string): Promise<ScanResult> {
       scannedAt: ticket.scanned_at || undefined,
       categoryName: (ticket as any).category?.name,
     };
+  }
+
+  const matchStatus = (ticket as any).match?.status;
+  if (matchStatus !== "en_cours") {
+    return { status: "invalid", message: "Le match n'est pas encore démarré" };
   }
 
   const { error } = await adminClient
