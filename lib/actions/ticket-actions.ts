@@ -268,14 +268,14 @@ export async function validateTicket(qrToken: string): Promise<ScanResult> {
 
   const { data: userProfile } = await supabase
     .from("profiles")
-    .select("zone_id")
+    .select("zone_id, created_by_admin")
     .eq("id", user.id)
     .single();
 
   const { data: ticket } = await adminClient
     .from("tickets")
     .select(
-      "*, match:matches(zone_id, home_team, away_team), category:ticket_categories(name)"
+      "*, match:matches(zone_id, c3_account_id, home_team, away_team), category:ticket_categories(name)"
     )
     .eq("qr_token", qrToken)
     .single();
@@ -284,7 +284,18 @@ export async function validateTicket(qrToken: string): Promise<ScanResult> {
     return { status: "invalid", message: "Billet invalide" };
   }
 
-  if ((ticket as any).match?.zone_id !== userProfile?.zone_id) {
+  const matchZoneId = (ticket as any).match?.zone_id;
+  const matchC3AccountId = (ticket as any).match?.c3_account_id;
+  const portierZoneId = userProfile?.zone_id ?? null;
+  const portierC3AccountId = userProfile?.created_by_admin ?? null;
+
+  const isAuthorized =
+    // Zone normale : même zone_id
+    (portierZoneId !== null && portierZoneId === matchZoneId) ||
+    // Compte C3 : pas de zone_id mais même c3_account_id
+    (portierZoneId === null && portierC3AccountId !== null && portierC3AccountId === matchC3AccountId);
+
+  if (!isAuthorized) {
     return { status: "invalid", message: "Billet d'une autre zone" };
   }
 

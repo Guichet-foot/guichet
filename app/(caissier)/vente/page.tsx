@@ -73,58 +73,62 @@ function VenteContent() {
 
   useEffect(() => {
     async function init() {
-      const supabase = createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) return;
+      try {
+        const supabase = createClient();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (!user) return;
 
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("zone_id, created_by_admin")
-        .eq("id", user.id)
-        .single();
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("zone_id, created_by_admin")
+          .eq("id", user.id)
+          .single();
 
-      if (!profile?.zone_id && !profile?.created_by_admin) return;
+        if (!profile?.zone_id && !profile?.created_by_admin) return;
 
-      let matchQuery = supabase
-        .from("matches")
-        .select("id, home_team, away_team, match_date, venue, vente_active")
-        .in("status", ["programme", "en_cours"])
-        .order("match_date", { ascending: true });
+        let matchQuery = supabase
+          .from("matches")
+          .select("id, home_team, away_team, match_date, venue, vente_active")
+          .in("status", ["programme", "en_cours"])
+          .order("match_date", { ascending: true });
 
-      if (profile.zone_id) {
-        matchQuery = matchQuery.eq("zone_id", profile.zone_id);
-      } else {
-        matchQuery = matchQuery.eq("c3_account_id", profile.created_by_admin);
+        if (profile.zone_id) {
+          matchQuery = matchQuery.eq("zone_id", profile.zone_id);
+        } else {
+          matchQuery = matchQuery.eq("c3_account_id", profile.created_by_admin);
+        }
+
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+
+        const [{ data: matchList }, { data: todayTickets }] = await Promise.all([
+          matchQuery,
+          supabase
+            .from("tickets")
+            .select("price")
+            .eq("sold_by", user.id)
+            .gte("sold_at", todayStart.toISOString())
+            .neq("status", "annule"),
+        ]);
+
+        if (matchList && matchList.length > 0) {
+          setMatches(matchList);
+          const firstActive = matchList.find((m: any) => m.vente_active) || matchList[0];
+          setSelectedMatchId(firstActive.id);
+          await loadCategories(firstActive.id);
+        }
+
+        if (todayTickets) {
+          setTodaySales({
+            count: todayTickets.length,
+            total: todayTickets.reduce((sum, t) => sum + t.price, 0),
+          });
+        }
+      } finally {
+        setInitialLoading(false);
       }
-
-      const { data: matchList } = await matchQuery;
-
-      if (matchList && matchList.length > 0) {
-        setMatches(matchList);
-        const firstActive = matchList.find((m: any) => m.vente_active) || matchList[0];
-        setSelectedMatchId(firstActive.id);
-        await loadCategories(firstActive.id);
-      }
-
-      const todayStart = new Date();
-      todayStart.setHours(0, 0, 0, 0);
-
-      const { data: todayTickets } = await supabase
-        .from("tickets")
-        .select("price")
-        .eq("sold_by", user.id)
-        .gte("sold_at", todayStart.toISOString())
-        .neq("status", "annule");
-
-      if (todayTickets) {
-        setTodaySales({
-          count: todayTickets.length,
-          total: todayTickets.reduce((sum, t) => sum + t.price, 0),
-        });
-      }
-      setInitialLoading(false);
     }
     init();
   }, [loadCategories]);
