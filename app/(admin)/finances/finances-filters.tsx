@@ -13,7 +13,9 @@ interface FinancesFiltersProps {
   currentDate?: string;
   currentFrom?: string;
   currentTo?: string;
+  currentMatch?: string;
   zoneParam?: string;
+  matches?: { id: string; label: string }[];
 }
 
 export function FinancesFilters({
@@ -21,7 +23,9 @@ export function FinancesFilters({
   currentDate,
   currentFrom,
   currentTo,
+  currentMatch,
   zoneParam,
+  matches = [],
 }: FinancesFiltersProps) {
   const router = useRouter();
   const todayStr = new Date().toISOString().split("T")[0];
@@ -29,29 +33,44 @@ export function FinancesFilters({
   const [date, setDate] = useState(currentDate || todayStr);
   const [from, setFrom] = useState(currentFrom || "");
   const [to, setTo] = useState(currentTo || "");
+  const [match, setMatch] = useState(currentMatch || "");
 
-  function buildUrl(p: Period, d?: string, f?: string, t?: string) {
+  function buildUrl(p: Period, d?: string, f?: string, t?: string, m?: string) {
     const params = new URLSearchParams();
     if (zoneParam) params.set("zone", zoneParam);
-    params.set("period", p);
-    if (p === "jour" && d) params.set("date", d);
-    if (p === "custom") {
-      if (f) params.set("from", f);
-      if (t) params.set("to", t);
+    if (m) {
+      params.set("match", m);
+    } else {
+      params.set("period", p);
+      if (p === "jour" && d) params.set("date", d);
+      if (p === "custom") {
+        if (f) params.set("from", f);
+        if (t) params.set("to", t);
+      }
     }
     return `/finances?${params.toString()}`;
   }
 
   function handlePeriodChange(p: Period) {
+    setMatch("");
     setPeriod(p);
     if (p === "jour") router.push(buildUrl("jour", date));
     else if (p === "mois") router.push(buildUrl("mois"));
-    // custom: wait for user to fill dates
+    // custom: wait for dates
   }
 
   function handleDateChange(d: string) {
     setDate(d);
-    if (period === "jour") router.push(buildUrl("jour", d));
+    if (period === "jour") router.push(buildUrl("jour", d, undefined, undefined, ""));
+  }
+
+  function handleMatchChange(m: string) {
+    setMatch(m);
+    if (m) {
+      router.push(buildUrl(period, date, from, to, m));
+    } else {
+      router.push(buildUrl(period, date, from, to, ""));
+    }
   }
 
   function applyCustom() {
@@ -73,7 +92,7 @@ export function FinancesFilters({
             type="button"
             onClick={() => handlePeriodChange(key)}
             className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-              period === key
+              period === key && !match
                 ? "bg-brand text-white"
                 : "bg-white border border-border text-muted-foreground hover:border-brand/40"
             }`}
@@ -83,7 +102,7 @@ export function FinancesFilters({
         ))}
       </div>
 
-      {period === "jour" && (
+      {period === "jour" && !match && (
         <div className="flex items-center gap-2">
           <Input
             type="date"
@@ -95,7 +114,7 @@ export function FinancesFilters({
         </div>
       )}
 
-      {period === "custom" && (
+      {period === "custom" && !match && (
         <div className="flex flex-wrap items-end gap-3">
           <div className="space-y-1">
             <Label className="text-xs text-muted-foreground">Du</Label>
@@ -126,6 +145,31 @@ export function FinancesFilters({
           >
             Appliquer
           </Button>
+        </div>
+      )}
+
+      {matches.length > 0 && (
+        <div className="flex items-center gap-2 pt-1 border-t border-border/50">
+          <Label className="text-xs text-muted-foreground whitespace-nowrap">Match :</Label>
+          <select
+            value={match}
+            onChange={(e) => handleMatchChange(e.target.value)}
+            className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+          >
+            <option value="">— Tous les matchs —</option>
+            {matches.map((m) => (
+              <option key={m.id} value={m.id}>{m.label}</option>
+            ))}
+          </select>
+          {match && (
+            <button
+              type="button"
+              onClick={() => handleMatchChange("")}
+              className="text-xs text-muted-foreground hover:text-foreground underline whitespace-nowrap"
+            >
+              Effacer
+            </button>
+          )}
         </div>
       )}
     </div>

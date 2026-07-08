@@ -6,7 +6,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Banknote, TrendingDown, TrendingUp, Building2, Landmark } from "lucide-react";
+import { Plus, Banknote, TrendingDown, TrendingUp, Building2, Landmark, PackageX } from "lucide-react";
 import { formatFCFA, formatDate } from "@/lib/format";
 import { EXPENSE_CATEGORY_LABELS } from "@/lib/constants";
 import { buildZoneUrl } from "@/lib/zone-utils";
@@ -23,7 +23,7 @@ type Period = "jour" | "mois" | "custom";
 export default async function FinancesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ zone?: string; period?: string; date?: string; from?: string; to?: string }>;
+  searchParams: Promise<{ zone?: string; period?: string; date?: string; from?: string; to?: string; match?: string }>;
 }) {
   const profile = await requireRole(["super_admin", "admin_zone", "c3"]);
   const params = await searchParams;
@@ -40,8 +40,9 @@ export default async function FinancesPage({
 
   const today = new Date().toISOString().split("T")[0];
   const period = (params.period as Period) || "mois";
+  const filterMatchId = params.match || null;
 
-  // Build date range from period params
+  // ── Date range from period params ────────────────────────────────
   let dateStart: Date;
   let dateEnd: Date;
   let periodLabel: string;
@@ -68,7 +69,9 @@ export default async function FinancesPage({
     periodLabel = "Mois en cours";
   }
 
-  // Platform settings effective on settingsDate
+  if (filterMatchId) periodLabel = "Match sélectionné";
+
+  // ── Platform settings ────────────────────────────────────────────
   const { data: platformData } = await adminSupabase
     .from("platform_settings")
     .select("frais_plateforme, odcav_rate, fee_per_block")
@@ -79,11 +82,20 @@ export default async function FinancesPage({
   const feePerBlock = (platformData as any)?.fee_per_block ?? 1000;
   const odcavRate = platformData?.odcav_rate ?? 0.05;
 
-  const { data: tickets } = (await supabase
+  // ── Tickets query — adminClient to bypass C3 RLS (zone_id=null) ──
+  let ticketsQuery = adminSupabase
     .from("tickets")
-    .select("price, status, counts_as_revenue, match_id, sold_at, match:matches(home_team, away_team, match_date, zone_id, c3_account_id)")
-    .gte("sold_at", dateStart.toISOString())
-    .lte("sold_at", dateEnd.toISOString())) as { data: any[] | null };
+    .select("price, status, counts_as_revenue, match_id, sold_at, match:matches(home_team, away_team, match_date, zone_id, c3_account_id)");
+
+  if (filterMatchId) {
+    ticketsQuery = ticketsQuery.eq("match_id", filterMatchId);
+  } else {
+    ticketsQuery = ticketsQuery
+      .gte("sold_at", dateStart.toISOString())
+      .lte("sold_at", dateEnd.toISOString());
+  }
+
+  const { data: tickets } = (await ticketsQuery) as { data: any[] | null };
 
   const filteredTickets = (c3AccountId
     ? tickets?.filter((t: any) => t.match?.c3_account_id === c3AccountId)
@@ -95,6 +107,12 @@ export default async function FinancesPage({
   const totalRevenue = filteredTickets
     .filter((t: any) => t.counts_as_revenue && t.status !== "annule")
     .reduce((sum: number, t: any) => sum + t.price, 0);
+
+  const totalUnsold = filteredTickets.filter((t: any) => t.status === "annule").length;
+  const totalUnsoldValue = filteredTickets
+    .filter((t: any) => t.status === "annule")
+    .reduce((sum: number, t: any) => sum + t.price, 0);
+
   const odcavCommission = Math.round(totalRevenue * odcavRate);
   const totalBlocks = totalSold > 0 ? Math.ceil(totalSold / 100) : 0;
   const fraisPlateformePeriod = totalBlocks * feePerBlock;
@@ -124,15 +142,22 @@ export default async function FinancesPage({
     }
   });
 
+  // ── Expenses ─────────────────────────────────────────────────────
   const expenseFrom = dateStart.toISOString().split("T")[0];
   const expenseTo = dateEnd.toISOString().split("T")[0];
 
   let expensesQuery = supabase
     .from("expenses")
     .select("*, match:matches(home_team, away_team), adder:profiles!expenses_added_by_fkey(full_name)")
-    .gte("expense_date", expenseFrom)
-    .lte("expense_date", expenseTo)
     .order("expense_date", { ascending: false });
+
+  if (filterMatchId) {
+    expensesQuery = expensesQuery.eq("match_id", filterMatchId);
+  } else {
+    expensesQuery = expensesQuery
+      .gte("expense_date", expenseFrom)
+      .lte("expense_date", expenseTo);
+  }
 
   if (zoneId) expensesQuery = expensesQuery.eq("zone_id", zoneId);
 
@@ -140,13 +165,25 @@ export default async function FinancesPage({
   const totalExpenses = expenses?.reduce((sum: number, e: any) => sum + e.amount, 0) || 0;
   const balance = totalRevenue - totalExpenses - odcavCommission - fraisPlateformePeriod;
 
-  // Grouper les dépenses par match pour le tableau
   const expensesByMatchId: Record<string, number> = {};
   expenses?.forEach((e: any) => {
     if (e.match_id) {
       expensesByMatchId[e.match_id] = (expensesByMatchId[e.match_id] || 0) + e.amount;
     }
   });
+
+  // ── Matches for filter dropdown ───────────────────────────────────
+  let matchesListQuery = supabase
+    .from("matches")
+    .select("id, home_team, away_team")
+    .order("match_date", { ascending: false });
+  if (c3AccountId) matchesListQuery = matchesListQuery.eq("c3_account_id", c3AccountId);
+  else if (zoneId) matchesListQuery = matchesListQuery.eq("zone_id", zoneId);
+  const { data: matchesList } = await matchesListQuery;
+  const filterMatches = (matchesList || []).map((m: any) => ({
+    id: m.id,
+    label: `${m.home_team} vs ${m.away_team}`,
+  }));
 
   return (
     <div className="space-y-6 min-w-0">
@@ -169,11 +206,13 @@ export default async function FinancesPage({
         currentDate={period === "jour" ? (params.date || today) : undefined}
         currentFrom={params.from}
         currentTo={params.to}
+        currentMatch={filterMatchId || undefined}
         zoneParam={params.zone}
+        matches={filterMatches}
       />
 
-      {/* Recettes + Dépenses */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      {/* Recettes + Dépenses + Invendus */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
@@ -183,6 +222,20 @@ export default async function FinancesPage({
                 <p className="text-xs text-muted-foreground mt-1">{totalSold} billet(s) vendu(s)</p>
               </div>
               <Banknote className="h-8 w-8 text-brand/40" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Invendus</p>
+                <p className="text-2xl font-bold text-orange-600">{totalUnsold}</p>
+                {totalUnsoldValue > 0 && (
+                  <p className="text-xs text-orange-500 mt-1">−{formatFCFA(totalUnsoldValue)}</p>
+                )}
+              </div>
+              <PackageX className="h-8 w-8 text-orange-400/40" />
             </div>
           </CardContent>
         </Card>

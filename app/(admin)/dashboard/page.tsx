@@ -1,10 +1,10 @@
 import { requireRole } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { getEffectiveZone } from "@/lib/get-effective-zone";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Banknote, Ticket, Trophy, TrendingUp } from "lucide-react";
+import { Banknote, Ticket, TrendingUp, PackageX } from "lucide-react";
 import { formatFCFA, formatDateShort } from "@/lib/format";
 import { MATCH_STATUS_LABELS, MATCH_STATUS_COLORS } from "@/lib/constants";
 import { SalesChart } from "./sales-chart";
@@ -32,28 +32,89 @@ export default async function DashboardPage({
   }
 
   const supabase = await createClient();
+  const adminClient = await createAdminClient();
   const zoneFilter = effectiveZoneId;
 
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
+  // ── Active filter period ─────────────────────────────────────────
+  const filterMatchId = params.match || null;
+  const filterDate = params.date || null;
+  const filterYear = params.year || null;
+  const todayStr = new Date().toISOString().split("T")[0];
 
-  const { data: todayTickets } = (await supabase
+  let dateStart: Date;
+  let dateEnd: Date;
+  let periodLabel: string;
+
+  if (filterDate) {
+    dateStart = new Date(filterDate + "T00:00:00");
+    dateEnd = new Date(filterDate + "T23:59:59.999");
+    periodLabel = filterDate === todayStr ? "Aujourd'hui" : `Le ${formatDateShort(filterDate)}`;
+  } else if (filterYear) {
+    dateStart = new Date(`${filterYear}-01-01T00:00:00`);
+    dateEnd = new Date(`${filterYear}-12-31T23:59:59.999`);
+    periodLabel = `Année ${filterYear}`;
+  } else {
+    const m = new Date();
+    m.setDate(1);
+    m.setHours(0, 0, 0, 0);
+    dateStart = m;
+    dateEnd = new Date();
+    dateEnd.setHours(23, 59, 59, 999);
+    periodLabel = "Mois en cours";
+  }
+
+  // ── Main ticket query for stat cards ────────────────────────────
+  // adminClient bypasses RLS: C3 matches have zone_id=null which blocks user client
+  let ticketsQuery = adminClient
     .from("tickets")
-    .select("price, sold_at, match_id, match:matches(zone_id, c3_account_id)")
-    .gte("sold_at", todayStart.toISOString())
-    .eq("counts_as_revenue", true)
-    .neq("status", "annule")) as { data: any[] | null };
+    .select("price, status, match_id, match:matches(zone_id, c3_account_id)");
 
-  const filteredTodayTickets = c3AccountId
-    ? todayTickets?.filter((t: any) => t.match?.c3_account_id === c3AccountId)
+  if (filterMatchId) {
+    ticketsQuery = ticketsQuery.eq("match_id", filterMatchId);
+  } else {
+    ticketsQuery = ticketsQuery
+      .gte("sold_at", dateStart.toISOString())
+      .lte("sold_at", dateEnd.toISOString());
+  }
+
+  const { data: rawTickets } = await ticketsQuery;
+
+  const scopedTickets = ((c3AccountId
+    ? rawTickets?.filter((t: any) => t.match?.c3_account_id === c3AccountId)
     : zoneFilter
-    ? todayTickets?.filter((t: any) => t.match?.zone_id === zoneFilter)
-    : todayTickets;
+    ? rawTickets?.filter((t: any) => t.match?.zone_id === zoneFilter)
+    : rawTickets) || []) as any[];
 
-  const todayRevenue =
-    filteredTodayTickets?.reduce((sum: number, t: any) => sum + t.price, 0) || 0;
-  const ticketsSold = filteredTodayTickets?.length || 0;
+  const revenueTickets = scopedTickets.filter((t: any) => t.status !== "annule");
+  const unsoldTickets = scopedTickets.filter((t: any) => t.status === "annule");
 
+  const totalRevenue = revenueTickets.reduce((s: number, t: any) => s + t.price, 0);
+  const totalSold = revenueTickets.length;
+  const totalUnsold = unsoldTickets.length;
+  const totalUnsoldValue = unsoldTickets.reduce((s: number, t: any) => s + t.price, 0);
+
+  // ── Expenses for period (balance card) ───────────────────────────
+  let expQuery = adminClient.from("expenses").select("amount");
+
+  if (filterMatchId) {
+    expQuery = expQuery.eq("match_id", filterMatchId);
+  } else {
+    expQuery = expQuery
+      .gte("expense_date", dateStart.toISOString().split("T")[0])
+      .lte("expense_date", dateEnd.toISOString().split("T")[0]);
+  }
+
+  if (c3AccountId) {
+    expQuery = (expQuery as any).eq("c3_account_id", c3AccountId);
+  } else if (zoneFilter) {
+    expQuery = expQuery.eq("zone_id", zoneFilter);
+  }
+
+  const { data: expData } = await expQuery;
+  const totalExpenses = expData?.reduce((s, e) => s + (e as any).amount, 0) || 0;
+  const balance = totalRevenue - totalExpenses;
+
+  // ── Upcoming matches ─────────────────────────────────────────────
   const now = new Date().toISOString();
   let matchQuery = supabase
     .from("matches")
@@ -68,68 +129,41 @@ export default async function DashboardPage({
 
   const { data: upcomingMatches } = await matchQuery;
 
-  const monthStart = new Date();
-  monthStart.setDate(1);
-  monthStart.setHours(0, 0, 0, 0);
-
-  const { data: monthTickets } = (await supabase
-    .from("tickets")
-    .select("price, match:matches(zone_id)")
-    .gte("sold_at", monthStart.toISOString())
-    .eq("counts_as_revenue", true)
-    .neq("status", "annule")) as { data: any[] | null };
-
-  const filteredMonthTickets = zoneFilter
-    ? monthTickets?.filter((t: any) => t.match?.zone_id === zoneFilter)
-    : monthTickets;
-
-  const monthRevenue =
-    filteredMonthTickets?.reduce((sum: number, t: any) => sum + t.price, 0) || 0;
-
-  let expenseQuery = supabase
-    .from("expenses")
-    .select("amount")
-    .gte("expense_date", monthStart.toISOString().split("T")[0]);
-
-  if (zoneFilter) expenseQuery = expenseQuery.eq("zone_id", zoneFilter);
-
-  const { data: monthExpenses } = await expenseQuery;
-  const monthExpenseTotal =
-    monthExpenses?.reduce((sum, e) => sum + (e as any).amount, 0) || 0;
-  const monthBalance = monthRevenue - monthExpenseTotal;
-
+  // ── 7-day chart (always last 7 days, unaffected by filters) ──────
   const sevenDaysAgo = new Date();
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
   sevenDaysAgo.setHours(0, 0, 0, 0);
 
-  const { data: weekTickets } = (await supabase
+  const { data: weekRaw } = await adminClient
     .from("tickets")
-    .select("price, sold_at, match:matches(zone_id)")
+    .select("price, sold_at, match_id, match:matches(zone_id, c3_account_id)")
     .gte("sold_at", sevenDaysAgo.toISOString())
-    .eq("counts_as_revenue", true)
-    .neq("status", "annule")) as { data: any[] | null };
+    .lte("sold_at", new Date().toISOString())
+    .neq("status", "annule");
 
-  const filteredWeekTickets = zoneFilter
-    ? weekTickets?.filter((t: any) => t.match?.zone_id === zoneFilter)
-    : weekTickets;
+  const filteredWeekTickets = ((c3AccountId
+    ? weekRaw?.filter((t: any) => t.match?.c3_account_id === c3AccountId)
+    : zoneFilter
+    ? weekRaw?.filter((t: any) => t.match?.zone_id === zoneFilter)
+    : weekRaw) || []) as any[];
 
   const chartData: { date: string; ventes: number }[] = [];
   for (let i = 0; i < 7; i++) {
     const d = new Date(sevenDaysAgo);
     d.setDate(d.getDate() + i);
     const dayStr = d.toISOString().split("T")[0];
-    const dayTotal =
-      filteredWeekTickets
-        ?.filter((t: any) => t.sold_at.startsWith(dayStr))
-        .reduce((sum: number, t: any) => sum + t.price, 0) || 0;
+    const dayTotal = filteredWeekTickets
+      .filter((t: any) => t.sold_at?.startsWith(dayStr))
+      .reduce((sum: number, t: any) => sum + t.price, 0);
     chartData.push({
       date: d.toLocaleDateString("fr-FR", { weekday: "short", day: "numeric" }),
       ventes: dayTotal,
     });
   }
 
+  // ── Ticket stats for upcoming match progress bars ─────────────────
   const matchIds = upcomingMatches?.map((m: any) => m.id) || [];
-  let matchTicketStats: Record<string, { sold: number; total: number }> = {};
+  const matchTicketStats: Record<string, { sold: number; total: number }> = {};
 
   if (matchIds.length > 0) {
     const { data: cats } = await supabase
@@ -142,11 +176,10 @@ export default async function DashboardPage({
       catTotals[c.match_id] = (catTotals[c.match_id] || 0) + c.quantity_total;
     });
 
-    const { data: matchTickets } = await supabase
+    const { data: matchTickets } = await adminClient
       .from("tickets")
       .select("match_id")
       .in("match_id", matchIds)
-      .eq("counts_as_revenue", true)
       .neq("status", "annule");
 
     const soldCounts: Record<string, number> = {};
@@ -155,13 +188,11 @@ export default async function DashboardPage({
     });
 
     matchIds.forEach((id: string) => {
-      matchTicketStats[id] = {
-        sold: soldCounts[id] || 0,
-        total: catTotals[id] || 0,
-      };
+      matchTicketStats[id] = { sold: soldCounts[id] || 0, total: catTotals[id] || 0 };
     });
   }
 
+  // ── Last 5 expenses ──────────────────────────────────────────────
   let lastExpensesQuery = supabase
     .from("expenses")
     .select("*")
@@ -172,7 +203,7 @@ export default async function DashboardPage({
 
   const { data: lastExpenses } = await lastExpensesQuery;
 
-  // Last 5 terminated matches with revenue
+  // ── Revenue of last 5 terminated matches (donut) ──────────────────
   let last5Query = supabase
     .from("matches")
     .select("id, home_team, away_team, match_date")
@@ -180,23 +211,22 @@ export default async function DashboardPage({
     .order("match_date", { ascending: false })
     .limit(5);
 
-  if (zoneFilter) last5Query = last5Query.eq("zone_id", zoneFilter);
+  if (c3AccountId) last5Query = last5Query.eq("c3_account_id", c3AccountId);
+  else if (zoneFilter) last5Query = last5Query.eq("zone_id", zoneFilter);
 
   const { data: last5Matches } = await last5Query;
-
   const last5MatchIds = last5Matches?.map((m: any) => m.id) || [];
   let last5Revenue: { id: string; teams: string; date: string; revenue: number }[] = [];
 
   if (last5MatchIds.length > 0) {
-    const { data: l5Tickets } = (await supabase
+    const { data: l5Tickets } = await adminClient
       .from("tickets")
       .select("match_id, price")
       .in("match_id", last5MatchIds)
-      .eq("counts_as_revenue", true)
-      .neq("status", "annule")) as { data: any[] | null };
+      .neq("status", "annule");
 
     const revMap: Record<string, number> = {};
-    l5Tickets?.forEach((t: any) => {
+    (l5Tickets as any[])?.forEach((t: any) => {
       revMap[t.match_id] = (revMap[t.match_id] || 0) + t.price;
     });
 
@@ -208,12 +238,13 @@ export default async function DashboardPage({
     }));
   }
 
-  // Fetch all matches for filter dropdown
+  // ── Matches list for filter dropdown ─────────────────────────────
   let allMatchesQuery = supabase
     .from("matches")
     .select("id, home_team, away_team")
     .order("match_date", { ascending: false });
-  if (zoneFilter) allMatchesQuery = allMatchesQuery.eq("zone_id", zoneFilter);
+  if (c3AccountId) allMatchesQuery = allMatchesQuery.eq("c3_account_id", c3AccountId);
+  else if (zoneFilter) allMatchesQuery = allMatchesQuery.eq("zone_id", zoneFilter);
   const { data: allMatchesList } = await allMatchesQuery;
   const filterMatches = (allMatchesList || []).map((m: any) => ({
     id: m.id,
@@ -227,13 +258,15 @@ export default async function DashboardPage({
 
       <DashboardFilters matches={filterMatches} />
 
+      {/* Stat cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Recettes du jour</p>
-                <p className="text-2xl font-bold text-brand">{formatFCFA(todayRevenue)}</p>
+                <p className="text-sm text-muted-foreground">Recettes</p>
+                <p className="text-2xl font-bold text-brand">{formatFCFA(totalRevenue)}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{periodLabel}</p>
               </div>
               <Banknote className="h-8 w-8 text-brand/40" />
             </div>
@@ -244,7 +277,8 @@ export default async function DashboardPage({
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Billets vendus</p>
-                <p className="text-2xl font-bold">{ticketsSold}</p>
+                <p className="text-2xl font-bold">{totalSold}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{periodLabel}</p>
               </div>
               <Ticket className="h-8 w-8 text-accent/60" />
             </div>
@@ -254,10 +288,13 @@ export default async function DashboardPage({
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Matchs à venir</p>
-                <p className="text-2xl font-bold">{upcomingMatches?.length || 0}</p>
+                <p className="text-sm text-muted-foreground">Invendus</p>
+                <p className="text-2xl font-bold text-orange-600">{totalUnsold}</p>
+                {totalUnsoldValue > 0 && (
+                  <p className="text-xs text-orange-500 mt-0.5">−{formatFCFA(totalUnsoldValue)}</p>
+                )}
               </div>
-              <Trophy className="h-8 w-8 text-brand/40" />
+              <PackageX className="h-8 w-8 text-orange-400/60" />
             </div>
           </CardContent>
         </Card>
@@ -265,10 +302,11 @@ export default async function DashboardPage({
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Solde du mois</p>
-                <p className={`text-2xl font-bold ${monthBalance >= 0 ? "text-success" : "text-danger"}`}>
-                  {formatFCFA(monthBalance)}
+                <p className="text-sm text-muted-foreground">Solde</p>
+                <p className={`text-2xl font-bold ${balance >= 0 ? "text-success" : "text-danger"}`}>
+                  {formatFCFA(balance)}
                 </p>
+                <p className="text-xs text-muted-foreground mt-0.5">{periodLabel}</p>
               </div>
               <TrendingUp className="h-8 w-8 text-muted-foreground/30" />
             </div>
@@ -276,6 +314,7 @@ export default async function DashboardPage({
         </Card>
       </div>
 
+      {/* 7-day chart */}
       <Card>
         <CardHeader><CardTitle className="text-lg">Ventes des 7 derniers jours</CardTitle></CardHeader>
         <CardContent><SalesChart data={chartData} /></CardContent>
