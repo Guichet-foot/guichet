@@ -91,7 +91,7 @@ function VenteContent() {
         let matchQuery = supabase
           .from("matches")
           .select("id, home_team, away_team, match_date, venue, vente_active")
-          .in("status", ["programme", "en_cours"])
+          .eq("status", "en_cours")
           .order("match_date", { ascending: true });
 
         if (profile.zone_id) {
