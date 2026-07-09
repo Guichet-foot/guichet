@@ -61,7 +61,7 @@ export async function GET(request: Request) {
     .join("\n");
 
   const html = `<!DOCTYPE html>
-<html lang="fr">
+<html lang="fr" style="margin:0;padding:0;">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
@@ -71,7 +71,7 @@ ${getPrintStyles(fmt)}
 .ticket-wrap { page-break-inside: avoid; }
 </style>
 </head>
-<body>
+<body style="margin:0;padding:0;">
 ${blocksHtml}
 <div class="no-print" style="padding:5mm 3mm;border-top:2px solid #000;text-align:center;margin-top:5mm;">
   <p style="font-size:11pt;font-weight:bold;margin-bottom:3mm;">

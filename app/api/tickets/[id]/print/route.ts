@@ -48,7 +48,7 @@ export async function GET(
   const body = renderTicketBlock(ticket, qrDataUrl, matchDateFmt, soldAtFmt, fmt, logoDataUrl);
 
   const html = `<!DOCTYPE html>
-<html lang="fr">
+<html lang="fr" style="margin:0;padding:0;">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
@@ -69,7 +69,7 @@ export async function GET(
 }
 </style>
 </head>
-<body>
+<body style="margin:0;padding:0;">
 ${body}
 <button class="no-print" onclick="window.print()" style="display:block;margin:5mm auto;padding:2mm 5mm;font-size:10pt;cursor:pointer;">Imprimer</button>
 <script>

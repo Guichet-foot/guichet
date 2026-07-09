@@ -13,7 +13,7 @@ export function getPrintStyles(fmt: PrintFormat): string {
   const padV     = is58 ? "1.5mm" : "2mm";
   const padH     = is58 ? "1.5mm" : "2mm";
   const basePt   = is58 ? "7.5"   : "8.5";
-  const teamsPt  = is58 ? "10"    : "10.5";
+  const teamsPt  = is58 ? "9.5"   : "9";
   const vsPt     = is58 ? "6.5"   : "7";
   const infoPt   = is58 ? "7"     : "8";
   const catPt    = is58 ? "11"    : "13";
@@ -150,7 +150,7 @@ export function renderTicketBlock(
      58mm: two lines, truncate each team name to 20 chars  */
   const teamsHtml = is58
     ? `<div class="c teams">${trunc(home, 20)}<br><span class="vs">vs</span><br>${trunc(away, 20)}</div>`
-    : `<div class="c teams">${trunc(home, 12)} <span class="vs">vs</span> ${trunc(away, 12)}</div>`;
+    : `<div class="c teams">${trunc(home, 13)} <span class="vs">vs</span> ${trunc(away, 13)}</div>`;
 
   return `
 <div class="print-ticket">

@@ -6,19 +6,24 @@
  * If the popup is blocked by the browser, falls back to a normal new tab.
  */
 export function printViaFrame(url: string): void {
-  // Tiny off-screen popup — not a tab, no toolbar, invisible to the user.
+  // Centered popup — not a tab (no address bar, no tab strip).
   // Must be called synchronously within the user gesture (click) so the browser allows it.
+  const w = 480;
+  const h = 750;
+  const left = Math.round((window.screen.width - w) / 2);
+  const top = Math.round((window.screen.height - h) / 2);
+
   const features = [
-    "width=300",
-    "height=600",
-    "left=-2000",
-    "top=-2000",
+    `width=${w}`,
+    `height=${h}`,
+    `left=${left}`,
+    `top=${top}`,
     "toolbar=no",
     "location=no",
     "menubar=no",
     "scrollbars=no",
     "status=no",
-    "resizable=no",
+    "resizable=yes",
   ].join(",");
 
   const popup = window.open(url, "gf-print-popup", features);
