@@ -108,15 +108,18 @@
 }
 
 @page {
-  size: 80mm auto;
+  size: 72mm auto;
   margin: 0;
 }
 
 @media print {
   html, body {
-    width: 80mm;
-    margin: 0;
-    padding: 0;
+    width: 72mm;
+    height: auto !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
   }
   body {
     font-family: 'Courier New', monospace;

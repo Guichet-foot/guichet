@@ -54,6 +54,20 @@ export async function GET(
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>${ticket.serial_number}</title>
 <style>${getPrintStyles(fmt)}</style>
+<style>
+@media print {
+  /* Single-ticket isolation: hide everything, show only .print-ticket.
+     position:absolute at (0,0) lets the browser compute page height from
+     the ticket content only — prevents trailing whitespace on thermal printers. */
+  body * { visibility: hidden; }
+  .print-ticket, .print-ticket * { visibility: visible; }
+  .print-ticket {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+  }
+}
+</style>
 </head>
 <body>
 ${body}

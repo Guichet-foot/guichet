@@ -8,7 +8,8 @@ function trunc(s: string, max: number): string {
 export function getPrintStyles(fmt: PrintFormat): string {
   const is58 = fmt === "58";
 
-  const width    = is58 ? "58mm"  : "80mm";
+  // 72mm = printable area of an 80mm thermal roll (XP-80T and similar)
+  const width    = is58 ? "58mm"  : "72mm";
   const padV     = is58 ? "1.5mm" : "2mm";
   const padH     = is58 ? "1.5mm" : "2mm";
   const basePt   = is58 ? "7.5"   : "8.5";
@@ -27,7 +28,6 @@ export function getPrintStyles(fmt: PrintFormat): string {
   const logoImgH  = is58 ? "20mm"  : "27mm";
 
   return `
-  @page { size: ${width} auto; margin: 0; }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body {
     width: ${width};
@@ -37,7 +37,6 @@ export function getPrintStyles(fmt: PrintFormat): string {
     background: #fff;
     line-height: 1.25;
   }
-  body { padding: ${padV} ${padH}; }
   .c { text-align: center; }
   .sep { border-top: 1px dashed #000; margin: 1mm 0; }
   .logo-wrap {
@@ -83,13 +82,42 @@ export function getPrintStyles(fmt: PrintFormat): string {
   }
   .tiny { font-size: ${tinyPt}pt; font-weight: 600; line-height: 1.3; }
   .bon-match { font-size: ${bonPt}pt; font-weight: 900; letter-spacing: 1.5px; margin-top: 0.5mm; }
-  .no-print { display: none; }
+
   @media print {
-    html, body { width: ${width}; margin: 0; padding: ${padV} ${padH}; }
-    .no-print { display: none !important; }
+    @page {
+      size: ${width} auto;
+      margin: 0;
+    }
+    html,
+    body {
+      width: ${width};
+      margin: 0 !important;
+      padding: 0 !important;
+      height: auto !important;
+      min-height: 0 !important;
+      overflow: visible !important;
+    }
+    .print-ticket {
+      width: ${width} !important;
+      height: auto !important;
+      min-height: 0 !important;
+      max-height: none !important;
+      overflow: visible !important;
+      padding: ${padV} ${padH} !important;
+      margin: 0 !important;
+      page-break-after: avoid !important;
+      break-after: avoid !important;
+      page-break-inside: avoid !important;
+      break-inside: avoid !important;
+    }
+    .no-print {
+      display: none !important;
+    }
   }
+
   @media screen {
-    body { max-width: ${width}; margin: 10px auto; border: 1px solid #ccc; padding: ${padV} ${padH}; }
+    body { max-width: ${width}; margin: 10px auto; border: 1px solid #ccc; }
+    .print-ticket { padding: ${padV} ${padH}; }
     .ticket-wrap { border: 1px solid #ddd; margin-bottom: 12px; }
     .no-print { display: block !important; }
   }`;
@@ -121,6 +149,7 @@ export function renderTicketBlock(
     : `<div class="c teams">${trunc(home, 14)} <span class="vs">vs</span> ${trunc(away, 14)}</div>`;
 
   return `
+<div class="print-ticket">
 <div class="logo-wrap c">
   <img src="${logoDataUrl}" class="logo-img" alt="Guichet Foot" />
 </div>
@@ -135,5 +164,6 @@ ${teamsHtml}
 <div class="c tiny">${ticket.seller.full_name} &middot; ${soldAtFmt}</div>
 <div class="sep"></div>
 <div class="c tiny">Valable uniquement ce match &middot; Non remboursable</div>
-<div class="c bon-match">BON MATCH !</div>`;
+<div class="c bon-match">BON MATCH !</div>
+</div>`;
 }
