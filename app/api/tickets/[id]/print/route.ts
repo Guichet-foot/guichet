@@ -73,7 +73,21 @@ export async function GET(
 ${body}
 <button class="no-print" onclick="window.print()" style="display:block;margin:5mm auto;padding:2mm 5mm;font-size:10pt;cursor:pointer;">Imprimer</button>
 <script>
-window.onload = function() { setTimeout(function() { window.print(); }, 400); };
+window.onload = function() {
+  // macOS ignores CSS @page{size:auto} and uses the OS-configured paper size.
+  // Measure the actual ticket height on screen then inject a concrete @page size
+  // so the thermal printer feeds only as much paper as the content needs.
+  var ticket = document.querySelector('.print-ticket');
+  var pageW = '${fmt === "58" ? "58mm" : "72mm"}';
+  if (ticket) {
+    // 1 CSS px = 25.4/96 mm at the standard 96 dpi reference pixel
+    var hMm = Math.ceil(ticket.getBoundingClientRect().height * 25.4 / 96) + 8;
+    var s = document.createElement('style');
+    s.textContent = '@page { size: ' + pageW + ' ' + hMm + 'mm; }';
+    document.head.appendChild(s);
+  }
+  setTimeout(function() { window.print(); }, 300);
+};
 </script>
 </body>
 </html>`;

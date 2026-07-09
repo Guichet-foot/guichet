@@ -82,7 +82,25 @@ ${blocksHtml}
   </button>
 </div>
 <script>
-window.onload = function() { setTimeout(function() { window.print(); }, 400); };
+window.onload = function() {
+  // macOS uses OS-configured paper size (e.g. 72x210mm) and ignores CSS @page{size:auto}.
+  // Measure the tallest .print-ticket and inject an exact @page size so the thermal
+  // printer feeds one ticket's worth of paper per page (not a fixed 210mm).
+  var tickets = document.querySelectorAll('.print-ticket');
+  var pageW = '${fmt === "58" ? "58mm" : "72mm"}';
+  if (tickets.length > 0) {
+    var maxH = 0;
+    tickets.forEach(function(t) {
+      var h = t.getBoundingClientRect().height;
+      if (h > maxH) maxH = h;
+    });
+    var hMm = Math.ceil(maxH * 25.4 / 96) + 8;
+    var s = document.createElement('style');
+    s.textContent = '@page { size: ' + pageW + ' ' + hMm + 'mm; }';
+    document.head.appendChild(s);
+  }
+  setTimeout(function() { window.print(); }, 400);
+};
 </script>
 </body>
 </html>`;
