@@ -96,7 +96,7 @@ window.onload = function() {
     });
     var hMm = Math.ceil(maxH * 25.4 / 96) + 8;
     var s = document.createElement('style');
-    s.textContent = '@page { size: ' + pageW + ' ' + hMm + 'mm; }';
+    s.textContent = '@page { size: ' + pageW + ' ' + hMm + 'mm; margin: 0; }';
     document.head.appendChild(s);
   }
   setTimeout(function() { window.print(); }, 400);

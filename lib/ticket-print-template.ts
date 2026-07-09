@@ -13,7 +13,7 @@ export function getPrintStyles(fmt: PrintFormat): string {
   const padV     = is58 ? "1.5mm" : "2mm";
   const padH     = is58 ? "1.5mm" : "2mm";
   const basePt   = is58 ? "7.5"   : "8.5";
-  const teamsPt  = is58 ? "10"    : "12";
+  const teamsPt  = is58 ? "10"    : "10.5";
   const vsPt     = is58 ? "6.5"   : "7";
   const infoPt   = is58 ? "7"     : "8";
   const catPt    = is58 ? "11"    : "13";
@@ -55,6 +55,9 @@ export function getPrintStyles(fmt: PrintFormat): string {
     font-size: ${teamsPt}pt;
     font-weight: 900;
     line-height: 1.3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .vs { font-size: ${vsPt}pt; font-weight: 400; opacity: 0.5; }
   .info {
@@ -83,11 +86,12 @@ export function getPrintStyles(fmt: PrintFormat): string {
   .tiny { font-size: ${tinyPt}pt; font-weight: 600; line-height: 1.3; }
   .bon-match { font-size: ${bonPt}pt; font-weight: 900; letter-spacing: 1.5px; margin-top: 0.5mm; }
 
+  @page {
+    size: ${width} auto;
+    margin: 0;
+  }
+
   @media print {
-    @page {
-      size: ${width} auto;
-      margin: 0;
-    }
     html,
     body {
       width: ${width};
@@ -146,7 +150,7 @@ export function renderTicketBlock(
      58mm: two lines, truncate each team name to 20 chars  */
   const teamsHtml = is58
     ? `<div class="c teams">${trunc(home, 20)}<br><span class="vs">vs</span><br>${trunc(away, 20)}</div>`
-    : `<div class="c teams">${trunc(home, 14)} <span class="vs">vs</span> ${trunc(away, 14)}</div>`;
+    : `<div class="c teams">${trunc(home, 12)} <span class="vs">vs</span> ${trunc(away, 12)}</div>`;
 
   return `
 <div class="print-ticket">

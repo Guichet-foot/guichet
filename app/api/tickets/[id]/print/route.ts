@@ -83,7 +83,7 @@ window.onload = function() {
     // 1 CSS px = 25.4/96 mm at the standard 96 dpi reference pixel
     var hMm = Math.ceil(ticket.getBoundingClientRect().height * 25.4 / 96) + 8;
     var s = document.createElement('style');
-    s.textContent = '@page { size: ' + pageW + ' ' + hMm + 'mm; }';
+    s.textContent = '@page { size: ' + pageW + ' ' + hMm + 'mm; margin: 0; }';
     document.head.appendChild(s);
   }
   setTimeout(function() { window.print(); }, 300);
