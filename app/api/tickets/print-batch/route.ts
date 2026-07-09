@@ -96,13 +96,11 @@ window.onload = function() {
     s.textContent = '@page { size: ' + pageW + ' ' + hMm + 'mm; margin: 0; }';
     document.head.appendChild(s);
   }
-  if (window.parent !== window) {
-    // Inside an iframe: let the parent call contentWindow.print() so the dialog
-    // appears in the current tab without opening a new one.
-    window.parent.postMessage({ type: 'gf-print-ready' }, '*');
-  } else {
-    setTimeout(function() { window.print(); }, 400);
-  }
+  setTimeout(function() { window.print(); }, 400);
+  // Auto-close if opened as a popup (window.opener is set by window.open())
+  window.addEventListener('afterprint', function() {
+    if (window.opener) window.close();
+  });
 };
 </script>
 </body>
