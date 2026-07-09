@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Printer } from "lucide-react";
+import { printViaFrame } from "@/lib/print-frame";
 
 const PRINT_FORMAT_KEY = "gf_print_format";
 
@@ -16,7 +17,7 @@ export function PrintButton({ ticketId, batchId }: PrintButtonProps) {
     const url = batchId
       ? `/api/tickets/print-batch?batch=${batchId}&fmt=${fmt}`
       : `/api/tickets/${ticketId}/print?fmt=${fmt}`;
-    window.open(url, "_blank");
+    printViaFrame(url);
   }
 
   return (

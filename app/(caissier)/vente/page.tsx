@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { createTickets, sellBlocTickets, getMatchCategoriesForSale } from "@/lib/actions/ticket-actions";
+import { printViaFrame } from "@/lib/print-frame";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -187,7 +188,7 @@ function VenteContent() {
     setLoading(false);
 
     if (result.batchId) {
-      window.open(`/api/tickets/print-batch?batch=${result.batchId}&fmt=${printFormat}`, "_blank");
+      printViaFrame(`/api/tickets/print-batch?batch=${result.batchId}&fmt=${printFormat}`);
     }
   }
 

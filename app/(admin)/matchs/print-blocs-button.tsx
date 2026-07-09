@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { printTicketBloc } from "@/lib/actions/ticket-actions";
 import { createClient } from "@/lib/supabase/client";
+import { printViaFrame } from "@/lib/print-frame";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -73,7 +74,7 @@ export function PrintBlocsButton({ matchId, matchName }: PrintBlocsButtonProps) 
     }
     setOpen(false);
     toast.success(`${blocs} bloc${blocs > 1 ? "s" : ""} généré${blocs > 1 ? "s" : ""} — impression en cours…`);
-    window.open(`/api/tickets/print-batch?batch=${result.batchId}&fmt=80`, "_blank");
+    printViaFrame(`/api/tickets/print-batch?batch=${result.batchId}&fmt=80`);
   }
 
   const selectedCat = categories.find((c) => c.id === categoryId);
