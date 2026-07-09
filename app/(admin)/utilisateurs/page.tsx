@@ -147,7 +147,7 @@ export default async function UsersPage({
   return (
     <div className="space-y-6">
       {isOdcavRole && !params.zone && <TabBar active="zones" />}
-      {profile.role === "super_admin" && selectedZone && <ZoneBackHeader zoneName={selectedZone.name} />}
+      {["super_admin","president_odcav","tresorier"].includes(profile.role) && selectedZone && <ZoneBackHeader zoneName={selectedZone.name} />}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold font-heading">Utilisateurs</h1>

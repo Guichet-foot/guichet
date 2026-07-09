@@ -41,12 +41,15 @@ export async function getEffectiveZone(
   const adminClient = await createAdminClient();
   const supabase = await createClient();
 
-  // Fondateur sees ALL zones; super_admin/president_odcav see only their own
+  // Fondateur sees ALL zones; super_admin/president_odcav see only their own.
+  // Trésorier sees the zones owned by whoever created their account (their ODCAV president).
   const isOdcavRole = profile.role === "super_admin" || profile.role === "president_odcav";
+  const zonesOwnerId =
+    profile.role === "tresorier" ? (profile.created_by_admin ?? profile.id) : profile.id;
   const zonesQuery = profile.role === "fondateur"
     ? supabase.from("zones").select("*").order("name")
-    : isOdcavRole
-    ? adminClient.from("zones").select("*").eq("created_by", profile.id).order("name")
+    : isOdcavRole || profile.role === "tresorier"
+    ? adminClient.from("zones").select("*").eq("created_by", zonesOwnerId).order("name")
     : supabase.from("zones").select("*").eq("created_by", profile.id).order("name");
 
   const { data: zones } = await zonesQuery;

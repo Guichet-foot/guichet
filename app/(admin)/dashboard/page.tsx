@@ -250,7 +250,7 @@ export default async function DashboardPage({
 
   return (
     <div className="space-y-6">
-      {profile.role === "super_admin" && selectedZone && <ZoneBackHeader zoneName={selectedZone.name} />}
+      {["super_admin","president_odcav","tresorier"].includes(profile.role) && selectedZone && <ZoneBackHeader zoneName={selectedZone.name} />}
       <h1 className="text-2xl font-bold font-heading">Tableau de bord</h1>
 
       <DashboardFilters matches={filterMatches} />
