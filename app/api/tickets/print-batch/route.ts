@@ -83,9 +83,6 @@ ${blocksHtml}
 </div>
 <script>
 window.onload = function() {
-  // macOS uses OS-configured paper size (e.g. 72x210mm) and ignores CSS @page{size:auto}.
-  // Measure the tallest .print-ticket and inject an exact @page size so the thermal
-  // printer feeds one ticket's worth of paper per page (not a fixed 210mm).
   var tickets = document.querySelectorAll('.print-ticket');
   var pageW = '${fmt === "58" ? "58mm" : "72mm"}';
   if (tickets.length > 0) {
@@ -99,7 +96,13 @@ window.onload = function() {
     s.textContent = '@page { size: ' + pageW + ' ' + hMm + 'mm; margin: 0; }';
     document.head.appendChild(s);
   }
-  setTimeout(function() { window.print(); }, 400);
+  if (window.parent !== window) {
+    // Inside an iframe: let the parent call contentWindow.print() so the dialog
+    // appears in the current tab without opening a new one.
+    window.parent.postMessage({ type: 'gf-print-ready' }, '*');
+  } else {
+    setTimeout(function() { window.print(); }, 400);
+  }
 };
 </script>
 </body>
