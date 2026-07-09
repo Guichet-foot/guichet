@@ -4,7 +4,7 @@ import { getEffectiveZone } from "@/lib/get-effective-zone";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Banknote, Ticket, TrendingUp, PackageX } from "lucide-react";
+import { Banknote, Ticket, PackageX } from "lucide-react";
 import { formatFCFA, formatDateShort } from "@/lib/format";
 import { MATCH_STATUS_LABELS, MATCH_STATUS_COLORS } from "@/lib/constants";
 import { SalesChart } from "./sales-chart";
@@ -63,56 +63,53 @@ export default async function DashboardPage({
     periodLabel = "Mois en cours";
   }
 
-  // ── Main ticket query for stat cards ────────────────────────────
-  // adminClient bypasses RLS: C3 matches have zone_id=null which blocks user client
-  let ticketsQuery = adminClient
-    .from("tickets")
-    .select("price, status, match_id, match:matches(zone_id, c3_account_id)");
+  // ── Matches in period (zone-scoped) — source of truth for period filter ──
+  let matchesPeriodQuery = adminClient
+    .from("matches")
+    .select("id");
 
   if (filterMatchId) {
-    ticketsQuery = ticketsQuery.eq("match_id", filterMatchId);
+    matchesPeriodQuery = matchesPeriodQuery.eq("id", filterMatchId);
   } else {
-    ticketsQuery = ticketsQuery
-      .gte("sold_at", dateStart.toISOString())
-      .lte("sold_at", dateEnd.toISOString());
+    matchesPeriodQuery = matchesPeriodQuery
+      .gte("match_date", dateStart.toISOString())
+      .lte("match_date", dateEnd.toISOString());
+  }
+  if (c3AccountId) matchesPeriodQuery = (matchesPeriodQuery as any).eq("c3_account_id", c3AccountId);
+  else if (zoneFilter) matchesPeriodQuery = matchesPeriodQuery.eq("zone_id", zoneFilter);
+
+  const { data: matchesPeriodData } = await matchesPeriodQuery;
+  const matchIdsInPeriod = (matchesPeriodData || []).map((m: any) => m.id as string);
+
+  // ── Tickets for those matches (no sold_at filter avoids missing invendus) ──
+  let periodTickets: any[] = [];
+  if (matchIdsInPeriod.length > 0) {
+    const { data } = await adminClient
+      .from("tickets")
+      .select("price, status, match_id")
+      .in("match_id", matchIdsInPeriod);
+    periodTickets = data || [];
   }
 
-  const { data: rawTickets } = await ticketsQuery;
+  // ── Match unsold — authoritative invendu counts ───────────────────
+  let totalUnsold = 0;
+  let totalUnsoldValue = 0;
+  if (matchIdsInPeriod.length > 0) {
+    const { data: unsoldRows } = await adminClient
+      .from("match_unsold")
+      .select("match_id, unsold_count, tout_vendus")
+      .in("match_id", matchIdsInPeriod);
+    (unsoldRows || []).forEach((row: any) => {
+      if (!row.tout_vendus) totalUnsold += row.unsold_count || 0;
+    });
+    totalUnsoldValue = periodTickets
+      .filter((t: any) => t.status === "annule")
+      .reduce((s: number, t: any) => s + t.price, 0);
+  }
 
-  const scopedTickets = ((c3AccountId
-    ? rawTickets?.filter((t: any) => t.match?.c3_account_id === c3AccountId)
-    : zoneFilter
-    ? rawTickets?.filter((t: any) => t.match?.zone_id === zoneFilter)
-    : rawTickets) || []) as any[];
-
-  const revenueTickets = scopedTickets.filter((t: any) => t.status !== "annule");
-  const unsoldTickets = scopedTickets.filter((t: any) => t.status === "annule");
-
+  const revenueTickets = periodTickets.filter((t: any) => t.status !== "annule");
   const totalRevenue = revenueTickets.reduce((s: number, t: any) => s + t.price, 0);
   const totalSold = revenueTickets.length;
-  const totalUnsold = unsoldTickets.length;
-  const totalUnsoldValue = unsoldTickets.reduce((s: number, t: any) => s + t.price, 0);
-
-  // ── Expenses for period (balance card) ───────────────────────────
-  let expQuery = adminClient.from("expenses").select("amount");
-
-  if (filterMatchId) {
-    expQuery = expQuery.eq("match_id", filterMatchId);
-  } else {
-    expQuery = expQuery
-      .gte("expense_date", dateStart.toISOString().split("T")[0])
-      .lte("expense_date", dateEnd.toISOString().split("T")[0]);
-  }
-
-  if (c3AccountId) {
-    expQuery = (expQuery as any).eq("c3_account_id", c3AccountId);
-  } else if (zoneFilter) {
-    expQuery = expQuery.eq("zone_id", zoneFilter);
-  }
-
-  const { data: expData } = await expQuery;
-  const totalExpenses = expData?.reduce((s, e) => s + (e as any).amount, 0) || 0;
-  const balance = totalRevenue - totalExpenses;
 
   // ── Upcoming matches ─────────────────────────────────────────────
   const now = new Date().toISOString();
@@ -259,19 +256,7 @@ export default async function DashboardPage({
       <DashboardFilters matches={filterMatches} />
 
       {/* Stat cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Recettes</p>
-                <p className="text-2xl font-bold text-brand">{formatFCFA(totalRevenue)}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">{periodLabel}</p>
-              </div>
-              <Banknote className="h-8 w-8 text-brand/40" />
-            </div>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
@@ -302,13 +287,11 @@ export default async function DashboardPage({
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Solde</p>
-                <p className={`text-2xl font-bold ${balance >= 0 ? "text-success" : "text-danger"}`}>
-                  {formatFCFA(balance)}
-                </p>
-                <p className="text-xs text-muted-foreground mt-0.5">{periodLabel}</p>
+                <p className="text-sm text-muted-foreground">Recettes</p>
+                <p className="text-2xl font-bold text-brand">{formatFCFA(totalRevenue)}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Billets vendus − Invendus</p>
               </div>
-              <TrendingUp className="h-8 w-8 text-muted-foreground/30" />
+              <Banknote className="h-8 w-8 text-brand/40" />
             </div>
           </CardContent>
         </Card>

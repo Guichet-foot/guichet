@@ -82,34 +82,54 @@ export default async function FinancesPage({
   const feePerBlock = (platformData as any)?.fee_per_block ?? 1000;
   const odcavRate = platformData?.odcav_rate ?? 0.05;
 
-  // ── Tickets query — adminClient to bypass C3 RLS (zone_id=null) ──
-  let ticketsQuery = adminSupabase
-    .from("tickets")
-    .select("price, status, counts_as_revenue, match_id, sold_at, match:matches(home_team, away_team, match_date, zone_id, c3_account_id)");
+  // ── Matches in period (zone-scoped) — source of truth for period filter ──
+  let matchesPeriodQuery = adminSupabase
+    .from("matches")
+    .select("id, home_team, away_team, match_date");
 
   if (filterMatchId) {
-    ticketsQuery = ticketsQuery.eq("match_id", filterMatchId);
+    matchesPeriodQuery = matchesPeriodQuery.eq("id", filterMatchId);
   } else {
-    ticketsQuery = ticketsQuery
-      .gte("sold_at", dateStart.toISOString())
-      .lte("sold_at", dateEnd.toISOString());
+    matchesPeriodQuery = matchesPeriodQuery
+      .gte("match_date", dateStart.toISOString())
+      .lte("match_date", dateEnd.toISOString());
+  }
+  if (c3AccountId) matchesPeriodQuery = (matchesPeriodQuery as any).eq("c3_account_id", c3AccountId);
+  else if (zoneId) matchesPeriodQuery = matchesPeriodQuery.eq("zone_id", zoneId);
+
+  const { data: matchesInPeriod } = await matchesPeriodQuery;
+  const matchIdsInPeriod = (matchesInPeriod || []).map((m: any) => m.id as string);
+
+  // ── Tickets for those matches (no sold_at filter — avoids missing invendus) ──
+  let periodTickets: any[] = [];
+  if (matchIdsInPeriod.length > 0) {
+    const { data } = await adminSupabase
+      .from("tickets")
+      .select("price, status, counts_as_revenue, match_id")
+      .in("match_id", matchIdsInPeriod);
+    periodTickets = data || [];
   }
 
-  const { data: tickets } = (await ticketsQuery) as { data: any[] | null };
+  // ── Match unsold — authoritative invendu counts ───────────────────
+  const unsoldByMatchId: Record<string, number> = {};
+  if (matchIdsInPeriod.length > 0) {
+    const { data: unsoldRows } = await adminSupabase
+      .from("match_unsold")
+      .select("match_id, unsold_count, tout_vendus")
+      .in("match_id", matchIdsInPeriod);
+    (unsoldRows || []).forEach((row: any) => {
+      unsoldByMatchId[row.match_id] = row.tout_vendus ? 0 : (row.unsold_count || 0);
+    });
+  }
 
-  const filteredTickets = (c3AccountId
-    ? tickets?.filter((t: any) => t.match?.c3_account_id === c3AccountId)
-    : zoneId
-    ? tickets?.filter((t: any) => t.match?.zone_id === zoneId)
-    : tickets) || [];
-
-  const totalSold = filteredTickets.filter((t: any) => t.counts_as_revenue && t.status !== "annule").length;
-  const totalRevenue = filteredTickets
+  const totalSold = periodTickets.filter((t: any) => t.counts_as_revenue && t.status !== "annule").length;
+  const totalRevenue = periodTickets
     .filter((t: any) => t.counts_as_revenue && t.status !== "annule")
     .reduce((sum: number, t: any) => sum + t.price, 0);
 
-  const totalUnsold = filteredTickets.filter((t: any) => t.status === "annule").length;
-  const totalUnsoldValue = filteredTickets
+  // Use match_unsold as authoritative invendu count; value from annulled tickets
+  const totalUnsold = Object.values(unsoldByMatchId).reduce((s, c) => s + c, 0);
+  const totalUnsoldValue = periodTickets
     .filter((t: any) => t.status === "annule")
     .reduce((sum: number, t: any) => sum + t.price, 0);
 
@@ -117,28 +137,27 @@ export default async function FinancesPage({
   const totalBlocks = totalSold > 0 ? Math.ceil(totalSold / 100) : 0;
   const fraisPlateformePeriod = totalBlocks * feePerBlock;
 
+  // Build revenueByMatch: initialise from matches, fill from tickets + match_unsold
   const revenueByMatch: Record<string, {
     homeTeam: string; awayTeam: string; date: string;
-    printed: number; unsold: number; validated: number; revenue: number;
+    printed: number; unsold: number; revenue: number;
   }> = {};
-  filteredTickets.forEach((t: any) => {
-    if (!t.match) return;
-    if (!revenueByMatch[t.match_id]) {
-      revenueByMatch[t.match_id] = {
-        homeTeam: t.match.home_team,
-        awayTeam: t.match.away_team,
-        date: t.match.match_date,
-        printed: 0, unsold: 0, validated: 0, revenue: 0,
-      };
-    }
-    revenueByMatch[t.match_id].printed++;
-    if (t.status === "annule") {
-      revenueByMatch[t.match_id].unsold++;
-    } else {
-      revenueByMatch[t.match_id].revenue += t.price;
-    }
-    if (t.status === "scanne") {
-      revenueByMatch[t.match_id].validated++;
+  (matchesInPeriod || []).forEach((m: any) => {
+    revenueByMatch[m.id] = {
+      homeTeam: m.home_team,
+      awayTeam: m.away_team,
+      date: m.match_date,
+      printed: 0,
+      unsold: unsoldByMatchId[m.id] || 0,
+      revenue: 0,
+    };
+  });
+  periodTickets.forEach((t: any) => {
+    const matchData = revenueByMatch[t.match_id];
+    if (!matchData) return;
+    matchData.printed++;
+    if (t.status !== "annule" && t.counts_as_revenue) {
+      matchData.revenue += t.price;
     }
   });
 
@@ -303,25 +322,23 @@ export default async function FinancesPage({
             <TableHeader>
               <TableRow className="text-xs">
                 <TableHead className="py-2 text-xs">Match</TableHead>
-                <TableHead className="py-2 text-xs text-right">Impr.</TableHead>
-                <TableHead className="py-2 text-xs text-right text-red-600">Invendu</TableHead>
-                <TableHead className="py-2 text-xs text-right text-green-700">Facturés</TableHead>
-                <TableHead className="py-2 text-xs text-right">Recettes</TableHead>
+                <TableHead className="py-2 text-xs text-right">Imprimé</TableHead>
+                <TableHead className="py-2 text-xs text-right text-red-600">Invendus</TableHead>
                 <TableHead className="py-2 text-xs text-right text-danger">Dépenses</TableHead>
-                <TableHead className="py-2 text-xs text-right font-bold">Solde</TableHead>
+                <TableHead className="py-2 text-xs text-right font-bold text-brand">Recettes</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {Object.entries(revenueByMatch).length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
                     Aucune recette sur cette période
                   </TableCell>
                 </TableRow>
               ) : (
                 Object.entries(revenueByMatch).map(([id, data]) => {
                   const matchExp = expensesByMatchId[id] || 0;
-                  const solde = data.revenue - matchExp;
+                  const recettes = data.revenue - matchExp;
                   return (
                     <TableRow key={id} className="text-sm">
                       <TableCell className="py-2">
@@ -329,12 +346,10 @@ export default async function FinancesPage({
                         <p className="text-xs text-muted-foreground">{formatDate(data.date)}</p>
                       </TableCell>
                       <TableCell className="py-2 text-right text-xs">{data.printed}</TableCell>
-                      <TableCell className="py-2 text-right text-xs font-medium text-red-600">{data.unsold}</TableCell>
-                      <TableCell className="py-2 text-right text-xs font-medium text-green-700">{data.printed - data.unsold}</TableCell>
-                      <TableCell className="py-2 text-right text-xs font-semibold text-brand whitespace-nowrap">{formatFCFA(data.revenue)}</TableCell>
+                      <TableCell className="py-2 text-right text-xs font-medium text-red-600">{data.unsold > 0 ? data.unsold : "—"}</TableCell>
                       <TableCell className="py-2 text-right text-xs font-medium text-danger whitespace-nowrap">{matchExp > 0 ? `-${formatFCFA(matchExp)}` : "—"}</TableCell>
-                      <TableCell className={`py-2 text-right text-xs font-bold whitespace-nowrap ${solde >= 0 ? "text-success" : "text-danger"}`}>
-                        {formatFCFA(solde)}
+                      <TableCell className={`py-2 text-right text-xs font-bold whitespace-nowrap ${recettes >= 0 ? "text-brand" : "text-danger"}`}>
+                        {formatFCFA(recettes)}
                       </TableCell>
                     </TableRow>
                   );
