@@ -59,7 +59,7 @@ export function getPrintStyles(fmt: PrintFormat): string {
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  .vs { font-size: ${vsPt}pt; font-weight: 400; opacity: 0.5; }
+  .vs { font-size: ${vsPt}pt; font-weight: 400; }
   .info {
     font-size: ${infoPt}pt;
     font-weight: 600;
