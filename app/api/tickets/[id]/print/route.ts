@@ -77,13 +77,19 @@ window.onload = function() {
   var ticket = document.querySelector('.print-ticket');
   var pageW = '${fmt === "58" ? "58mm" : "72mm"}';
   if (ticket) {
-    var hMm = Math.ceil(ticket.getBoundingClientRect().height * 25.4 / 96) + 8;
+    var rect = ticket.getBoundingClientRect();
+    // Convert px→mm (96dpi reference pixel)
+    var hMm = Math.ceil(rect.height * 25.4 / 96) + 3;
+    // Measure top offset: any space above the ticket (body padding, etc.)
+    var topOffsetMm = Math.ceil(rect.top * 25.4 / 96);
+    // Negative margin-top cancels the hardware top margin the XPRINTER driver adds.
+    // We negate the measured top offset so content starts at the very top of the paper.
+    var topMarginMm = topOffsetMm > 0 ? -topOffsetMm : 0;
     var s = document.createElement('style');
-    s.textContent = '@page { size: ' + pageW + ' ' + hMm + 'mm; margin: 0; }';
+    s.textContent = '@page { size: ' + pageW + ' ' + hMm + 'mm; margin-top: ' + topMarginMm + 'mm; margin-right: 0mm; margin-bottom: 0mm; margin-left: 0mm; }';
     document.head.appendChild(s);
   }
-  setTimeout(function() { window.print(); }, 300);
-  // Auto-close if opened as a popup (window.opener is set by window.open())
+  setTimeout(function() { window.print(); }, 500);
   window.addEventListener('afterprint', function() {
     if (window.opener) window.close();
   });

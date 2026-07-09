@@ -6,22 +6,20 @@
  * If the popup is blocked by the browser, falls back to a normal new tab.
  */
 export function printViaFrame(url: string): void {
-  // Centered popup — not a tab (no address bar, no tab strip).
+  // Fullscreen popup — not a tab (no address bar, no tab strip).
   // Must be called synchronously within the user gesture (click) so the browser allows it.
-  const w = 480;
-  const h = 750;
-  const left = Math.round((window.screen.width - w) / 2);
-  const top = Math.round((window.screen.height - h) / 2);
+  const w = window.screen.availWidth;
+  const h = window.screen.availHeight;
 
   const features = [
     `width=${w}`,
     `height=${h}`,
-    `left=${left}`,
-    `top=${top}`,
+    "left=0",
+    "top=0",
     "toolbar=no",
     "location=no",
     "menubar=no",
-    "scrollbars=no",
+    "scrollbars=yes",
     "status=no",
     "resizable=yes",
   ].join(",");
