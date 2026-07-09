@@ -37,11 +37,14 @@ export async function requireAuth(): Promise<Profile> {
 
 export async function requireRole(roles: UserRole[]): Promise<Profile> {
   const profile = await requireAuth();
-  // president_odcav has the same access as super_admin everywhere
-  const effectiveRoles =
-    roles.includes("super_admin") && !roles.includes("president_odcav")
-      ? ([...roles, "president_odcav"] as UserRole[])
-      : roles;
+  // president_odcav and tresorier have the same access as super_admin everywhere
+  const effectiveRoles = roles.includes("super_admin")
+    ? ([
+        ...roles,
+        ...(!roles.includes("president_odcav") ? ["president_odcav"] : []),
+        ...(!roles.includes("tresorier") ? ["tresorier"] : []),
+      ] as UserRole[])
+    : roles;
   if (!effectiveRoles.includes(profile.role)) {
     if (profile.role === "caissier") redirect("/vente");
     if (profile.role === "portier") redirect("/scanner");

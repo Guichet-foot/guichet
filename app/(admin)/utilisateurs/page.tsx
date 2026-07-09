@@ -33,7 +33,7 @@ export default async function UsersPage({
       .select("*")
       .eq("created_by_admin", profile.id)
       .is("zone_id", null)
-      .in("role", ["c3", "super_admin"])
+      .in("role", ["c3", "super_admin", "tresorier"])
       .order("created_at", { ascending: false });
 
     return (

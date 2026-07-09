@@ -154,7 +154,7 @@ export default async function EquipesPage({
           <h1 className="text-2xl font-bold font-heading">Équipes</h1>
           <p className="text-muted-foreground">{teams?.length || 0} équipe(s)</p>
         </div>
-        <TeamFormDialog zoneId={effectiveZoneId} userRole={profile.role} />
+        {profile.role !== "tresorier" && <TeamFormDialog zoneId={effectiveZoneId} userRole={profile.role} />}
       </div>
 
       <Card>
@@ -172,7 +172,7 @@ export default async function EquipesPage({
                   <TableHead className="hidden sm:table-cell">Président</TableHead>
                   <TableHead className="hidden md:table-cell">Délégué(s)</TableHead>
                   <TableHead className="hidden sm:table-cell">Couleurs</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  {profile.role !== "tresorier" && <TableHead className="text-right">Actions</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -192,13 +192,15 @@ export default async function EquipesPage({
                     <TableCell className="hidden sm:table-cell">
                       {team.colors ? <TeamColorSwatches colors={team.colors} /> : "—"}
                     </TableCell>
-                    <TableCell className="text-right">
-                      <TeamActions
-                        team={{ id: team.id, name: team.name, president: team.president, delegates: team.delegates || [], colors: team.colors, zone_id: team.zone_id }}
-                        zoneId={effectiveZoneId}
-                        userRole={profile.role}
-                      />
-                    </TableCell>
+                    {profile.role !== "tresorier" && (
+                      <TableCell className="text-right">
+                        <TeamActions
+                          team={{ id: team.id, name: team.name, president: team.president, delegates: team.delegates || [], colors: team.colors, zone_id: team.zone_id }}
+                          zoneId={effectiveZoneId}
+                          userRole={profile.role}
+                        />
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>

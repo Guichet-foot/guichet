@@ -41,8 +41,10 @@ export default async function CartesPage({
     })
   );
 
+  const isOdcavRole = profile.role === "super_admin" || profile.role === "president_odcav" || profile.role === "tresorier";
+  const isReadOnly = profile.role === "tresorier";
+
   // Build the "Créer une carte" link — pass zone param for ODCAV roles so the form pre-selects it
-  const isOdcavRole = profile.role === "super_admin" || profile.role === "president_odcav";
   const createHref = isOdcavRole && effectiveZoneId
     ? `/cartes/nouveau?zone=${effectiveZoneId}`
     : "/cartes/nouveau";
@@ -67,16 +69,18 @@ export default async function CartesPage({
             </p>
           </div>
         </div>
-        <Link href={createHref}>
-          <Button className="bg-green-700 hover:bg-green-800 text-white">
-            <Plus className="h-4 w-4 mr-2" />
-            Créer une carte
-          </Button>
-        </Link>
+        {!isReadOnly && (
+          <Link href={createHref}>
+            <Button className="bg-green-700 hover:bg-green-800 text-white">
+              <Plus className="h-4 w-4 mr-2" />
+              Créer une carte
+            </Button>
+          </Link>
+        )}
       </div>
 
       {/* Client: stats + tabs + grid */}
-      <CartesClient items={items} zoneLogo={selectedZone?.logo ?? undefined} />
+      <CartesClient items={items} zoneLogo={selectedZone?.logo ?? undefined} readOnly={isReadOnly} />
     </div>
   );
 }

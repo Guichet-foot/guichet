@@ -80,7 +80,7 @@ export default function NewUserPage() {
   useEffect(() => {
     if (role !== "admin_zone") setIsPresident(false);
     if (role !== "c3") { setCity(""); setSelectedZones([]); }
-    if (role !== "super_admin") { setAllModules(true); setSelectedModules([]); }
+    if (role !== "super_admin" && role !== "tresorier") { setAllModules(true); setSelectedModules([]); }
     if (role !== "caissier" && role !== "portier") { setPwUnit("jamais"); setPwValue(30); }
   }, [role]);
 
@@ -90,10 +90,11 @@ export default function NewUserPage() {
   const availableRoles = (() => {
     if (isOdcavRole) {
       if (isDirectsMode) {
-        // Comptes directs: C3 and direct super_admin sub-accounts
+        // Comptes directs: C3, direct super_admin sub-accounts, and tresorier
         return [
           { value: "c3",         label: "Coordination C3" },
           { value: "super_admin",label: "Super Admin (accès direct)" },
+          { value: "tresorier",  label: "Trésorier" },
         ];
       }
       // Zone-based creation (from ?zone=xxx or zone card): no C3, no super_admin
@@ -121,7 +122,7 @@ export default function NewUserPage() {
   const showZoneSelector = isOdcavRole && !isDirectsMode && !zoneParam && role && role !== "c3" && role !== "super_admin";
   const showCityField = role === "c3";
   const showZoneCheckboxes = isDirectsMode && role === "c3";
-  const showModuleSelector = isDirectsMode && role === "super_admin";
+  const showModuleSelector = isDirectsMode && (role === "super_admin" || role === "tresorier");
 
   function toggleZone(id: string) {
     setSelectedZones((prev) =>

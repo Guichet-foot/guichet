@@ -214,9 +214,10 @@ function CardDesign({ card, qrDataUrl, zoneLogo }: { card: AccessCard; qrDataUrl
 interface CartesGridProps {
   items: CardWithQR[];
   zoneLogo?: string;
+  readOnly?: boolean;
 }
 
-function CartesGrid({ items, zoneLogo }: CartesGridProps) {
+function CartesGrid({ items, zoneLogo, readOnly }: CartesGridProps) {
   const [selected, setSelected] = useState<CardWithQR | null>(null);
 
   return (
@@ -244,11 +245,13 @@ function CartesGrid({ items, zoneLogo }: CartesGridProps) {
                 <CardDesign card={selected.card} qrDataUrl={selected.qrDataUrl} zoneLogo={zoneLogo} />
               </div>
               <div className="flex gap-2">
-                <Link href={`/cartes/${selected.card.id}/edit`} className="flex-1">
-                  <Button className="w-full bg-green-700 hover:bg-green-800 text-white">
-                    <Pencil className="h-4 w-4 mr-1.5" />Modifier
-                  </Button>
-                </Link>
+                {!readOnly && (
+                  <Link href={`/cartes/${selected.card.id}/edit`} className="flex-1">
+                    <Button className="w-full bg-green-700 hover:bg-green-800 text-white">
+                      <Pencil className="h-4 w-4 mr-1.5" />Modifier
+                    </Button>
+                  </Link>
+                )}
                 <a href={`/api/cartes/${selected.card.id}/download`} download>
                   <Button variant="outline" className="border-green-700 text-green-700 hover:bg-green-50">
                     <Download className="h-4 w-4 mr-1.5" />Télécharger
@@ -264,7 +267,7 @@ function CartesGrid({ items, zoneLogo }: CartesGridProps) {
 }
 
 /** Main client component: stats cards + tabs + filtered grid */
-export function CartesClient({ items, zoneLogo }: { items: CardWithQR[]; zoneLogo?: string }) {
+export function CartesClient({ items, zoneLogo, readOnly }: { items: CardWithQR[]; zoneLogo?: string; readOnly?: boolean }) {
   const [activeTab, setActiveTab] = useState<Tab>("zone_delegue");
   const [downloading, setDownloading] = useState(false);
 
@@ -421,7 +424,7 @@ export function CartesClient({ items, zoneLogo }: { items: CardWithQR[]; zoneLog
           <p className="font-medium">Aucune carte dans cet onglet</p>
         </div>
       ) : (
-        <CartesGrid items={filteredItems} zoneLogo={zoneLogo} />
+        <CartesGrid items={filteredItems} zoneLogo={zoneLogo} readOnly={readOnly} />
       )}
     </div>
   );

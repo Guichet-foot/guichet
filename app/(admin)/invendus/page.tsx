@@ -16,8 +16,8 @@ export default async function InvendusPage({
   const profile = await requireRole(["super_admin", "admin_zone", "c3"]);
   const params = await searchParams;
 
-  // president_odcav : sélection de zone obligatoire, lecture seule
-  if (profile.role === "president_odcav") {
+  // president_odcav / tresorier : sélection de zone obligatoire, lecture seule
+  if (profile.role === "president_odcav" || profile.role === "tresorier") {
     const { effectiveZoneId, selectedZone, ownedZones, needsZoneSelection } =
       await getEffectiveZone(profile, params.zone);
 

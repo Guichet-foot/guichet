@@ -187,8 +187,8 @@ export async function updateSession(request: NextRequest) {
   const isCaissierRoute = caissierRoutes.some((r) => pathname.startsWith(r));
   const isPortierRoute = portierRoutes.some((r) => pathname.startsWith(r));
 
-  // president_odcav and super_admin have the same routing
-  const isAdminRole = ["president_odcav", "super_admin", "admin_zone", "c3"].includes(profile.role);
+  // president_odcav, super_admin, tresorier have the same routing
+  const isAdminRole = ["president_odcav", "super_admin", "admin_zone", "c3", "tresorier"].includes(profile.role);
 
   if (profile.role === "portier") {
     if (!isPortierRoute) {
@@ -201,10 +201,12 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(new URL("/vente", request.url));
   }
 
-  // president_odcav redirect for non-admin, non-fondateur routes
-  // Use isAdminRoute (includes /dashboard) not isAdminRouteForFondateur (excludes /dashboard)
-  // to avoid a loop when president_odcav is already at /dashboard
-  if (profile.role === "president_odcav" && !isFondateurRoute && !isAdminRoute) {
+  // president_odcav / tresorier redirect for non-admin, non-fondateur routes
+  if (
+    (profile.role === "president_odcav" || profile.role === "tresorier") &&
+    !isFondateurRoute &&
+    !isAdminRoute
+  ) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 

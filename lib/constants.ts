@@ -46,6 +46,7 @@ export const ROLE_LABELS: Record<string, string> = {
   caissier: "Caissier",
   portier: "Portier",
   c3: "Coordination C3",
+  tresorier: "Trésorier",
 };
 
 export const ROLE_COLORS: Record<string, string> = {
@@ -56,6 +57,7 @@ export const ROLE_COLORS: Record<string, string> = {
   caissier: "bg-accent-gold/20 text-amber-800",
   portier: "bg-blue-100 text-blue-800",
   c3: "bg-teal-100 text-teal-800",
+  tresorier: "bg-emerald-100 text-emerald-800",
 };
 
 // Modules disponibles pour la sélection de permissions
