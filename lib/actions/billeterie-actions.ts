@@ -50,6 +50,7 @@ export async function getAllMatchesForBilleterie(): Promise<MatchOption[]> {
       .from("matches")
       .select(fields)
       .neq("status", "annule")
+      .neq("status", "termine")
       .order("match_date", { ascending: false });
     return (data || []) as MatchOption[];
   }
@@ -72,9 +73,9 @@ export async function getAllMatchesForBilleterie(): Promise<MatchOption[]> {
 
   const [zoneRes, directRes] = await Promise.all([
     zoneIds.length > 0
-      ? adminClient.from("matches").select(fields).in("zone_id", zoneIds).neq("status", "annule").order("match_date", { ascending: false })
+      ? adminClient.from("matches").select(fields).in("zone_id", zoneIds).neq("status", "annule").neq("status", "termine").order("match_date", { ascending: false })
       : Promise.resolve({ data: [] as any[] }),
-    adminClient.from("matches").select(fields).in("created_by", creatorIds).eq("is_direct", true).neq("status", "annule").order("match_date", { ascending: false }),
+    adminClient.from("matches").select(fields).in("created_by", creatorIds).eq("is_direct", true).neq("status", "annule").neq("status", "termine").order("match_date", { ascending: false }),
   ]);
 
   const all = [...(zoneRes.data || []), ...(directRes.data || [])];
@@ -89,7 +90,7 @@ export async function createBilleterie(formData: {
   name: string;
   matchIds: string[];
   price: number;
-  quantity: number;
+  quantity?: number;
 }): Promise<{ error?: string; billeterieId?: string; batchId?: string }> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -107,7 +108,6 @@ export async function createBilleterie(formData: {
 
   if (!formData.name.trim()) return { error: "Nom obligatoire" };
   if (formData.matchIds.length < 1) return { error: "Sélectionnez au moins un match" };
-  if (formData.quantity < 1 || formData.quantity > 10000) return { error: "Quantité invalide (1–10 000)" };
   if (formData.price < 0) return { error: "Prix invalide" };
 
   const { data: bil, error: bilErr } = await adminClient
@@ -118,27 +118,32 @@ export async function createBilleterie(formData: {
 
   if (bilErr || !bil) return { error: bilErr?.message || "Erreur création" };
 
-  const today = format(new Date(), "yyyyMMdd");
-  const { count: existingCount } = await adminClient
-    .from("billeterie_tickets")
-    .select("*", { count: "exact", head: true })
-    .like("serial_number", `BIL-${today}-%`);
+  const qty = formData.quantity ?? 0;
+  let batchId: string | undefined;
 
-  const batchId = crypto.randomUUID();
-  const baseCount = existingCount || 0;
+  if (qty > 0) {
+    const today = format(new Date(), "yyyyMMdd");
+    const { count: existingCount } = await adminClient
+      .from("billeterie_tickets")
+      .select("*", { count: "exact", head: true })
+      .like("serial_number", `BIL-${today}-%`);
 
-  const tickets = Array.from({ length: formData.quantity }, (_, i) => ({
-    billeterie_id: bil.id,
-    qr_token: crypto.randomUUID(),
-    serial_number: `BIL-${today}-${String(baseCount + i + 1).padStart(5, "0")}`,
-    sale_batch_id: batchId,
-    sold_by: user.id,
-    status: "actif",
-  }));
+    batchId = crypto.randomUUID();
+    const baseCount = existingCount || 0;
 
-  for (let i = 0; i < tickets.length; i += 100) {
-    const { error: tickErr } = await adminClient.from("billeterie_tickets").insert(tickets.slice(i, i + 100));
-    if (tickErr) return { error: tickErr.message };
+    const tickets = Array.from({ length: qty }, (_, i) => ({
+      billeterie_id: bil.id,
+      qr_token: crypto.randomUUID(),
+      serial_number: `BIL-${today}-${String(baseCount + i + 1).padStart(5, "0")}`,
+      sale_batch_id: batchId,
+      sold_by: user.id,
+      status: "actif",
+    }));
+
+    for (let i = 0; i < tickets.length; i += 100) {
+      const { error: tickErr } = await adminClient.from("billeterie_tickets").insert(tickets.slice(i, i + 100));
+      if (tickErr) return { error: tickErr.message };
+    }
   }
 
   revalidatePath("/billeterie");

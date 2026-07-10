@@ -26,7 +26,6 @@ function matchLabel(m: MatchOption): string {
 
 function statusBadge(status: string) {
   if (status === "en_cours") return <Badge className="bg-green-600 text-white text-xs">En cours</Badge>;
-  if (status === "termine") return <Badge variant="secondary" className="text-xs">Terminé</Badge>;
   return <Badge variant="outline" className="text-xs">Programmé</Badge>;
 }
 
@@ -37,7 +36,6 @@ export default function NouveauBilletteriePage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [name, setName] = useState("");
   const [price, setPrice] = useState("");
-  const [quantity, setQuantity] = useState("100");
 
   useEffect(() => {
     getAllMatchesForBilleterie().then((data) => setMatches(data));
@@ -63,9 +61,7 @@ export default function NouveauBilletteriePage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (selectedIds.size === 0) { toast.error("Sélectionnez au moins un match"); return; }
-    const qty = parseInt(quantity);
     const p = parseInt(price);
-    if (isNaN(qty) || qty < 1) { toast.error("Quantité invalide"); return; }
     if (isNaN(p) || p < 0) { toast.error("Prix invalide"); return; }
 
     setLoading(true);
@@ -73,17 +69,12 @@ export default function NouveauBilletteriePage() {
       name,
       matchIds: Array.from(selectedIds),
       price: p,
-      quantity: qty,
     });
     setLoading(false);
 
     if (result.error) { toast.error(result.error); return; }
 
-    toast.success(`${qty} billet(s) créé(s)`);
-
-    if (result.batchId) {
-      window.open(`/api/billeterie/print-batch?batch=${result.batchId}&fmt=80`, "_blank");
-    }
+    toast.success("Pass créé");
     router.push(`/billeterie/${result.billeterieId}`);
   }
 
@@ -114,35 +105,20 @@ export default function NouveauBilletteriePage() {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="price">Prix (FCFA)</Label>
-                <Input
-                  id="price"
-                  type="number"
-                  min="0"
-                  value={price}
-                  onChange={(e) => setPrice(e.target.value)}
-                  required
-                  placeholder="2000"
-                />
-                {price && !isNaN(parseInt(price)) && (
-                  <p className="text-xs text-muted-foreground">{formatFCFA(parseInt(price))}</p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="quantity">Nombre de billets</Label>
-                <Input
-                  id="quantity"
-                  type="number"
-                  min="1"
-                  max="10000"
-                  value={quantity}
-                  onChange={(e) => setQuantity(e.target.value)}
-                  required
-                />
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="price">Prix (FCFA)</Label>
+              <Input
+                id="price"
+                type="number"
+                min="0"
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+                required
+                placeholder="2000"
+              />
+              {price && !isNaN(parseInt(price)) && (
+                <p className="text-xs text-muted-foreground">{formatFCFA(parseInt(price))}</p>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -167,7 +143,7 @@ export default function NouveauBilletteriePage() {
             {matches.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <Trophy className="h-8 w-8 mx-auto mb-2" />
-                <p className="text-sm">Aucun match disponible</p>
+                <p className="text-sm">Aucun match programmé disponible</p>
               </div>
             ) : (
               <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
@@ -211,7 +187,7 @@ export default function NouveauBilletteriePage() {
           {loading ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
-            `Créer ${quantity || 0} billet(s) — ${selectedIds.size} match${selectedIds.size !== 1 ? "s" : ""}`
+            `Créer le pass — ${selectedIds.size} match${selectedIds.size !== 1 ? "s" : ""}`
           )}
         </Button>
       </form>
