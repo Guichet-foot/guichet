@@ -39,24 +39,27 @@ export default async function FondateurZoneMatchsPage({
     .order("match_date", { ascending: false });
 
   const matchIds = (matches || []).map((m: any) => m.id as string);
-  let ticketStats: Record<string, { count: number; revenue: number }> = {};
+  let ticketStats: Record<string, { printed: number; validated: number; revenue: number }> = {};
 
   if (matchIds.length > 0) {
     const { data: tickets } = await adminClient
       .from("tickets")
-      .select("match_id, price")
+      .select("match_id, price, bloc_printed, status")
       .in("match_id", matchIds)
-      .eq("counts_as_revenue", true);
+      .neq("status", "annule");
 
     if (tickets) {
       ticketStats = tickets.reduce(
         (acc, t: any) => {
-          if (!acc[t.match_id]) acc[t.match_id] = { count: 0, revenue: 0 };
-          acc[t.match_id].count++;
-          acc[t.match_id].revenue += t.price;
+          if (!acc[t.match_id]) acc[t.match_id] = { printed: 0, validated: 0, revenue: 0 };
+          if (t.bloc_printed) {
+            acc[t.match_id].printed++;
+            acc[t.match_id].revenue += t.price;
+          }
+          if (t.status === "scanne") acc[t.match_id].validated++;
           return acc;
         },
-        {} as Record<string, { count: number; revenue: number }>
+        {} as Record<string, { printed: number; validated: number; revenue: number }>
       );
     }
   }
@@ -101,13 +104,14 @@ export default async function FondateurZoneMatchsPage({
                   <TableHead className="hidden sm:table-cell">Statut</TableHead>
                   <TableHead className="text-center">Score</TableHead>
                   <TableHead className="hidden lg:table-cell text-right">Billets imprimés</TableHead>
+                  <TableHead className="hidden lg:table-cell text-right">Billets validés</TableHead>
                   <TableHead className="hidden lg:table-cell text-right">Recettes</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {(matches as any[]).map((match) => {
-                  const stats = ticketStats[match.id] || { count: 0, revenue: 0 };
+                  const stats = ticketStats[match.id] || { printed: 0, validated: 0, revenue: 0 };
                   return (
                     <TableRow key={match.id}>
                       <TableCell className="font-medium">
@@ -131,8 +135,15 @@ export default async function FondateurZoneMatchsPage({
                         )}
                       </TableCell>
                       <TableCell className="hidden lg:table-cell text-right">
-                        {stats.count > 0 ? (
-                          <span className="font-semibold">{stats.count.toLocaleString("fr-FR")}</span>
+                        {stats.printed > 0 ? (
+                          <span className="font-semibold">{stats.printed.toLocaleString("fr-FR")}</span>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="hidden lg:table-cell text-right">
+                        {stats.validated > 0 ? (
+                          <span className="font-semibold text-success">{stats.validated.toLocaleString("fr-FR")}</span>
                         ) : (
                           <span className="text-muted-foreground text-xs">—</span>
                         )}

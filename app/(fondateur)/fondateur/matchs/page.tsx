@@ -33,23 +33,24 @@ export default async function FondateurMatchsPage({
       .order("match_date", { ascending: false });
 
     const matchIds = (directMatches || []).map((m: any) => m.id as string);
-    let ticketStats: Record<string, { count: number }> = {};
+    let ticketStats: Record<string, { printed: number; validated: number }> = {};
 
     if (matchIds.length > 0) {
       const { data: tickets } = await adminClient
         .from("tickets")
-        .select("match_id")
+        .select("match_id, bloc_printed, status")
         .in("match_id", matchIds)
-        .eq("counts_as_revenue", true);
+        .neq("status", "annule");
 
       if (tickets) {
         ticketStats = tickets.reduce(
           (acc, t: any) => {
-            if (!acc[t.match_id]) acc[t.match_id] = { count: 0 };
-            acc[t.match_id].count++;
+            if (!acc[t.match_id]) acc[t.match_id] = { printed: 0, validated: 0 };
+            if (t.bloc_printed) acc[t.match_id].printed++;
+            if (t.status === "scanne") acc[t.match_id].validated++;
             return acc;
           },
-          {} as Record<string, { count: number }>
+          {} as Record<string, { printed: number; validated: number }>
         );
       }
     }
@@ -86,7 +87,8 @@ export default async function FondateurMatchsPage({
                     <TableHead className="hidden sm:table-cell">Type</TableHead>
                     <TableHead className="hidden md:table-cell">Date</TableHead>
                     <TableHead className="hidden sm:table-cell">Statut</TableHead>
-                    <TableHead className="hidden lg:table-cell text-right">Billets</TableHead>
+                    <TableHead className="hidden lg:table-cell text-right">Billets imprimés</TableHead>
+                    <TableHead className="hidden lg:table-cell text-right">Billets validés</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -98,7 +100,7 @@ export default async function FondateurMatchsPage({
                     const awayDisplay = match.away_team_zone
                       ? `${match.away_team} (${match.away_team_zone})`
                       : match.away_team;
-                    const stats = ticketStats[match.id] || { count: 0 };
+                    const stats = ticketStats[match.id] || { printed: 0, validated: 0 };
                     return (
                       <TableRow key={match.id}>
                         <TableCell className="font-medium">
@@ -120,8 +122,15 @@ export default async function FondateurMatchsPage({
                           </Badge>
                         </TableCell>
                         <TableCell className="hidden lg:table-cell text-right">
-                          {stats.count > 0 ? (
-                            <span className="font-semibold">{stats.count.toLocaleString("fr-FR")}</span>
+                          {stats.printed > 0 ? (
+                            <span className="font-semibold">{stats.printed.toLocaleString("fr-FR")}</span>
+                          ) : (
+                            <span className="text-muted-foreground text-xs">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="hidden lg:table-cell text-right">
+                          {stats.validated > 0 ? (
+                            <span className="font-semibold text-success">{stats.validated.toLocaleString("fr-FR")}</span>
                           ) : (
                             <span className="text-muted-foreground text-xs">—</span>
                           )}
