@@ -1,17 +1,152 @@
 import { requireRole } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/server";
 import { Card, CardContent } from "@/components/ui/card";
-import { MapPin, Trophy } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
+import { MapPin, Trophy, Plus, Network } from "lucide-react";
 import Link from "next/link";
+import { MATCH_STATUS_LABELS, MATCH_STATUS_COLORS } from "@/lib/constants";
+import { formatDateShort } from "@/lib/format";
+import { PrintBlocsButton } from "@/app/(admin)/matchs/print-blocs-button";
 
 export const metadata = { title: "Matchs — Fondateur" };
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-export default async function FondateurMatchsPage() {
+export default async function FondateurMatchsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>;
+}) {
   await requireRole(["fondateur"]);
+  const { tab } = await searchParams;
+  const activeTab = tab === "direct" ? "direct" : "zones";
+
   const adminClient = await createAdminClient();
 
+  if (activeTab === "direct") {
+    const { data: directMatches } = await adminClient
+      .from("matches")
+      .select("*")
+      .eq("is_direct", true)
+      .order("match_date", { ascending: false });
+
+    const matchIds = (directMatches || []).map((m: any) => m.id as string);
+    let ticketStats: Record<string, { count: number }> = {};
+
+    if (matchIds.length > 0) {
+      const { data: tickets } = await adminClient
+        .from("tickets")
+        .select("match_id")
+        .in("match_id", matchIds)
+        .eq("counts_as_revenue", true);
+
+      if (tickets) {
+        ticketStats = tickets.reduce(
+          (acc, t: any) => {
+            if (!acc[t.match_id]) acc[t.match_id] = { count: 0 };
+            acc[t.match_id].count++;
+            return acc;
+          },
+          {} as Record<string, { count: number }>
+        );
+      }
+    }
+
+    return (
+      <div className="space-y-6">
+        <TabBar active="direct" />
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold font-heading">Matchs directs</h1>
+            <p className="text-muted-foreground text-sm">{directMatches?.length || 0} match(s)</p>
+          </div>
+          <Link href="/fondateur/matchs/direct/nouveau">
+            <Button className="bg-brand hover:bg-brand/90">
+              <Plus className="h-4 w-4 mr-2" />
+              Nouveau match direct
+            </Button>
+          </Link>
+        </div>
+
+        <Card>
+          <CardContent className="p-0 overflow-x-auto">
+            {!directMatches || directMatches.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                <Network className="h-12 w-12 mb-4" />
+                <p>Aucun match direct créé</p>
+                <p className="text-sm mt-1">Créez des matchs inter-zones sans passer par une zone spécifique</p>
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Match</TableHead>
+                    <TableHead className="hidden sm:table-cell">Type</TableHead>
+                    <TableHead className="hidden md:table-cell">Date</TableHead>
+                    <TableHead className="hidden sm:table-cell">Statut</TableHead>
+                    <TableHead className="hidden lg:table-cell text-right">Billets</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(directMatches as any[]).map((match) => {
+                    const homeDisplay = match.home_team_zone
+                      ? `${match.home_team} (${match.home_team_zone})`
+                      : match.home_team;
+                    const awayDisplay = match.away_team_zone
+                      ? `${match.away_team} (${match.away_team_zone})`
+                      : match.away_team;
+                    const stats = ticketStats[match.id] || { count: 0 };
+                    return (
+                      <TableRow key={match.id}>
+                        <TableCell className="font-medium">
+                          <div className="leading-tight">
+                            <span>{homeDisplay}</span>
+                            <span className="text-muted-foreground mx-1 text-xs">vs</span>
+                            <span>{awayDisplay}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">
+                          {match.match_type || "—"}
+                        </TableCell>
+                        <TableCell className="hidden md:table-cell text-sm">
+                          {formatDateShort(match.match_date)}
+                        </TableCell>
+                        <TableCell className="hidden sm:table-cell">
+                          <Badge variant="secondary" className={MATCH_STATUS_COLORS[match.status]}>
+                            {MATCH_STATUS_LABELS[match.status]}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="hidden lg:table-cell text-right">
+                          {stats.count > 0 ? (
+                            <span className="font-semibold">{stats.count.toLocaleString("fr-FR")}</span>
+                          ) : (
+                            <span className="text-muted-foreground text-xs">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {match.status !== "termine" && match.status !== "annule" && (
+                            <PrintBlocsButton
+                              matchId={match.id}
+                              matchName={`${match.home_team} vs ${match.away_team}`}
+                            />
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // ── Tab Zones (default) ───────────────────────────────────────────
   const { data: zones } = await adminClient
     .from("zones")
     .select("id, name, region, president, logo")
@@ -24,12 +159,13 @@ export default async function FondateurMatchsPage() {
 
   return (
     <div className="space-y-6">
+      <TabBar active="zones" />
       <div className="flex items-center gap-3">
         <div className="w-12 h-12 rounded-xl bg-brand/10 flex items-center justify-center">
           <Trophy className="h-6 w-6 text-brand" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold font-heading">Matchs</h1>
+          <h1 className="text-2xl font-bold font-heading">Matchs Zone</h1>
           <p className="text-muted-foreground text-sm">Sélectionnez une zone</p>
         </div>
       </div>
@@ -67,6 +203,35 @@ export default async function FondateurMatchsPage() {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function TabBar({ active }: { active: "zones" | "direct" }) {
+  return (
+    <div className="flex gap-1 border-b">
+      <Link
+        href="/fondateur/matchs"
+        className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+          active === "zones"
+            ? "border-brand text-brand"
+            : "border-transparent text-muted-foreground hover:text-foreground"
+        }`}
+      >
+        <MapPin className="h-4 w-4" />
+        Match Zone
+      </Link>
+      <Link
+        href="/fondateur/matchs?tab=direct"
+        className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+          active === "direct"
+            ? "border-brand text-brand"
+            : "border-transparent text-muted-foreground hover:text-foreground"
+        }`}
+      >
+        <Network className="h-4 w-4" />
+        Match Direct
+      </Link>
     </div>
   );
 }

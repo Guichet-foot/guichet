@@ -1,8 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { printTicketBloc } from "@/lib/actions/ticket-actions";
-import { createClient } from "@/lib/supabase/client";
+import { printTicketBloc, getMatchCategoriesForSale } from "@/lib/actions/ticket-actions";
 import { printViaFrame } from "@/lib/print-frame";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -46,13 +45,7 @@ export function PrintBlocsButton({ matchId, matchName }: PrintBlocsButtonProps) 
   async function handleOpen() {
     setOpen(true);
     setLoadingCats(true);
-    const supabase = createClient();
-    const { data } = await supabase
-      .from("ticket_categories")
-      .select("id, name, price")
-      .eq("match_id", matchId)
-      .eq("active", true)
-      .order("display_order");
+    const data = await getMatchCategoriesForSale(matchId);
     setLoadingCats(false);
     if (data && data.length > 0) {
       setCategories(data);

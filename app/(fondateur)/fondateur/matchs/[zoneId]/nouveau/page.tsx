@@ -25,16 +25,16 @@ export default async function FondateurNouveauMatchPage({
 
   if (!zone) notFound();
 
-  const { data: teamsData } = await adminClient
-    .from("teams")
-    .select("id, name")
-    .eq("zone_id", zoneId)
-    .order("name");
+  const [{ data: teamsData }, { data: templatesData }] = await Promise.all([
+    adminClient.from("teams").select("id, name").eq("zone_id", zoneId).order("name"),
+    adminClient.from("ticket_templates").select("id, name, price, color").eq("zone_id", zoneId).order("price"),
+  ]);
 
   const teams = (teamsData || []) as { id: string; name: string }[];
+  const templates = (templatesData || []) as { id: string; name: string; price: number; color: string }[];
 
   return (
-    <div className="max-w-md mx-auto space-y-6">
+    <div className="max-w-lg mx-auto space-y-6">
       <div className="flex items-center gap-3">
         <Link href={`/fondateur/matchs/${zoneId}`}>
           <Button variant="outline" size="sm">
@@ -48,7 +48,7 @@ export default async function FondateurNouveauMatchPage({
         </div>
       </div>
 
-      <NouveauMatchForm zoneId={zoneId} zoneName={zone.name} teams={teams} />
+      <NouveauMatchForm zoneId={zoneId} zoneName={zone.name} teams={teams} templates={templates} />
     </div>
   );
 }

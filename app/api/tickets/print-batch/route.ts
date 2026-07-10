@@ -24,7 +24,7 @@ export async function GET(request: Request) {
   const adminClient = await createAdminClient();
   const { data: tickets } = await adminClient
     .from("tickets")
-    .select("*, match:matches(home_team, away_team, venue, match_date), category:ticket_categories(name), seller:profiles!tickets_sold_by_fkey(full_name)")
+    .select("*, match:matches(home_team, away_team, venue, match_date, home_team_zone, away_team_zone, match_type), category:ticket_categories(name), seller:profiles!tickets_sold_by_fkey(full_name)")
     .eq("sale_batch_id", batchId)
     .order("serial_number");
 

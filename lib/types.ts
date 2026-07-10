@@ -67,6 +67,10 @@ export interface Match {
   c3_account_id?: string | null;
   home_team: string;
   away_team: string;
+  home_team_zone?: string | null;
+  away_team_zone?: string | null;
+  match_type?: string | null;
+  is_direct?: boolean;
   venue: string;
   match_date: string;
   status: MatchStatus;

@@ -131,7 +131,14 @@ export function renderTicketBlock(
   ticket: {
     serial_number: string;
     price: number;
-    match: { home_team: string; away_team: string; venue: string };
+    match: {
+      home_team: string;
+      away_team: string;
+      venue: string;
+      home_team_zone?: string | null;
+      away_team_zone?: string | null;
+      match_type?: string | null;
+    };
     category: { name: string };
     seller: { full_name: string };
   },
@@ -145,12 +152,21 @@ export function renderTicketBlock(
   const priceFmt = new Intl.NumberFormat("fr-FR").format(ticket.price);
   const home = ticket.match.home_team;
   const away = ticket.match.away_team;
+  const homeZone = ticket.match.home_team_zone || null;
+  const awayZone = ticket.match.away_team_zone || null;
+  const matchType = ticket.match.match_type || null;
 
-  /* 80mm: one line, truncate each team name to 14 chars
-     58mm: two lines, truncate each team name to 20 chars  */
+  const homeDisplay = homeZone ? `${home} (${homeZone})` : home;
+  const awayDisplay = awayZone ? `${away} (${awayZone})` : away;
+
+  /* 80mm: one line, 58mm: two lines */
   const teamsHtml = is58
-    ? `<div class="c teams">${trunc(home, 20)}<br><span class="vs">vs</span><br>${trunc(away, 20)}</div>`
-    : `<div class="c teams">${trunc(home, 15)} <span class="vs">vs</span> ${trunc(away, 15)}</div>`;
+    ? `<div class="c teams">${trunc(homeDisplay, 24)}<br><span class="vs">vs</span><br>${trunc(awayDisplay, 24)}</div>`
+    : `<div class="c teams">${trunc(homeDisplay, 18)} <span class="vs">vs</span> ${trunc(awayDisplay, 18)}</div>`;
+
+  const matchTypeHtml = matchType
+    ? `<div class="c tiny" style="font-style:italic;margin-top:0.5mm;">${matchType}</div>`
+    : "";
 
   return `
 <div class="print-ticket">
@@ -160,6 +176,7 @@ export function renderTicketBlock(
 <div class="sep"></div>
 ${teamsHtml}
 <div class="c info">${ticket.match.venue}<br>${matchDateFmt}</div>
+${matchTypeHtml}
 <div class="sep"></div>
 <div class="c cat-prix">${ticket.category.name} &mdash; ${priceFmt}&nbsp;FCFA</div>
 <div class="sep"></div>
