@@ -12,7 +12,7 @@ import { PrintBlocsButton } from "@/app/(admin)/matchs/print-blocs-button";
 import { MatchActionButtons } from "@/app/(admin)/matchs/match-action-buttons";
 import { MatchTabBar } from "@/app/(admin)/matchs/match-tab-bar";
 
-export const metadata = { title: "Matchs Départementaux" };
+export const metadata = { title: "Matchs Départementals" };
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -25,7 +25,7 @@ export default async function MatchsDepartementauxPage() {
       <MatchTabBar active="departementaux" />
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold font-heading">Matchs Départementaux</h1>
+          <h1 className="text-2xl font-bold font-heading">Matchs Départementals</h1>
           <p className="text-muted-foreground">{matches.length} match(s)</p>
         </div>
         <Link href="/matchs/departementaux/nouveau">

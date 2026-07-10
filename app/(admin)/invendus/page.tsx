@@ -45,8 +45,8 @@ export default async function InvendusPage({
             <PackageX className="h-6 w-6 text-red-600" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold font-heading">Invendus — Communaux</h1>
-            <p className="text-muted-foreground text-sm">Billets invendus des matchs communaux</p>
+            <h1 className="text-2xl font-bold font-heading">Invendus — Communal</h1>
+            <p className="text-muted-foreground text-sm">Billets invendus des matchs communal</p>
           </div>
         </div>
         <InvendusList matches={matches} unsoldMap={unsoldMap} />
@@ -66,8 +66,8 @@ export default async function InvendusPage({
             <PackageX className="h-6 w-6 text-red-600" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold font-heading">Invendus — Départementaux</h1>
-            <p className="text-muted-foreground text-sm">Billets invendus des matchs départementaux</p>
+            <h1 className="text-2xl font-bold font-heading">Invendus — Départementals</h1>
+            <p className="text-muted-foreground text-sm">Billets invendus des matchs départementals</p>
           </div>
         </div>
         <InvendusList matches={matches} unsoldMap={unsoldMap} />

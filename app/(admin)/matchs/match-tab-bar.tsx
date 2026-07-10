@@ -4,8 +4,8 @@ import { MapPin, Users, Building2 } from "lucide-react";
 export function MatchTabBar({ active }: { active: "zonaux" | "communaux" | "departementaux" }) {
   const tabs = [
     { key: "zonaux", label: "Matchs Zonaux", href: "/matchs", icon: MapPin },
-    { key: "communaux", label: "Matchs Communaux", href: "/matchs/communaux", icon: Users },
-    { key: "departementaux", label: "Matchs Départementaux", href: "/matchs/departementaux", icon: Building2 },
+    { key: "communaux", label: "Matchs Communal", href: "/matchs/communaux", icon: Users },
+    { key: "departementaux", label: "Matchs Départementals", href: "/matchs/departementaux", icon: Building2 },
   ] as const;
 
   return (

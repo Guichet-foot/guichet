@@ -12,7 +12,7 @@ import { PrintBlocsButton } from "@/app/(admin)/matchs/print-blocs-button";
 import { MatchActionButtons } from "@/app/(admin)/matchs/match-action-buttons";
 import { MatchTabBar } from "@/app/(admin)/matchs/match-tab-bar";
 
-export const metadata = { title: "Matchs Communaux" };
+export const metadata = { title: "Matchs Communal" };
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -25,7 +25,7 @@ export default async function MatchsCommunauxPage() {
       <MatchTabBar active="communaux" />
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold font-heading">Matchs Communaux</h1>
+          <h1 className="text-2xl font-bold font-heading">Matchs Communal</h1>
           <p className="text-muted-foreground">{matches.length} match(s)</p>
         </div>
         <Link href="/matchs/communaux/nouveau">
