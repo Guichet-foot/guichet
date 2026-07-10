@@ -43,11 +43,12 @@ export async function getFinishedMatches() {
     // C3: only their own matches
     query = query.eq("c3_account_id", profile.id);
   } else if (profile.role === "super_admin") {
-    // Scope to zones owned by this super_admin
+    // Sub-admins inherit parent's zones
+    const ownerId = profile.created_by_admin ?? profile.id;
     const { data: ownedZones } = await adminClient
       .from("zones")
       .select("id")
-      .eq("created_by", profile.id);
+      .eq("created_by", ownerId);
     const zoneIds = (ownedZones || []).map((z: any) => z.id);
     if (zoneIds.length === 0) return [];
     query = query.in("zone_id", zoneIds);
@@ -291,7 +292,8 @@ export async function getMatchesForReassignment(excludeMatchId: string): Promise
   } else if (profile.role === "c3") {
     query = query.eq("c3_account_id", profile.id);
   } else if (profile.role === "super_admin") {
-    const { data: ownedZones } = await adminClient.from("zones").select("id").eq("created_by", profile.id);
+    const ownerId = profile.created_by_admin ?? profile.id;
+    const { data: ownedZones } = await adminClient.from("zones").select("id").eq("created_by", ownerId);
     const zoneIds = ((ownedZones || []) as any[]).map((z) => z.id);
     if (zoneIds.length === 0) return [];
     query = query.in("zone_id", zoneIds);
@@ -339,6 +341,57 @@ export async function reassignTicketsToMatch(
   revalidatePath(`/matchs/${fromMatchId}`);
   revalidatePath(`/matchs/${toMatchId}`);
   return { count: ids.length };
+}
+
+// Matchs communaux/départementaux terminés — pour les onglets invendus ODCAV
+export async function getFinishedInterMatches(matchType: "Match Communal" | "Match Départemental"): Promise<any[]> {
+  const profile = await requireRole(["super_admin"]);
+  const adminClient = await createAdminClient();
+  const ownerId = profile.created_by_admin ?? profile.id;
+
+  // Include sub-admins of the same ODCAV
+  const { data: subAdmins } = await adminClient.from("profiles").select("id").eq("created_by_admin", ownerId);
+  const creatorIds = [ownerId, ...(subAdmins || []).map((p: any) => p.id as string)];
+
+  const { data } = await adminClient
+    .from("matches")
+    .select("id, home_team, away_team, home_team_zone, away_team_zone, match_date, venue, match_type")
+    .eq("status", "termine")
+    .eq("match_type", matchType)
+    .eq("is_direct", true)
+    .in("created_by", creatorIds)
+    .order("match_date", { ascending: false });
+
+  // Adapt to InvendusList shape (zone = null for inter-matches)
+  return (data || []).map((m: any) => ({
+    ...m,
+    zone: null,
+  })) as any[];
+}
+
+// Matchs communaux/départementaux non terminés — pour la réattribution
+export async function getInterMatchesForReassignment(
+  excludeMatchId: string,
+  matchType: "Match Communal" | "Match Départemental"
+): Promise<{ id: string; home_team: string; away_team: string; match_date: string }[]> {
+  const profile = await requireRole(["super_admin"]);
+  const adminClient = await createAdminClient();
+  const ownerId = profile.created_by_admin ?? profile.id;
+
+  const { data: subAdmins } = await adminClient.from("profiles").select("id").eq("created_by_admin", ownerId);
+  const creatorIds = [ownerId, ...(subAdmins || []).map((p: any) => p.id as string)];
+
+  const { data } = await adminClient
+    .from("matches")
+    .select("id, home_team, away_team, match_date")
+    .neq("id", excludeMatchId)
+    .not("status", "in", '("annule","termine")')
+    .eq("match_type", matchType)
+    .eq("is_direct", true)
+    .in("created_by", creatorIds)
+    .order("match_date", { ascending: true });
+
+  return (data || []) as any[];
 }
 
 // Scan unsold ticket: marks it as 'annule' in the DB

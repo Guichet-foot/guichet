@@ -15,6 +15,7 @@ import { MatchMobileActions } from "./match-mobile-actions";
 import { PrintBlocsButton } from "./print-blocs-button";
 import { ZoneCardGrid } from "@/components/zone-card-grid";
 import { ZoneBackHeader } from "@/components/zone-back-header";
+import { MatchTabBar } from "./match-tab-bar";
 
 export const metadata = { title: "Matchs" };
 
@@ -27,11 +28,22 @@ export default async function MatchsPage({
 }) {
   const profile = await requireRole(["super_admin", "admin_zone", "c3", "fondateur"]);
   const params = await searchParams;
+
+  const isOdcavRole =
+    profile.role === "super_admin" ||
+    profile.role === "president_odcav" ||
+    profile.role === "tresorier";
+
   const { effectiveZoneId, selectedZone, ownedZones, needsZoneSelection, c3AccountId } =
     await getEffectiveZone(profile, params.zone);
 
   if (needsZoneSelection) {
-    return <ZoneCardGrid zones={ownedZones} title="Matchs" />;
+    return (
+      <div className="space-y-6">
+        {isOdcavRole && <MatchTabBar active="zonaux" />}
+        <ZoneCardGrid zones={ownedZones} title="Matchs" />
+      </div>
+    );
   }
 
   const supabase = await createClient();
@@ -67,7 +79,8 @@ export default async function MatchsPage({
 
   return (
     <div className="space-y-6">
-      {["super_admin","president_odcav","tresorier"].includes(profile.role) && selectedZone && <ZoneBackHeader zoneName={selectedZone.name} />}
+      {isOdcavRole && !params.zone && <MatchTabBar active="zonaux" />}
+      {isOdcavRole && selectedZone && <ZoneBackHeader zoneName={selectedZone.name} />}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold font-heading">Matchs</h1>
@@ -134,9 +147,8 @@ export default async function MatchsPage({
                       </TableCell>
                       <TableCell className="hidden lg:table-cell text-right">{formatFCFA(stats.revenue)}</TableCell>
                       <TableCell className="text-right">
-                        {/* Desktop: inline buttons */}
                         <div className="hidden sm:flex items-center gap-1 justify-end">
-                          {(profile.role === "super_admin" || profile.role === "fondateur") &&
+                          {(profile.role === "super_admin" || profile.role === "fondateur" || profile.role === "president_odcav") &&
                             match.status !== "termine" && match.status !== "annule" && (
                               <PrintBlocsButton
                                 matchId={match.id}
@@ -155,7 +167,6 @@ export default async function MatchsPage({
                             <Button variant="ghost" size="sm" title="Voir les détails"><Eye className="h-4 w-4" /></Button>
                           </Link>
                         </div>
-                        {/* Mobile: single button → popup */}
                         <div className="sm:hidden">
                           <MatchMobileActions
                             match={{ id: match.id, zone_id: match.zone_id, home_team: match.home_team, away_team: match.away_team, venue: match.venue || "", match_date: match.match_date, status: match.status, vente_active: match.vente_active ?? false, home_score: match.home_score, away_score: match.away_score }}

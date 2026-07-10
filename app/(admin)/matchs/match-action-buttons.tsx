@@ -16,7 +16,7 @@ import { toast } from "sonner";
 
 interface MatchActionButtonsProps {
   matchId: string;
-  zoneId: string;
+  zoneId: string | null;
   status: string;
   venteActive: boolean;
   homeTeam?: string;

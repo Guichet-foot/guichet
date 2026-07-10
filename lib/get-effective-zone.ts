@@ -44,8 +44,11 @@ export async function getEffectiveZone(
   // Fondateur sees ALL zones; super_admin/president_odcav see only their own.
   // Trésorier sees the zones owned by whoever created their account (their ODCAV president).
   const isOdcavRole = profile.role === "super_admin" || profile.role === "president_odcav";
+  // Sub-admins (super_admin or tresorier created by a president_odcav) inherit parent's zones
   const zonesOwnerId =
-    profile.role === "tresorier" ? (profile.created_by_admin ?? profile.id) : profile.id;
+    (profile.role === "tresorier" || profile.role === "super_admin") && profile.created_by_admin
+      ? profile.created_by_admin
+      : profile.id;
   const zonesQuery = profile.role === "fondateur"
     ? supabase.from("zones").select("*").order("name")
     : isOdcavRole || profile.role === "tresorier"

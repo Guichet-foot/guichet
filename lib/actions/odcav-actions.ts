@@ -25,8 +25,12 @@ export async function getOdcavSettings(): Promise<OdcavSettings> {
   const { data: { user } } = await supabase.auth.getUser();
 
   const adminClient = await createAdminClient();
-  // Each super_admin has their own row identified by their user UUID
-  const rowId = user?.id ?? "global";
+  // Sub-admins (super_admin/tresorier created by a president) share the parent's settings row
+  let rowId = user?.id ?? "global";
+  if (user) {
+    const { data: prof } = await adminClient.from("profiles").select("created_by_admin").eq("id", user.id).maybeSingle();
+    if (prof?.created_by_admin) rowId = prof.created_by_admin;
+  }
   const { data } = await adminClient
     .from("odcav_settings")
     .select("*")

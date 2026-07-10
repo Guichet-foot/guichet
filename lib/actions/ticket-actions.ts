@@ -127,7 +127,7 @@ export async function printTicketBloc(matchId: string, categoryId: string, total
   const { data: profile } = await supabase
     .from("profiles").select("role").eq("id", user.id).single();
 
-  if (!profile || !["super_admin", "fondateur"].includes(profile.role)) {
+  if (!profile || !["super_admin", "president_odcav", "tresorier", "fondateur"].includes(profile.role)) {
     return { error: "Non autorisé — réservé à l'ODCAV et au fondateur" };
   }
 
