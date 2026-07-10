@@ -119,7 +119,7 @@ export async function createTickets(matchId: string, categoryId: string, quantit
 // ODCAV / fondateur pre-print physical ticket blocks (100 tickets = 1 bloc).
 // No vente_active check — ODCAV prints before the match starts.
 // No quantity_total limit — ODCAV decides how many to print.
-export async function printTicketBloc(matchId: string, categoryId: string, blocs: number) {
+export async function printTicketBloc(matchId: string, categoryId: string, totalQty: number) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Non authentifié" };
@@ -131,7 +131,7 @@ export async function printTicketBloc(matchId: string, categoryId: string, blocs
     return { error: "Non autorisé — réservé à l'ODCAV et au fondateur" };
   }
 
-  const qty = Math.max(1, blocs) * 100;
+  const qty = Math.max(1, totalQty);
   const adminClient = await createAdminClient();
 
   const { data: category } = await adminClient
