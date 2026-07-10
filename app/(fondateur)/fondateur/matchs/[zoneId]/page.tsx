@@ -8,8 +8,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ArrowLeft, Plus, Trophy } from "lucide-react";
 import { MATCH_STATUS_LABELS, MATCH_STATUS_COLORS } from "@/lib/constants";
-import { formatDateShort, formatFCFA } from "@/lib/format";
+import { formatDateShort } from "@/lib/format";
 import { PrintBlocsButton } from "@/app/(admin)/matchs/print-blocs-button";
+import { MatchApercuDialog } from "../match-apercu-dialog";
 
 export const metadata = { title: "Matchs de zone — Fondateur" };
 
@@ -39,7 +40,7 @@ export default async function FondateurZoneMatchsPage({
     .order("match_date", { ascending: false });
 
   const matchIds = (matches || []).map((m: any) => m.id as string);
-  let ticketStats: Record<string, { printed: number; validated: number; revenue: number }> = {};
+  let ticketStats: Record<string, { printed: number; validated: number; printedRevenue: number; validatedRevenue: number }> = {};
 
   if (matchIds.length > 0) {
     const { data: tickets } = await adminClient
@@ -51,15 +52,18 @@ export default async function FondateurZoneMatchsPage({
     if (tickets) {
       ticketStats = tickets.reduce(
         (acc, t: any) => {
-          if (!acc[t.match_id]) acc[t.match_id] = { printed: 0, validated: 0, revenue: 0 };
+          if (!acc[t.match_id]) acc[t.match_id] = { printed: 0, validated: 0, printedRevenue: 0, validatedRevenue: 0 };
           if (t.bloc_printed) {
             acc[t.match_id].printed++;
-            acc[t.match_id].revenue += t.price;
+            acc[t.match_id].printedRevenue += t.price;
           }
-          if (t.status === "scanne") acc[t.match_id].validated++;
+          if (t.status === "scanne") {
+            acc[t.match_id].validated++;
+            acc[t.match_id].validatedRevenue += t.price;
+          }
           return acc;
         },
-        {} as Record<string, { printed: number; validated: number; revenue: number }>
+        {} as Record<string, { printed: number; validated: number; printedRevenue: number; validatedRevenue: number }>
       );
     }
   }
@@ -102,16 +106,14 @@ export default async function FondateurZoneMatchsPage({
                   <TableHead>Match</TableHead>
                   <TableHead className="hidden md:table-cell">Date</TableHead>
                   <TableHead className="hidden sm:table-cell">Statut</TableHead>
-                  <TableHead className="text-center">Score</TableHead>
-                  <TableHead className="hidden lg:table-cell text-right">Billets imprimés</TableHead>
-                  <TableHead className="hidden lg:table-cell text-right">Billets validés</TableHead>
-                  <TableHead className="hidden lg:table-cell text-right">Recettes</TableHead>
+                  <TableHead className="hidden lg:table-cell text-right">Imprimés</TableHead>
+                  <TableHead className="hidden lg:table-cell text-right">Validés</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {(matches as any[]).map((match) => {
-                  const stats = ticketStats[match.id] || { printed: 0, validated: 0, revenue: 0 };
+                  const stats = ticketStats[match.id] || { printed: 0, validated: 0, printedRevenue: 0, validatedRevenue: 0 };
                   return (
                     <TableRow key={match.id}>
                       <TableCell className="font-medium">
@@ -124,15 +126,6 @@ export default async function FondateurZoneMatchsPage({
                         <Badge variant="secondary" className={MATCH_STATUS_COLORS[match.status]}>
                           {MATCH_STATUS_LABELS[match.status]}
                         </Badge>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {match.status === "termine" && match.home_score !== null ? (
-                          <span className="inline-block bg-brand text-white text-xs font-bold px-2 py-0.5 rounded">
-                            {match.home_score} - {match.away_score}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground text-xs">—</span>
-                        )}
                       </TableCell>
                       <TableCell className="hidden lg:table-cell text-right">
                         {stats.printed > 0 ? (
@@ -148,16 +141,19 @@ export default async function FondateurZoneMatchsPage({
                           <span className="text-muted-foreground text-xs">—</span>
                         )}
                       </TableCell>
-                      <TableCell className="hidden lg:table-cell text-right">
-                        {stats.revenue > 0 ? formatFCFA(stats.revenue) : <span className="text-muted-foreground text-xs">—</span>}
-                      </TableCell>
                       <TableCell className="text-right">
-                        {match.status !== "termine" && match.status !== "annule" && (
-                          <PrintBlocsButton
-                            matchId={match.id}
+                        <div className="flex items-center justify-end gap-1">
+                          <MatchApercuDialog
                             matchName={`${match.home_team} vs ${match.away_team}`}
+                            stats={stats}
                           />
-                        )}
+                          {match.status !== "termine" && match.status !== "annule" && (
+                            <PrintBlocsButton
+                              matchId={match.id}
+                              matchName={`${match.home_team} vs ${match.away_team}`}
+                            />
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   );

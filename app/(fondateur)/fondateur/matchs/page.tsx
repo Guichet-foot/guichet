@@ -9,6 +9,7 @@ import Link from "next/link";
 import { MATCH_STATUS_LABELS, MATCH_STATUS_COLORS } from "@/lib/constants";
 import { formatDateShort } from "@/lib/format";
 import { PrintBlocsButton } from "@/app/(admin)/matchs/print-blocs-button";
+import { MatchApercuDialog } from "./match-apercu-dialog";
 
 export const metadata = { title: "Matchs — Fondateur" };
 
@@ -33,24 +34,24 @@ export default async function FondateurMatchsPage({
       .order("match_date", { ascending: false });
 
     const matchIds = (directMatches || []).map((m: any) => m.id as string);
-    let ticketStats: Record<string, { printed: number; validated: number }> = {};
+    let ticketStats: Record<string, { printed: number; validated: number; printedRevenue: number; validatedRevenue: number }> = {};
 
     if (matchIds.length > 0) {
       const { data: tickets } = await adminClient
         .from("tickets")
-        .select("match_id, bloc_printed, status")
+        .select("match_id, price, bloc_printed, status")
         .in("match_id", matchIds)
         .neq("status", "annule");
 
       if (tickets) {
         ticketStats = tickets.reduce(
           (acc, t: any) => {
-            if (!acc[t.match_id]) acc[t.match_id] = { printed: 0, validated: 0 };
-            if (t.bloc_printed) acc[t.match_id].printed++;
-            if (t.status === "scanne") acc[t.match_id].validated++;
+            if (!acc[t.match_id]) acc[t.match_id] = { printed: 0, validated: 0, printedRevenue: 0, validatedRevenue: 0 };
+            if (t.bloc_printed) { acc[t.match_id].printed++; acc[t.match_id].printedRevenue += t.price; }
+            if (t.status === "scanne") { acc[t.match_id].validated++; acc[t.match_id].validatedRevenue += t.price; }
             return acc;
           },
-          {} as Record<string, { printed: number; validated: number }>
+          {} as Record<string, { printed: number; validated: number; printedRevenue: number; validatedRevenue: number }>
         );
       }
     }
@@ -87,8 +88,8 @@ export default async function FondateurMatchsPage({
                     <TableHead className="hidden sm:table-cell">Type</TableHead>
                     <TableHead className="hidden md:table-cell">Date</TableHead>
                     <TableHead className="hidden sm:table-cell">Statut</TableHead>
-                    <TableHead className="hidden lg:table-cell text-right">Billets imprimés</TableHead>
-                    <TableHead className="hidden lg:table-cell text-right">Billets validés</TableHead>
+                    <TableHead className="hidden lg:table-cell text-right">Imprimés</TableHead>
+                    <TableHead className="hidden lg:table-cell text-right">Validés</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -100,7 +101,7 @@ export default async function FondateurMatchsPage({
                     const awayDisplay = match.away_team_zone
                       ? `${match.away_team} (${match.away_team_zone})`
                       : match.away_team;
-                    const stats = ticketStats[match.id] || { printed: 0, validated: 0 };
+                    const stats = ticketStats[match.id] || { printed: 0, validated: 0, printedRevenue: 0, validatedRevenue: 0 };
                     return (
                       <TableRow key={match.id}>
                         <TableCell className="font-medium">
@@ -136,12 +137,18 @@ export default async function FondateurMatchsPage({
                           )}
                         </TableCell>
                         <TableCell className="text-right">
-                          {match.status !== "termine" && match.status !== "annule" && (
-                            <PrintBlocsButton
-                              matchId={match.id}
+                          <div className="flex items-center justify-end gap-1">
+                            <MatchApercuDialog
                               matchName={`${match.home_team} vs ${match.away_team}`}
+                              stats={stats}
                             />
-                          )}
+                            {match.status !== "termine" && match.status !== "annule" && (
+                              <PrintBlocsButton
+                                matchId={match.id}
+                                matchName={`${match.home_team} vs ${match.away_team}`}
+                              />
+                            )}
+                          </div>
                         </TableCell>
                       </TableRow>
                     );
