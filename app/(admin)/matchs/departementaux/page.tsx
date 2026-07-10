@@ -17,7 +17,7 @@ export const metadata = { title: "Matchs Départementaux" };
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 export default async function MatchsDepartementauxPage() {
-  await requireRole(["super_admin"]);
+  await requireRole(["super_admin", "fondateur"]);
   const matches = await getOdcavInterMatches("Match Départemental");
 
   return (

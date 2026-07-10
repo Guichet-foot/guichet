@@ -7,7 +7,8 @@ import { revalidatePath } from "next/cache";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 async function getOdcavUser() {
-  const profile = await requireRole(["super_admin"]);
+  // Also allows president_odcav + tresorier (requireRole auto-expansion) + fondateur
+  const profile = await requireRole(["super_admin", "fondateur"]);
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
@@ -21,16 +22,25 @@ export async function getOdcavTeamsWithZones(): Promise<{
   const ctx = await getOdcavUser();
   if (!ctx) return [];
   const adminClient = await createAdminClient();
-  const ownerId = ctx.profile.created_by_admin ?? ctx.profile.id;
 
-  const { data: zones } = await adminClient.from("zones").select("id, name").eq("created_by", ownerId).order("name");
-  if (!zones || zones.length === 0) return [];
-  const zoneIds = zones.map((z: any) => z.id as string);
+  let zones: { id: string; name: string }[] = [];
+
+  if (ctx.profile.role === "fondateur") {
+    const { data } = await adminClient.from("zones").select("id, name").order("name");
+    zones = (data || []) as { id: string; name: string }[];
+  } else {
+    const ownerId = ctx.profile.created_by_admin ?? ctx.profile.id;
+    const { data } = await adminClient.from("zones").select("id, name").eq("created_by", ownerId).order("name");
+    zones = (data || []) as { id: string; name: string }[];
+  }
+
+  if (zones.length === 0) return [];
+  const zoneIds = zones.map((z) => z.id);
 
   const { data: teams } = await adminClient.from("teams").select("id, name, zone_id").in("zone_id", zoneIds).order("name");
   if (!teams) return [];
 
-  const zoneMap = new Map(zones.map((z: any) => [z.id as string, z.name as string]));
+  const zoneMap = new Map(zones.map((z) => [z.id, z.name]));
   return teams.map((t: any) => ({
     id: t.id as string,
     name: t.name as string,
@@ -91,16 +101,24 @@ export async function createOdcavInterMatch(formData: {
   return { success: true, matchId: match.id };
 }
 
-// List communal or departmental matches created by this admin (or parent admin)
+// List communal or departmental matches for the current ODCAV admin / fondateur
 export async function getOdcavInterMatches(matchType: "Match Communal" | "Match Départemental"): Promise<any[]> {
   const ctx = await getOdcavUser();
   if (!ctx) return [];
   const adminClient = await createAdminClient();
 
-  // Find all possible creator IDs: self and sub-admins whose created_by_admin = ownerId
+  if (ctx.profile.role === "fondateur") {
+    const { data } = await adminClient
+      .from("matches")
+      .select("*")
+      .eq("match_type", matchType)
+      .eq("is_direct", true)
+      .order("match_date", { ascending: false });
+    return (data || []) as any[];
+  }
+
   const ownerId = ctx.profile.created_by_admin ?? ctx.profile.id;
 
-  // Fetch sub-admins of this ODCAV to also include their matches
   const { data: subAdmins } = await adminClient
     .from("profiles")
     .select("id")

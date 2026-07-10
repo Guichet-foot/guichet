@@ -17,7 +17,7 @@ export const metadata = { title: "Matchs Communaux" };
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 export default async function MatchsCommunauxPage() {
-  await requireRole(["super_admin"]);
+  await requireRole(["super_admin", "fondateur"]);
   const matches = await getOdcavInterMatches("Match Communal");
 
   return (

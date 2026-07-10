@@ -244,7 +244,8 @@ export async function updateMatch(matchId: string, formData: {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Non authentifié" };
 
-  const { error } = await supabase
+  const adminClient = await createAdminClient();
+  const { error } = await adminClient
     .from("matches")
     .update({
       home_team: formData.homeTeam,

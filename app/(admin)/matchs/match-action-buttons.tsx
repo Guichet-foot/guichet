@@ -11,7 +11,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Loader2, ShoppingCart, ShoppingCartIcon, CheckCircle, Trash2 } from "lucide-react";
+import { Loader2, ShoppingCart, ShoppingCartIcon, CheckCircle, Trash2, Pencil } from "lucide-react";
+import Link from "next/link";
 import { toast } from "sonner";
 
 interface MatchActionButtonsProps {
@@ -82,6 +83,17 @@ export function MatchActionButtons({ matchId, zoneId: _zoneId, status, venteActi
   return (
     <>
       <div className="flex gap-1">
+        <Link href={`/matchs/${matchId}/modifier`}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            title="Modifier le match"
+            className="text-muted-foreground hover:text-foreground"
+          >
+            <Pencil className="h-3 w-3" />
+          </Button>
+        </Link>
         {status !== "termine" && status !== "annule" && (
           <>
             <Button

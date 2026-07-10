@@ -2,8 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { createMatch, getC3TeamsAndZones, getTeamsForZone, getTicketTemplatesForZone } from "@/lib/actions/match-actions";
-import { applyTemplatesToMatch } from "@/lib/actions/ticket-template-actions";
+import { createMatch, getC3TeamsAndZones, getTeamsForZone } from "@/lib/actions/match-actions";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,10 +16,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
-import { ArrowLeft, Check, Loader2, Ticket } from "lucide-react";
+import { ArrowLeft, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
-import { formatFCFA } from "@/lib/format";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -29,14 +27,6 @@ interface TeamOption {
   name: string;
   zoneId?: string;
   zoneAbbrev?: string;
-}
-
-interface TemplateOption {
-  id: string;
-  name: string;
-  price: number;
-  default_quantity: number;
-  color: string;
 }
 
 function makeZoneAbbrev(zoneName: string): string {
@@ -49,13 +39,9 @@ export default function NewMatchPage() {
   const [zoneId, setZoneId] = useState<string>("");
   const [c3AccountId, setC3AccountId] = useState<string | null>(null);
   const [teams, setTeams] = useState<TeamOption[]>([]);
-  const [templates, setTemplates] = useState<TemplateOption[]>([]);
-  const [selectedTemplates, setSelectedTemplates] = useState<Set<string>>(new Set());
 
-  // For non-C3: homeTeam/awayTeam are team names (direct text or select value = name)
   const [homeTeam, setHomeTeam] = useState("");
   const [awayTeam, setAwayTeam] = useState("");
-  // For C3: track by team ID to resolve zone abbreviations at submit time
   const [homeTeamId, setHomeTeamId] = useState("");
   const [awayTeamId, setAwayTeamId] = useState("");
 
@@ -63,7 +49,6 @@ export default function NewMatchPage() {
   const [matchDate, setMatchDate] = useState("");
   const [notes, setNotes] = useState("");
 
-  // Whether teams span multiple zones (C3 only)
   const isMultiZone = new Set(teams.map((t) => t.zoneId).filter(Boolean)).size > 1;
 
   useEffect(() => {
@@ -84,7 +69,6 @@ export default function NewMatchPage() {
       if (profile?.role === "c3") {
         setC3AccountId(profile.id);
 
-        // Utiliser adminClient via server action (le client user est bloqué par RLS)
         const { teams: teamList, zones: zoneList, allowedZones } = await getC3TeamsAndZones();
 
         if (allowedZones.length > 0) {
@@ -98,54 +82,23 @@ export default function NewMatchPage() {
             }))
           );
         }
-        // Templates (pas bloqués par RLS — filtrés sur c3_account_id de l'utilisateur lui-même)
-        const { data: templateList } = await supabase
-          .from("ticket_templates")
-          .select("id, name, price, default_quantity, color")
-          .eq("c3_account_id", profile.id)
-          .order("price");
-        if (templateList) setTemplates(templateList);
       } else {
         const effectiveZone = zoneParam || profile?.zone_id;
         if (effectiveZone) {
           setZoneId(effectiveZone);
-          // Use server actions (adminClient) to bypass RLS for ODCAV/president roles
-          const [teamList, templateList] = await Promise.all([
-            getTeamsForZone(effectiveZone),
-            getTicketTemplatesForZone(effectiveZone),
-          ]);
+          const teamList = await getTeamsForZone(effectiveZone);
           if (teamList.length > 0) setTeams(teamList);
-          if (templateList.length > 0) setTemplates(templateList);
         }
       }
     }
     init();
   }, []);
 
-  function toggleTemplate(id: string) {
-    setSelectedTemplates((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
-
-  function selectAllTemplates() {
-    if (selectedTemplates.size === templates.length) {
-      setSelectedTemplates(new Set());
-    } else {
-      setSelectedTemplates(new Set(templates.map((t) => t.id)));
-    }
-  }
-
-  // Compute display label for a team option in the dropdown
   function teamLabel(t: TeamOption): string {
     if (isMultiZone && t.zoneAbbrev) return `${t.name} (${t.zoneAbbrev})`;
     return t.name;
   }
 
-  // Compute final stored name for a team (with zone abbrev when opponents are from different zones)
   function resolveTeamName(teamId: string, opponentId: string): string {
     const t = teams.find((x) => x.id === teamId);
     const opp = teams.find((x) => x.id === opponentId);
@@ -190,17 +143,7 @@ export default function NewMatchPage() {
       return;
     }
 
-    if (selectedTemplates.size > 0 && result.matchId) {
-      const applyResult = await applyTemplatesToMatch(result.matchId, Array.from(selectedTemplates));
-      if (applyResult.error) {
-        toast.warning(`Match créé mais erreur billets : ${applyResult.error}`);
-      } else {
-        toast.success(`Match créé avec ${applyResult.count} catégorie(s) de billets`);
-      }
-    } else {
-      toast.success("Match créé");
-    }
-
+    toast.success("Match créé");
     router.push("/matchs");
   }
 
@@ -324,78 +267,12 @@ export default function NewMatchPage() {
               />
             </div>
 
-            {/* Catégories de billets */}
-            {templates.length > 0 && (
-              <div className="space-y-3 pt-2 border-t border-border">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Ticket className="h-4 w-4 text-brand" />
-                    <Label className="text-sm font-semibold">Catégories de billets</Label>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={selectAllTemplates}
-                    className="text-xs text-brand hover:underline"
-                  >
-                    {selectedTemplates.size === templates.length ? "Tout désélectionner" : "Tout sélectionner"}
-                  </button>
-                </div>
-                <p className="text-xs text-muted-foreground -mt-1">
-                  Sélectionnez les catégories à appliquer à ce match
-                </p>
-                <div className="space-y-2">
-                  {templates.map((t) => {
-                    const isSelected = selectedTemplates.has(t.id);
-                    return (
-                      <button
-                        key={t.id}
-                        type="button"
-                        onClick={() => toggleTemplate(t.id)}
-                        className={`w-full text-left rounded-lg border-2 p-3 transition-colors ${
-                          isSelected
-                            ? "border-brand bg-brand/5"
-                            : "border-border hover:border-brand/30"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div
-                              className="w-2.5 h-8 rounded-sm shrink-0"
-                              style={{ backgroundColor: t.color || "#0D5C3F" }}
-                            />
-                            <div>
-                              <p className="font-semibold text-sm">{t.name}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {formatFCFA(t.price)} — Qté : {t.default_quantity}
-                              </p>
-                            </div>
-                          </div>
-                          {isSelected && <Check className="h-4 w-4 text-brand shrink-0" />}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-                {selectedTemplates.size > 0 && (
-                  <p className="text-xs text-brand font-medium">
-                    {selectedTemplates.size} catégorie(s) sélectionnée(s)
-                  </p>
-                )}
-              </div>
-            )}
-
             <Button
               type="submit"
               className="w-full bg-brand hover:bg-brand/90"
               disabled={loading}
             >
-              {loading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : selectedTemplates.size > 0 ? (
-                `Créer le match avec ${selectedTemplates.size} catégorie(s)`
-              ) : (
-                "Créer le match"
-              )}
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Créer le match"}
             </Button>
           </form>
         </CardContent>
