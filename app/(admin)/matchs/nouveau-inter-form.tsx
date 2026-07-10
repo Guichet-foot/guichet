@@ -123,8 +123,7 @@ export function NouveauInterMatchForm({ matchType, backHref, title }: Props) {
                 <SelectContent>
                   {teams.map((t) => (
                     <SelectItem key={t.id} value={t.id}>
-                      {t.name}
-                      {t.zone_name && <span className="text-muted-foreground ml-1">({t.zone_name})</span>}
+                      {t.zone_name ? `${t.name} (${t.zone_name})` : t.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -148,8 +147,7 @@ export function NouveauInterMatchForm({ matchType, backHref, title }: Props) {
                     .filter((t) => t.id !== homeTeamId)
                     .map((t) => (
                       <SelectItem key={t.id} value={t.id}>
-                        {t.name}
-                        {t.zone_name && <span className="text-muted-foreground ml-1">({t.zone_name})</span>}
+                        {t.zone_name ? `${t.name} (${t.zone_name})` : t.name}
                       </SelectItem>
                     ))}
                 </SelectContent>

@@ -43,6 +43,72 @@ export async function getC3TeamsAndZones(): Promise<{
   };
 }
 
+/**
+ * Zones de l'admin courant (ou de son parent) — bypass RLS via adminClient.
+ * Utilisé dans les formulaires client qui ont besoin des zones ODCAV.
+ */
+export async function getAdminZonesForForm(): Promise<{ id: string; name: string }[]> {
+  const supabase = await createClient();
+  const adminClient = await createAdminClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data: profile } = await adminClient
+    .from("profiles")
+    .select("role, created_by_admin")
+    .eq("id", user.id)
+    .single();
+
+  if (!profile) return [];
+
+  const odcavRoles = ["super_admin", "president_odcav", "tresorier", "fondateur"];
+  if (!odcavRoles.includes(profile.role)) return [];
+
+  // Sub-admins use their parent's zones
+  const ownerId = profile.created_by_admin ?? user.id;
+
+  if (profile.role === "fondateur") {
+    const { data } = await adminClient.from("zones").select("id, name").order("name");
+    return (data || []) as { id: string; name: string }[];
+  }
+
+  const { data } = await adminClient
+    .from("zones")
+    .select("id, name")
+    .eq("created_by", ownerId)
+    .order("name");
+  return (data || []) as { id: string; name: string }[];
+}
+
+/**
+ * Équipes d'une zone — bypass RLS via adminClient.
+ * Utilisé dans les formulaires client (match zone, equipes).
+ */
+export async function getTeamsForZone(zoneId: string): Promise<{ id: string; name: string }[]> {
+  const adminClient = await createAdminClient();
+  const { data } = await adminClient
+    .from("teams")
+    .select("id, name")
+    .eq("zone_id", zoneId)
+    .order("name");
+  return (data || []) as { id: string; name: string }[];
+}
+
+/**
+ * Templates de billets d'une zone — bypass RLS via adminClient.
+ */
+export async function getTicketTemplatesForZone(zoneId: string): Promise<{
+  id: string; name: string; price: number; default_quantity: number; color: string;
+}[]> {
+  const adminClient = await createAdminClient();
+  const { data } = await adminClient
+    .from("ticket_templates")
+    .select("id, name, price, default_quantity, color")
+    .eq("zone_id", zoneId)
+    .order("price");
+  return (data || []) as { id: string; name: string; price: number; default_quantity: number; color: string }[];
+}
+
 export async function createMatch(formData: {
   zoneId?: string | null;
   c3AccountId?: string | null;

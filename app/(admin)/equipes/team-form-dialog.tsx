@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { createTeam, updateTeam } from "@/lib/actions/team-actions";
-import { createClient } from "@/lib/supabase/client";
+import { getAdminZonesForForm } from "@/lib/actions/match-actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -134,19 +134,13 @@ export function TeamFormDialog({
   const [officialColors, setOfficialColors] = useState<[string, string]>(initialColors.official);
   const [substituteColors, setSubstituteColors] = useState<[string, string]>(initialColors.substitute);
 
+  const isOdcavRole = userRole === "super_admin" || userRole === "president_odcav" || userRole === "tresorier" || userRole === "fondateur";
+
   useEffect(() => {
-    if (userRole === "super_admin") {
-      async function fetchZones() {
-        const supabase = createClient();
-        const { data } = await supabase
-          .from("zones")
-          .select("id, name")
-          .order("name");
-        if (data) setZones(data);
-      }
-      fetchZones();
+    if (isOdcavRole) {
+      getAdminZonesForForm().then((data) => setZones(data));
     }
-  }, [userRole]);
+  }, [isOdcavRole]);
 
   function addDelegate() {
     setDelegates([...delegates, ""]);
@@ -176,7 +170,7 @@ export function TeamFormDialog({
     e.preventDefault();
     setLoading(true);
 
-    const finalZoneId = userRole === "super_admin" ? selectedZoneId : zoneId;
+    const finalZoneId = isOdcavRole ? (selectedZoneId || zoneId) : zoneId;
     if (!finalZoneId) {
       toast.error("Zone non sélectionnée");
       setLoading(false);
@@ -239,7 +233,7 @@ export function TeamFormDialog({
           </DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
-          {userRole === "super_admin" && (
+          {isOdcavRole && !zoneId && (
             <div className="space-y-2">
               <Label>Zone</Label>
               <Select
@@ -248,7 +242,7 @@ export function TeamFormDialog({
                 required
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Choisir une zone" />
+                  <SelectValue placeholder={zones.length === 0 ? "Chargement…" : "Choisir une zone"} />
                 </SelectTrigger>
                 <SelectContent>
                   {zones.map((z) => (
@@ -259,6 +253,11 @@ export function TeamFormDialog({
                 </SelectContent>
               </Select>
             </div>
+          )}
+          {isOdcavRole && zoneId && zones.length > 0 && (
+            <p className="text-xs text-muted-foreground">
+              Zone : <strong>{zones.find((z) => z.id === zoneId)?.name ?? zoneId}</strong>
+            </p>
           )}
 
           <div className="space-y-2">

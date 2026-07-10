@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { createMatch, getC3TeamsAndZones } from "@/lib/actions/match-actions";
+import { createMatch, getC3TeamsAndZones, getTeamsForZone, getTicketTemplatesForZone } from "@/lib/actions/match-actions";
 import { applyTemplatesToMatch } from "@/lib/actions/ticket-template-actions";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -109,12 +109,13 @@ export default function NewMatchPage() {
         const effectiveZone = zoneParam || profile?.zone_id;
         if (effectiveZone) {
           setZoneId(effectiveZone);
-          const [{ data: teamList }, { data: templateList }] = await Promise.all([
-            supabase.from("teams").select("id, name").eq("zone_id", effectiveZone).order("name"),
-            supabase.from("ticket_templates").select("id, name, price, default_quantity, color").eq("zone_id", effectiveZone).order("price"),
+          // Use server actions (adminClient) to bypass RLS for ODCAV/president roles
+          const [teamList, templateList] = await Promise.all([
+            getTeamsForZone(effectiveZone),
+            getTicketTemplatesForZone(effectiveZone),
           ]);
-          if (teamList) setTeams(teamList);
-          if (templateList) setTemplates(templateList);
+          if (teamList.length > 0) setTeams(teamList);
+          if (templateList.length > 0) setTemplates(templateList);
         }
       }
     }

@@ -1,5 +1,5 @@
 import { requireRole } from "@/lib/auth";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
 import { getEffectiveZone } from "@/lib/get-effective-zone";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -48,7 +48,7 @@ export default async function EquipesPage({
     return <ZoneCardGrid zones={ownedZones} title="Équipes" />;
   }
 
-  const supabase = await createClient();
+  const adminClient = await createAdminClient();
 
   // ── C3 : vue 2 colonnes par zone ──────────────────────────────
   if (c3AccountId) {
@@ -57,7 +57,6 @@ export default async function EquipesPage({
     let allTeams: any[] = [];
 
     if (allowedZones && allowedZones.length > 0) {
-      const adminClient = await createAdminClient();
       const [{ data: zd }, { data: td }] = await Promise.all([
         adminClient.from("zones").select("id, name").in("id", allowedZones).order("name"),
         adminClient.from("teams").select("*").in("zone_id", allowedZones).order("name"),
@@ -65,8 +64,8 @@ export default async function EquipesPage({
       zonesData = zd || [];
       allTeams = td || [];
     } else {
-      // Ancien compte C3 sans allowed_zones — RLS gère la restriction
-      const { data: td } = await supabase.from("teams").select("*").order("name");
+      // Ancien compte C3 sans allowed_zones
+      const { data: td } = await adminClient.from("teams").select("*").order("name");
       allTeams = td || [];
     }
 
@@ -136,10 +135,10 @@ export default async function EquipesPage({
     );
   }
 
-  // ── Vue normale (admin_zone / super_admin) ────────────────────
+  // ── Vue normale (admin_zone / super_admin / president_odcav / tresorier) ──
   let teams: any[] | null = null;
   {
-    const baseQuery = supabase.from("teams").select("*").order("name");
+    const baseQuery = adminClient.from("teams").select("*").order("name");
     const { data } = effectiveZoneId
       ? await baseQuery.eq("zone_id", effectiveZoneId)
       : await baseQuery;
