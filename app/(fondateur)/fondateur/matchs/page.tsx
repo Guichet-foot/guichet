@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { MapPin, Trophy, Plus, Network } from "lucide-react";
+import { MapPin, Trophy, Plus, Network, Users, Building2 } from "lucide-react";
 import Link from "next/link";
 import { MATCH_STATUS_LABELS, MATCH_STATUS_COLORS } from "@/lib/constants";
 import { formatDateShort } from "@/lib/format";
@@ -223,31 +223,30 @@ export default async function FondateurMatchsPage({
   );
 }
 
-function TabBar({ active }: { active: "zones" | "direct" }) {
+function TabBar({ active }: { active: "zones" | "direct" | "communaux" | "departementaux" }) {
+  const tabs = [
+    { key: "zones", label: "Match Zone", href: "/fondateur/matchs", icon: MapPin },
+    { key: "direct", label: "Match Direct", href: "/fondateur/matchs?tab=direct", icon: Network },
+    { key: "communaux", label: "Matchs Communal", href: "/fondateur/matchs/communaux", icon: Users },
+    { key: "departementaux", label: "Matchs Départementals", href: "/fondateur/matchs/departementaux", icon: Building2 },
+  ] as const;
+
   return (
-    <div className="flex gap-1 border-b">
-      <Link
-        href="/fondateur/matchs"
-        className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
-          active === "zones"
-            ? "border-brand text-brand"
-            : "border-transparent text-muted-foreground hover:text-foreground"
-        }`}
-      >
-        <MapPin className="h-4 w-4" />
-        Match Zone
-      </Link>
-      <Link
-        href="/fondateur/matchs?tab=direct"
-        className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
-          active === "direct"
-            ? "border-brand text-brand"
-            : "border-transparent text-muted-foreground hover:text-foreground"
-        }`}
-      >
-        <Network className="h-4 w-4" />
-        Match Direct
-      </Link>
+    <div className="flex gap-1 border-b overflow-x-auto">
+      {tabs.map(({ key, label, href, icon: Icon }) => (
+        <Link
+          key={key}
+          href={href}
+          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${
+            active === key
+              ? "border-brand text-brand"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          <Icon className="h-4 w-4" />
+          {label}
+        </Link>
+      ))}
     </div>
   );
 }

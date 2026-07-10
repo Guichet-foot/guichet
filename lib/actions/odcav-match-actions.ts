@@ -15,6 +15,54 @@ async function getOdcavUser() {
   return { user, profile };
 }
 
+// Returns all ODCAV president accounts created by the current fondateur
+export async function getFondateurOdcavAccounts(): Promise<{
+  id: string;
+  name: string | null;
+}[]> {
+  const profile = await requireRole(["fondateur"]);
+  const adminClient = await createAdminClient();
+  const { data } = await adminClient
+    .from("profiles")
+    .select("id, full_name")
+    .in("role", ["president_odcav", "super_admin"])
+    .eq("created_by_admin", profile.id)
+    .eq("active", true)
+    .order("full_name");
+  return (data || []).map((p: any) => ({ id: p.id as string, name: p.full_name as string | null }));
+}
+
+// Returns all teams from zones owned by the given ODCAV president
+export async function getTeamsForOdcav(odcavId: string): Promise<{
+  id: string;
+  name: string;
+  zone_id: string;
+  zone_name: string;
+}[]> {
+  await requireRole(["fondateur"]);
+  const adminClient = await createAdminClient();
+  const { data: zones } = await adminClient
+    .from("zones")
+    .select("id, name")
+    .eq("created_by", odcavId)
+    .order("name");
+  if (!zones || zones.length === 0) return [];
+  const zoneIds = zones.map((z: any) => z.id as string);
+  const { data: teams } = await adminClient
+    .from("teams")
+    .select("id, name, zone_id")
+    .in("zone_id", zoneIds)
+    .order("name");
+  if (!teams) return [];
+  const zoneMap = new Map(zones.map((z: any) => [z.id as string, z.name as string]));
+  return teams.map((t: any) => ({
+    id: t.id as string,
+    name: t.name as string,
+    zone_id: t.zone_id as string,
+    zone_name: zoneMap.get(t.zone_id) ?? "",
+  }));
+}
+
 // Returns all teams across all zones owned by this ODCAV admin (or parent admin)
 export async function getOdcavTeamsWithZones(): Promise<{
   id: string; name: string; zone_id: string; zone_name: string;
@@ -29,7 +77,10 @@ export async function getOdcavTeamsWithZones(): Promise<{
     const { data } = await adminClient.from("zones").select("id, name").order("name");
     zones = (data || []) as { id: string; name: string }[];
   } else {
-    const ownerId = ctx.profile.created_by_admin ?? ctx.profile.id;
+    const ownerId =
+      (ctx.profile.role === "super_admin" || ctx.profile.role === "tresorier")
+        ? (ctx.profile.created_by_admin ?? ctx.profile.id)
+        : ctx.profile.id;
     const { data } = await adminClient.from("zones").select("id, name").eq("created_by", ownerId).order("name");
     zones = (data || []) as { id: string; name: string }[];
   }
@@ -60,6 +111,7 @@ export async function createOdcavInterMatch(formData: {
   matchDate: string;
   notes: string;
   inlineCategories?: { name: string; price: number }[];
+  odcavId?: string; // When fondateur creates, sets created_by to this ODCAV's ID
 }) {
   const ctx = await getOdcavUser();
   if (!ctx) return { error: "Non autorisé" };
@@ -77,7 +129,7 @@ export async function createOdcavInterMatch(formData: {
       venue: formData.venue,
       match_date: formData.matchDate,
       notes: formData.notes || null,
-      created_by: ctx.user.id,
+      created_by: formData.odcavId ?? ctx.user.id,
       is_direct: true,
     })
     .select("id")
@@ -98,6 +150,7 @@ export async function createOdcavInterMatch(formData: {
   }
 
   revalidatePath("/matchs");
+  revalidatePath("/fondateur/matchs");
   return { success: true, matchId: match.id };
 }
 
@@ -117,7 +170,12 @@ export async function getOdcavInterMatches(matchType: "Match Communal" | "Match 
     return (data || []) as any[];
   }
 
-  const ownerId = ctx.profile.created_by_admin ?? ctx.profile.id;
+  // super_admin/tresorier are sub-accounts — inherit parent's identity.
+  // president_odcav IS the top-level ODCAV account — always use their own ID.
+  const ownerId =
+    (ctx.profile.role === "super_admin" || ctx.profile.role === "tresorier")
+      ? (ctx.profile.created_by_admin ?? ctx.profile.id)
+      : ctx.profile.id;
 
   const { data: subAdmins } = await adminClient
     .from("profiles")
