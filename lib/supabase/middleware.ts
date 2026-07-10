@@ -164,7 +164,7 @@ export async function updateSession(request: NextRequest) {
   const adminRoutes = [
     "/dashboard", "/equipes", "/utilisateurs",
     "/zones", "/billets", "/matchs", "/finances", "/rapports", "/parametres",
-    "/invendus", "/cartes", "/parametres-odcav", "/parametres-c3",
+    "/invendus", "/cartes", "/parametres-odcav", "/parametres-c3", "/billeterie",
   ];
 
   // Fondateur has their own dashboard — redirect them away from the admin /dashboard

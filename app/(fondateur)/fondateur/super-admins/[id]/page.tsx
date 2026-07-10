@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, MapPin, Banknote, Ticket, Trophy } from "lucide-react";
 import { formatFCFA } from "@/lib/format";
 import { DeleteZoneButton } from "./delete-zone-button";
+import { CreateZoneButton, EditZoneButton } from "./zone-buttons";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -109,7 +110,12 @@ export default async function SuperAdminDetailPage({
       </div>
 
       <Card>
-        <CardHeader><CardTitle className="text-lg">Zones gérées</CardTitle></CardHeader>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-lg">Zones gérées</CardTitle>
+            <CreateZoneButton odcavId={sa.id} />
+          </div>
+        </CardHeader>
         <CardContent>
           {!zones || zones.length === 0 ? (
             <p className="text-muted-foreground text-center py-4">Aucune zone créée</p>
@@ -128,13 +134,19 @@ export default async function SuperAdminDetailPage({
                         <p className="text-xs text-muted-foreground">{zone.region || "—"}</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3 shrink-0">
-                      <div className="text-right">
+                    <div className="flex items-center gap-2 shrink-0">
+                      <div className="text-right hidden sm:block">
                         <p className="font-bold text-brand">{formatFCFA(s.revenue)}</p>
                         <p className="text-xs text-muted-foreground">
                           {s.tickets} billets · {s.matches} matchs
                         </p>
                       </div>
+                      <EditZoneButton
+                        zoneId={zone.id}
+                        odcavId={sa.id}
+                        initialName={zone.name}
+                        initialRegion={zone.region || ""}
+                      />
                       <DeleteZoneButton
                         zoneId={zone.id}
                         zoneName={zone.name}

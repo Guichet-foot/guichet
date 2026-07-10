@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Trophy, MapPin, Network, Users, Building2 } from "lucide-react";
+import { Plus, Trophy, MapPin, Users, Building2 } from "lucide-react";
 import { MATCH_STATUS_LABELS, MATCH_STATUS_COLORS } from "@/lib/constants";
 import { formatDateShort } from "@/lib/format";
 import { PrintBlocsButton } from "@/app/(admin)/matchs/print-blocs-button";
@@ -124,10 +124,9 @@ export default async function FondateurMatchsDepartementauxPage() {
   );
 }
 
-function FondateurMatchTabBar({ active }: { active: "zones" | "direct" | "communaux" | "departementaux" }) {
+function FondateurMatchTabBar({ active }: { active: "zones" | "communaux" | "departementaux" }) {
   const tabs = [
     { key: "zones", label: "Match Zone", href: "/fondateur/matchs", icon: MapPin },
-    { key: "direct", label: "Match Direct", href: "/fondateur/matchs?tab=direct", icon: Network },
     { key: "communaux", label: "Matchs Communal", href: "/fondateur/matchs/communaux", icon: Users },
     { key: "departementaux", label: "Matchs Départementals", href: "/fondateur/matchs/departementaux", icon: Building2 },
   ] as const;

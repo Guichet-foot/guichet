@@ -3,6 +3,51 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
+async function requireFondateur() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+  if (profile?.role !== "fondateur") return null;
+  return user;
+}
+
+export async function createZoneForOdcav(
+  odcavId: string,
+  name: string,
+  region: string
+): Promise<{ error?: string }> {
+  const user = await requireFondateur();
+  if (!user) return { error: "Non autorisé" };
+  const adminClient = await createAdminClient();
+  const { error } = await adminClient.from("zones").insert({
+    name: name.trim(),
+    region: region.trim() || null,
+    created_by: odcavId,
+  });
+  if (error) return { error: error.message };
+  revalidatePath(`/fondateur/super-admins/${odcavId}`);
+  return {};
+}
+
+export async function updateZoneBasic(
+  zoneId: string,
+  odcavId: string,
+  name: string,
+  region: string
+): Promise<{ error?: string }> {
+  const user = await requireFondateur();
+  if (!user) return { error: "Non autorisé" };
+  const adminClient = await createAdminClient();
+  const { error } = await adminClient.from("zones").update({
+    name: name.trim(),
+    region: region.trim() || null,
+  }).eq("id", zoneId);
+  if (error) return { error: error.message };
+  revalidatePath(`/fondateur/super-admins/${odcavId}`);
+  return {};
+}
+
 export async function deleteZoneComplete(zoneId: string): Promise<{ error?: string; success?: boolean }> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
