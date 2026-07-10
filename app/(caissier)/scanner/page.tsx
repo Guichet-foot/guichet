@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { validateTicket } from "@/lib/actions/ticket-actions";
+import { validateBilleterieTicket } from "@/lib/actions/billeterie-actions";
 import { getCardByQRToken } from "@/lib/actions/carte-actions";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -102,9 +103,11 @@ function ScannerContent() {
                 }, 3000);
               }
             } else {
-              // ── Scan billet ──
+              // ── Scan billet (ordinaire ou billetterie) ──
               try {
-                const result = await validateTicket(decodedText);
+                const result = decodedText.startsWith("BIL-")
+                  ? await validateBilleterieTicket(decodedText)
+                  : await validateTicket(decodedText);
                 setScanResult(result);
                 if (result.status === "valid") {
                   setStats((prev) => ({ ...prev, validated: prev.validated + 1 }));

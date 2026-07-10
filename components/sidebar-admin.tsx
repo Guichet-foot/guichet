@@ -22,6 +22,7 @@ import {
   ContactRound,
   PackageX,
   Network,
+  TicketCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
@@ -49,6 +50,7 @@ const adminLinks = [
 
 const superAdminLinks = [
   { href: "/zones", label: "Zones", icon: MapPin },
+  { href: "/billeterie", label: "Billetterie", icon: TicketCheck },
   { href: "/parametres-odcav", label: "Paramètre ODCAV", icon: Building2 },
 ];
 
