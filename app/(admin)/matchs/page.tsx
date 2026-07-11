@@ -1,5 +1,5 @@
 import { requireRole } from "@/lib/auth";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
 import { getEffectiveZone } from "@/lib/get-effective-zone";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -54,30 +54,6 @@ export default async function MatchsPage({
 
   const { data: matches } = await query;
 
-  const matchIds = matches?.map((m) => m.id) || [];
-  let ticketStats: Record<string, { count: number; revenue: number }> = {};
-
-  if (matchIds.length > 0) {
-    const adminClient = await createAdminClient();
-    const { data: tickets } = await adminClient
-      .from("tickets")
-      .select("match_id, price")
-      .in("match_id", matchIds)
-      .or("bloc_printed.eq.true,counts_as_revenue.eq.true");
-
-    if (tickets) {
-      ticketStats = tickets.reduce(
-        (acc, t) => {
-          if (!acc[t.match_id]) acc[t.match_id] = { count: 0, revenue: 0 };
-          acc[t.match_id].count++;
-          acc[t.match_id].revenue += t.price;
-          return acc;
-        },
-        {} as Record<string, { count: number; revenue: number }>
-      );
-    }
-  }
-
   return (
     <div className="space-y-6">
       {isOdcavRole && !params.zone && <MatchTabBar active="zonaux" />}
@@ -110,74 +86,59 @@ export default async function MatchsPage({
                   <TableHead className="hidden md:table-cell">Date</TableHead>
                   <TableHead className="hidden sm:table-cell">Statut</TableHead>
                   <TableHead className="text-center">Score</TableHead>
-                  <TableHead className="hidden lg:table-cell text-right">Billets</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {matches.map((match: any) => {
-                  const stats = ticketStats[match.id] || { count: 0, revenue: 0 };
-                  return (
-                    <TableRow key={match.id}>
-                      <TableCell className="font-medium">{match.home_team} vs {match.away_team}</TableCell>
-                      <TableCell className="hidden md:table-cell text-sm">{formatDateShort(match.match_date)}</TableCell>
-                      <TableCell className="hidden sm:table-cell">
-                        <Badge variant="secondary" className={MATCH_STATUS_COLORS[match.status]}>
-                          {MATCH_STATUS_LABELS[match.status]}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {match.status === "termine" && match.home_score !== null ? (
-                          <span className="inline-block bg-brand text-white text-xs font-bold px-2 py-0.5 rounded">
-                            {match.home_score} - {match.away_score}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground text-xs">—</span>
+                {matches.map((match: any) => (
+                  <TableRow key={match.id}>
+                    <TableCell className="font-medium">{match.home_team} vs {match.away_team}</TableCell>
+                    <TableCell className="hidden md:table-cell text-sm">{formatDateShort(match.match_date)}</TableCell>
+                    <TableCell className="hidden sm:table-cell">
+                      <Badge variant="secondary" className={MATCH_STATUS_COLORS[match.status]}>
+                        {MATCH_STATUS_LABELS[match.status]}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {match.status === "termine" && match.home_score !== null ? (
+                        <span className="inline-block bg-brand text-white text-xs font-bold px-2 py-0.5 rounded">
+                          {match.home_score} - {match.away_score}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground text-xs">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="hidden sm:flex items-center gap-1 justify-end">
+                        {(profile.role === "super_admin" || profile.role === "fondateur" || profile.role === "president_odcav") &&
+                          match.status !== "termine" && match.status !== "annule" && (
+                            <PrintBlocsButton
+                              matchId={match.id}
+                              matchName={`${match.home_team} vs ${match.away_team}`}
+                            />
                         )}
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell text-right">
-                        <div className="text-right leading-tight">
-                          <span>{stats.count}</span>
-                          {stats.count >= 100 && (
-                            <p className="text-xs text-muted-foreground">
-                              {Math.floor(stats.count / 100)} bloc{Math.floor(stats.count / 100) > 1 ? "s" : ""}
-                            </p>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="hidden sm:flex items-center gap-1 justify-end">
-                          {(profile.role === "super_admin" || profile.role === "fondateur" || profile.role === "president_odcav") &&
-                            match.status !== "termine" && match.status !== "annule" && (
-                              <PrintBlocsButton
-                                matchId={match.id}
-                                matchName={`${match.home_team} vs ${match.away_team}`}
-                              />
-                          )}
-                          <MatchActionButtons matchId={match.id} zoneId={match.zone_id} status={match.status} venteActive={match.vente_active ?? false} homeTeam={match.home_team} awayTeam={match.away_team} />
-                          {match.status !== "termine" && match.status !== "annule" && profile.role !== "fondateur" && (
-                            <Link href={buildZoneUrl(`/matchs/${match.id}/modifier`, params.zone)}>
-                              <Button variant="ghost" size="sm" title="Modifier le match">
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-                            </Link>
-                          )}
-                          <Link href={buildZoneUrl(`/matchs/${match.id}`, params.zone)}>
-                            <Button variant="ghost" size="sm" title="Voir les détails"><Eye className="h-4 w-4" /></Button>
+                        <MatchActionButtons matchId={match.id} zoneId={match.zone_id} status={match.status} venteActive={match.vente_active ?? false} homeTeam={match.home_team} awayTeam={match.away_team} />
+                        {match.status !== "termine" && match.status !== "annule" && profile.role !== "fondateur" && (
+                          <Link href={buildZoneUrl(`/matchs/${match.id}/modifier`, params.zone)}>
+                            <Button variant="ghost" size="sm" title="Modifier le match">
+                              <Pencil className="h-4 w-4" />
+                            </Button>
                           </Link>
-                        </div>
-                        <div className="sm:hidden">
-                          <MatchMobileActions
-                            match={{ id: match.id, zone_id: match.zone_id, home_team: match.home_team, away_team: match.away_team, venue: match.venue || "", match_date: match.match_date, status: match.status, vente_active: match.vente_active ?? false, home_score: match.home_score, away_score: match.away_score }}
-                            stats={stats}
-                            detailUrl={buildZoneUrl(`/matchs/${match.id}`, params.zone)}
-                            editUrl={profile.role !== "fondateur" ? buildZoneUrl(`/matchs/${match.id}/modifier`, params.zone) : undefined}
-                          />
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
+                        )}
+                        <Link href={buildZoneUrl(`/matchs/${match.id}`, params.zone)}>
+                          <Button variant="ghost" size="sm" title="Voir les détails"><Eye className="h-4 w-4" /></Button>
+                        </Link>
+                      </div>
+                      <div className="sm:hidden">
+                        <MatchMobileActions
+                          match={{ id: match.id, zone_id: match.zone_id, home_team: match.home_team, away_team: match.away_team, venue: match.venue || "", match_date: match.match_date, status: match.status, vente_active: match.vente_active ?? false, home_score: match.home_score, away_score: match.away_score }}
+                          detailUrl={buildZoneUrl(`/matchs/${match.id}`, params.zone)}
+                          editUrl={profile.role !== "fondateur" ? buildZoneUrl(`/matchs/${match.id}/modifier`, params.zone) : undefined}
+                        />
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
               </TableBody>
             </Table>
           )}

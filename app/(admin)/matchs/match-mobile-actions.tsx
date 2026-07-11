@@ -20,13 +20,12 @@ import {
   MoreVertical,
   Eye,
   Pencil,
-  Ticket,
   Calendar,
   MapPin,
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
-import { formatFCFA, formatDateShort } from "@/lib/format";
+import { formatDateShort } from "@/lib/format";
 import { MATCH_STATUS_LABELS, MATCH_STATUS_COLORS } from "@/lib/constants";
 import Link from "next/link";
 
@@ -43,12 +42,11 @@ interface MatchMobileActionsProps {
     home_score: number | null;
     away_score: number | null;
   };
-  stats: { count: number; revenue: number };
   detailUrl: string;
   editUrl?: string;
 }
 
-export function MatchMobileActions({ match, stats, detailUrl, editUrl }: MatchMobileActionsProps) {
+export function MatchMobileActions({ match, detailUrl, editUrl }: MatchMobileActionsProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [scoreOpen, setScoreOpen] = useState(false);
@@ -139,14 +137,6 @@ export function MatchMobileActions({ match, stats, detailUrl, editUrl }: MatchMo
                   </span>
                 )}
               </div>
-            </div>
-
-            <div className="flex gap-4 text-sm">
-              <div className="flex items-center gap-1">
-                <Ticket className="h-4 w-4 text-muted-foreground" />
-                <span className="font-semibold">{stats.count}</span> billets
-              </div>
-              <div className="font-semibold text-brand">{formatFCFA(stats.revenue)}</div>
             </div>
 
             <div className="space-y-2">

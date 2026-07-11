@@ -24,8 +24,7 @@ function matchLabel(m: MatchOption): string {
   return `${home} vs ${away}`;
 }
 
-function statusBadge(status: string) {
-  if (status === "en_cours") return <Badge className="bg-green-600 text-white text-xs">En cours</Badge>;
+function statusBadge(_status: string) {
   return <Badge variant="outline" className="text-xs">Programmé</Badge>;
 }
 

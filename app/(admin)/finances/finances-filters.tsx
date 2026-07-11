@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-type Period = "jour" | "mois" | "custom";
+type Period = "24h" | "jour" | "mois" | "custom";
 
 interface FinancesFiltersProps {
   currentPeriod: Period;
@@ -29,7 +29,7 @@ export function FinancesFilters({
 }: FinancesFiltersProps) {
   const router = useRouter();
   const todayStr = new Date().toISOString().split("T")[0];
-  const [period, setPeriod] = useState<Period>(currentPeriod);
+  const [period, setPeriod] = useState<Period>(currentPeriod ?? "24h");
   const [date, setDate] = useState(currentDate || todayStr);
   const [from, setFrom] = useState(currentFrom || "");
   const [to, setTo] = useState(currentTo || "");
@@ -54,7 +54,8 @@ export function FinancesFilters({
   function handlePeriodChange(p: Period) {
     setMatch("");
     setPeriod(p);
-    if (p === "jour") router.push(buildUrl("jour", date));
+    if (p === "24h") router.push(buildUrl("24h"));
+    else if (p === "jour") router.push(buildUrl("jour", date));
     else if (p === "mois") router.push(buildUrl("mois"));
     // custom: wait for dates
   }
@@ -78,6 +79,7 @@ export function FinancesFilters({
   }
 
   const tabs: { key: Period; label: string }[] = [
+    { key: "24h", label: "24h" },
     { key: "jour", label: "Jour" },
     { key: "mois", label: "Mois en cours" },
     { key: "custom", label: "Personnalisé" },

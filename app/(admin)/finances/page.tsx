@@ -6,19 +6,20 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Banknote, TrendingDown, TrendingUp, Building2, Landmark, PackageX } from "lucide-react";
+import { Plus, Banknote, TrendingDown, TrendingUp, Landmark, PackageX, Layers, ScanLine, ReceiptText } from "lucide-react";
 import { formatFCFA, formatDate } from "@/lib/format";
 import { EXPENSE_CATEGORY_LABELS } from "@/lib/constants";
 import { buildZoneUrl } from "@/lib/zone-utils";
 import { ZoneCardGrid } from "@/components/zone-card-grid";
 import { ZoneBackHeader } from "@/components/zone-back-header";
 import { FinancesFilters } from "./finances-filters";
+import { PrintButton } from "@/components/print-button";
 
 export const metadata = { title: "Finances" };
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-type Period = "jour" | "mois" | "custom";
+type Period = "24h" | "jour" | "mois" | "custom";
 
 export default async function FinancesPage({
   searchParams,
@@ -39,7 +40,7 @@ export default async function FinancesPage({
   const zoneId = effectiveZoneId;
 
   const today = new Date().toISOString().split("T")[0];
-  const period = (params.period as Period) || "mois";
+  const period = (params.period as Period) || "24h";
   const filterMatchId = params.match || null;
 
   // ── Date range from period params ────────────────────────────────
@@ -48,7 +49,12 @@ export default async function FinancesPage({
   let periodLabel: string;
   let settingsDate = today;
 
-  if (period === "jour") {
+  if (period === "24h") {
+    dateEnd = new Date();
+    dateStart = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    periodLabel = "Dernières 24h";
+    settingsDate = today;
+  } else if (period === "jour") {
     const d = params.date || today;
     dateStart = new Date(d + "T00:00:00");
     dateEnd = new Date(d + "T23:59:59.999");
@@ -60,7 +66,7 @@ export default async function FinancesPage({
     periodLabel = `Du ${formatDate(params.from)} au ${formatDate(params.to)}`;
     settingsDate = params.to;
   } else {
-    // Default: current month
+    // Mois en cours
     dateStart = new Date();
     dateStart.setDate(1);
     dateStart.setHours(0, 0, 0, 0);
@@ -74,12 +80,11 @@ export default async function FinancesPage({
   // ── Platform settings ────────────────────────────────────────────
   const { data: platformData } = await adminSupabase
     .from("platform_settings")
-    .select("frais_plateforme, odcav_rate, fee_per_block")
+    .select("odcav_rate")
     .lte("effective_date", settingsDate)
     .order("effective_date", { ascending: false })
     .limit(1)
     .single();
-  const feePerBlock = (platformData as any)?.fee_per_block ?? 1000;
   const odcavRate = platformData?.odcav_rate ?? 0.05;
 
   // ── Matches in period (zone-scoped) — source of truth for period filter ──
@@ -100,44 +105,35 @@ export default async function FinancesPage({
   const { data: matchesInPeriod } = await matchesPeriodQuery;
   const matchIdsInPeriod = (matchesInPeriod || []).map((m: any) => m.id as string);
 
-  // ── Tickets for those matches (no sold_at filter — avoids missing invendus) ──
+  // ── Tickets for those matches ────────────────────────────────────
   let periodTickets: any[] = [];
   if (matchIdsInPeriod.length > 0) {
     const { data } = await adminSupabase
       .from("tickets")
-      .select("price, status, counts_as_revenue, match_id")
+      .select("price, status, bloc_printed, counts_as_revenue, match_id")
       .in("match_id", matchIdsInPeriod);
     periodTickets = data || [];
   }
 
-  // ── Match unsold — authoritative invendu counts ───────────────────
-  const unsoldByMatchId: Record<string, number> = {};
-  if (matchIdsInPeriod.length > 0) {
-    const { data: unsoldRows } = await adminSupabase
-      .from("match_unsold")
-      .select("match_id, unsold_count, tout_vendus")
-      .in("match_id", matchIdsInPeriod);
-    (unsoldRows || []).forEach((row: any) => {
-      unsoldByMatchId[row.match_id] = row.tout_vendus ? 0 : (row.unsold_count || 0);
-    });
-  }
+  // ── Financial metrics (new model: ODCAV prints blocs → zones scan) ──
+  const printedTickets = periodTickets.filter((t: any) => t.bloc_printed === true);
+  const totalPrinted = printedTickets.length;
+  const totalBlocs = totalPrinted > 0 ? Math.ceil(totalPrinted / 100) : 0;
+  const totalScanned = periodTickets.filter((t: any) => t.status === "scanne").length;
+  const totalUnsold = Math.max(0, totalPrinted - totalScanned);
+  const totalUnsoldValue = printedTickets
+    .filter((t: any) => t.status !== "scanne")
+    .reduce((sum: number, t: any) => sum + (t.price || 0), 0);
 
   const totalSold = periodTickets.filter((t: any) => t.counts_as_revenue && t.status !== "annule").length;
   const totalRevenue = periodTickets
     .filter((t: any) => t.counts_as_revenue && t.status !== "annule")
     .reduce((sum: number, t: any) => sum + t.price, 0);
 
-  // Use match_unsold as authoritative invendu count; value from annulled tickets
-  const totalUnsold = Object.values(unsoldByMatchId).reduce((s, c) => s + c, 0);
-  const totalUnsoldValue = periodTickets
-    .filter((t: any) => t.status === "annule")
-    .reduce((sum: number, t: any) => sum + t.price, 0);
-
   const odcavCommission = Math.round(totalRevenue * odcavRate);
-  const totalBlocks = totalSold > 0 ? Math.ceil(totalSold / 100) : 0;
-  const fraisPlateformePeriod = totalBlocks * feePerBlock;
+  const fraisPlateformePeriod = totalPrinted * 10;
 
-  // Build revenueByMatch: initialise from matches, fill from tickets + match_unsold
+  // Build revenueByMatch: initialise from matches, fill from tickets
   const revenueByMatch: Record<string, {
     homeTeam: string; awayTeam: string; date: string;
     printed: number; unsold: number; revenue: number;
@@ -148,15 +144,18 @@ export default async function FinancesPage({
       awayTeam: m.away_team,
       date: m.match_date,
       printed: 0,
-      unsold: unsoldByMatchId[m.id] || 0,
+      unsold: 0,
       revenue: 0,
     };
   });
   periodTickets.forEach((t: any) => {
     const matchData = revenueByMatch[t.match_id];
     if (!matchData) return;
-    matchData.printed++;
-    if (t.status !== "annule" && t.counts_as_revenue) {
+    if (t.bloc_printed) {
+      matchData.printed++;
+      if (t.status !== "scanne") matchData.unsold++;
+    }
+    if (t.counts_as_revenue && t.status !== "annule") {
       matchData.revenue += t.price;
     }
   });
@@ -212,12 +211,15 @@ export default async function FinancesPage({
           <h1 className="text-2xl font-bold font-heading">Finances</h1>
           <p className="text-muted-foreground">{periodLabel}</p>
         </div>
-        <Link href={buildZoneUrl("/finances/depenses/nouveau", params.zone)}>
-          <Button className="bg-brand hover:bg-brand/90">
-            <Plus className="h-4 w-4 mr-2" />
-            Ajouter une dépense
-          </Button>
-        </Link>
+        <div className="flex gap-2">
+          <PrintButton label="PDF" />
+          <Link href={buildZoneUrl("/finances/depenses/nouveau", params.zone)}>
+            <Button className="bg-brand hover:bg-brand/90">
+              <Plus className="h-4 w-4 mr-2" />
+              Ajouter une dépense
+            </Button>
+          </Link>
+        </div>
       </div>
 
       <FinancesFilters
@@ -230,17 +232,31 @@ export default async function FinancesPage({
         matches={filterMatches}
       />
 
-      {/* Recettes + Dépenses + Invendus */}
+      {/* Blocs imprimés + Validés + Invendus */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Recettes brutes</p>
-                <p className="text-2xl font-bold text-brand">{formatFCFA(totalRevenue)}</p>
-                <p className="text-xs text-muted-foreground mt-1">{totalSold} billet(s) vendu(s)</p>
+                <p className="text-sm text-muted-foreground">Blocs imprimés</p>
+                <p className="text-2xl font-bold">{totalBlocs}</p>
+                <p className="text-xs text-muted-foreground mt-1">{totalPrinted} billet{totalPrinted !== 1 ? "s" : ""}</p>
               </div>
-              <Banknote className="h-8 w-8 text-brand/40" />
+              <Layers className="h-8 w-8 text-accent/60" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Validés par scan</p>
+                <p className="text-2xl font-bold text-green-600">{totalScanned}</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {totalPrinted > 0 ? `${Math.round((totalScanned / totalPrinted) * 100)}%` : "0%"} des imprimés
+                </p>
+              </div>
+              <ScanLine className="h-8 w-8 text-green-400/60" />
             </div>
           </CardContent>
         </Card>
@@ -255,6 +271,22 @@ export default async function FinancesPage({
                 )}
               </div>
               <PackageX className="h-8 w-8 text-orange-400/40" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Recettes brutes + Dépenses */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Recettes brutes</p>
+                <p className="text-2xl font-bold text-brand">{formatFCFA(totalRevenue)}</p>
+                <p className="text-xs text-muted-foreground mt-1">{totalSold} billet(s) vendu(s)</p>
+              </div>
+              <Banknote className="h-8 w-8 text-brand/40" />
             </div>
           </CardContent>
         </Card>
@@ -289,11 +321,11 @@ export default async function FinancesPage({
           <CardContent className="pt-5">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-orange-700 font-medium">Frais plateforme</p>
+                <p className="text-sm text-orange-700 font-medium">Frais billetterie</p>
                 <p className="text-xl font-bold text-orange-800">{formatFCFA(fraisPlateformePeriod)}</p>
-                <p className="text-xs text-orange-600 mt-0.5">{totalBlocks} bloc(s) × {formatFCFA(feePerBlock)}/bloc</p>
+                <p className="text-xs text-orange-600 mt-0.5">{totalPrinted} billet{totalPrinted !== 1 ? "s" : ""} × 10 FCFA</p>
               </div>
-              <Building2 className="h-7 w-7 text-orange-400" />
+              <ReceiptText className="h-7 w-7 text-orange-400" />
             </div>
           </CardContent>
         </Card>

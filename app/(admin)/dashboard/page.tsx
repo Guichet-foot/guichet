@@ -4,7 +4,7 @@ import { getEffectiveZone } from "@/lib/get-effective-zone";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Banknote, Ticket, PackageX } from "lucide-react";
+import { Banknote, PackageX, Layers, ScanLine, Landmark, ReceiptText } from "lucide-react";
 import { formatFCFA, formatDateShort } from "@/lib/format";
 import { MATCH_STATUS_LABELS, MATCH_STATUS_COLORS } from "@/lib/constants";
 import { SalesChart } from "./sales-chart";
@@ -12,6 +12,7 @@ import { RevenueDonut } from "./revenue-donut";
 import { DashboardFilters } from "./dashboard-filters";
 import { ZoneCardGrid } from "@/components/zone-card-grid";
 import { ZoneBackHeader } from "@/components/zone-back-header";
+import { PrintButton } from "@/components/print-button";
 
 export const metadata = { title: "Tableau de bord" };
 
@@ -54,13 +55,10 @@ export default async function DashboardPage({
     dateEnd = new Date(`${filterYear}-12-31T23:59:59.999`);
     periodLabel = `Année ${filterYear}`;
   } else {
-    const m = new Date();
-    m.setDate(1);
-    m.setHours(0, 0, 0, 0);
-    dateStart = m;
+    // Default: last 24 hours
     dateEnd = new Date();
-    dateEnd.setHours(23, 59, 59, 999);
-    periodLabel = "Mois en cours";
+    dateStart = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    periodLabel = "Dernières 24h";
   }
 
   // ── Matches in period (zone-scoped) — source of truth for period filter ──
@@ -81,35 +79,30 @@ export default async function DashboardPage({
   const { data: matchesPeriodData } = await matchesPeriodQuery;
   const matchIdsInPeriod = (matchesPeriodData || []).map((m: any) => m.id as string);
 
-  // ── Tickets for those matches (no sold_at filter avoids missing invendus) ──
+  // ── Tickets for those matches ────────────────────────────────────
   let periodTickets: any[] = [];
   if (matchIdsInPeriod.length > 0) {
     const { data } = await adminClient
       .from("tickets")
-      .select("price, status, match_id")
+      .select("price, status, bloc_printed, counts_as_revenue, match_id")
       .in("match_id", matchIdsInPeriod);
     periodTickets = data || [];
   }
 
-  // ── Match unsold — authoritative invendu counts ───────────────────
-  let totalUnsold = 0;
-  let totalUnsoldValue = 0;
-  if (matchIdsInPeriod.length > 0) {
-    const { data: unsoldRows } = await adminClient
-      .from("match_unsold")
-      .select("match_id, unsold_count, tout_vendus")
-      .in("match_id", matchIdsInPeriod);
-    (unsoldRows || []).forEach((row: any) => {
-      if (!row.tout_vendus) totalUnsold += row.unsold_count || 0;
-    });
-    totalUnsoldValue = periodTickets
-      .filter((t: any) => t.status === "annule")
-      .reduce((s: number, t: any) => s + t.price, 0);
-  }
-
-  const revenueTickets = periodTickets.filter((t: any) => t.status !== "annule");
-  const totalRevenue = revenueTickets.reduce((s: number, t: any) => s + t.price, 0);
-  const totalSold = revenueTickets.length;
+  // ── New financial metrics (new model: ODCAV prints blocs → zones scan) ──
+  const printedTickets = periodTickets.filter((t: any) => t.bloc_printed === true);
+  const totalPrinted = printedTickets.length;
+  const totalBlocs = totalPrinted > 0 ? Math.ceil(totalPrinted / 100) : 0;
+  const totalScanned = periodTickets.filter((t: any) => t.status === "scanne").length;
+  const totalUnsold = Math.max(0, totalPrinted - totalScanned);
+  const totalUnsoldValue = printedTickets
+    .filter((t: any) => t.status !== "scanne")
+    .reduce((s: number, t: any) => s + (t.price || 0), 0);
+  const grossRevenue = periodTickets
+    .filter((t: any) => t.counts_as_revenue && t.status !== "annule")
+    .reduce((s: number, t: any) => s + (t.price || 0), 0);
+  const fraisODCAV = Math.round(grossRevenue * 0.05);
+  const fraisBilleterie = totalPrinted * 10;
 
   // ── Upcoming matches ─────────────────────────────────────────────
   const now = new Date().toISOString();
@@ -251,21 +244,41 @@ export default async function DashboardPage({
   return (
     <div className="space-y-6">
       {["super_admin","president_odcav","tresorier"].includes(profile.role) && selectedZone && <ZoneBackHeader zoneName={selectedZone.name} />}
-      <h1 className="text-2xl font-bold font-heading">Tableau de bord</h1>
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold font-heading">Tableau de bord</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">{periodLabel}</p>
+        </div>
+        <PrintButton />
+      </div>
 
       <DashboardFilters matches={filterMatches} />
 
-      {/* Stat cards */}
+      {/* Row 1: Blocs imprimés | Validés | Invendus */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Billets vendus</p>
-                <p className="text-2xl font-bold">{totalSold}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">{periodLabel}</p>
+                <p className="text-sm text-muted-foreground">Blocs imprimés</p>
+                <p className="text-2xl font-bold">{totalBlocs}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{totalPrinted} billet{totalPrinted !== 1 ? "s" : ""} au total</p>
               </div>
-              <Ticket className="h-8 w-8 text-accent/60" />
+              <Layers className="h-8 w-8 text-accent/60" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Validés par scan</p>
+                <p className="text-2xl font-bold text-green-600">{totalScanned}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {totalPrinted > 0 ? `${Math.round((totalScanned / totalPrinted) * 100)}%` : "0%"} des imprimés
+                </p>
+              </div>
+              <ScanLine className="h-8 w-8 text-green-400/60" />
             </div>
           </CardContent>
         </Card>
@@ -283,15 +296,43 @@ export default async function DashboardPage({
             </div>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Row 2: Recettes brutes | Frais ODCAV | Frais billetterie */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Recettes</p>
-                <p className="text-2xl font-bold text-brand">{formatFCFA(totalRevenue)}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Billets vendus − Invendus</p>
+                <p className="text-sm text-muted-foreground">Recettes brutes</p>
+                <p className="text-2xl font-bold text-brand">{formatFCFA(grossRevenue)}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Avant frais</p>
               </div>
               <Banknote className="h-8 w-8 text-brand/40" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-blue-200 bg-blue-50/30 dark:bg-blue-950/20">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-blue-700 dark:text-blue-300">Frais ODCAV (5%)</p>
+                <p className="text-2xl font-bold text-blue-800 dark:text-blue-200">{formatFCFA(fraisODCAV)}</p>
+                <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5">Sur recettes brutes</p>
+              </div>
+              <Landmark className="h-8 w-8 text-blue-400/60" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-orange-200 bg-orange-50/30 dark:bg-orange-950/20">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-orange-700 dark:text-orange-300">Frais billetterie</p>
+                <p className="text-2xl font-bold text-orange-800 dark:text-orange-200">{formatFCFA(fraisBilleterie)}</p>
+                <p className="text-xs text-orange-600 dark:text-orange-400 mt-0.5">{totalPrinted} billet{totalPrinted !== 1 ? "s" : ""} × 10 FCFA</p>
+              </div>
+              <ReceiptText className="h-8 w-8 text-orange-400/60" />
             </div>
           </CardContent>
         </Card>
@@ -345,10 +386,12 @@ export default async function DashboardPage({
                         {MATCH_STATUS_LABELS[match.status]}
                       </Badge>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Progress value={pct} className="flex-1" />
-                      <span className="text-xs text-muted-foreground whitespace-nowrap">{stats.sold}/{stats.total}</span>
-                    </div>
+                    {stats.total > 0 && (
+                      <div className="flex items-center gap-2">
+                        <Progress value={pct} className="flex-1" />
+                        <span className="text-xs text-muted-foreground whitespace-nowrap">{stats.sold}/{stats.total}</span>
+                      </div>
+                    )}
                   </div>
                 );
               })

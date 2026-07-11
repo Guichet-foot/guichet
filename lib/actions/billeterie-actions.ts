@@ -49,8 +49,7 @@ export async function getAllMatchesForBilleterie(): Promise<MatchOption[]> {
     const { data } = await adminClient
       .from("matches")
       .select(fields)
-      .neq("status", "annule")
-      .neq("status", "termine")
+      .eq("status", "programme")
       .order("match_date", { ascending: false });
     return (data || []) as MatchOption[];
   }
@@ -73,9 +72,9 @@ export async function getAllMatchesForBilleterie(): Promise<MatchOption[]> {
 
   const [zoneRes, directRes] = await Promise.all([
     zoneIds.length > 0
-      ? adminClient.from("matches").select(fields).in("zone_id", zoneIds).neq("status", "annule").neq("status", "termine").order("match_date", { ascending: false })
+      ? adminClient.from("matches").select(fields).in("zone_id", zoneIds).eq("status", "programme").order("match_date", { ascending: false })
       : Promise.resolve({ data: [] as any[] }),
-    adminClient.from("matches").select(fields).in("created_by", creatorIds).neq("status", "annule").neq("status", "termine").order("match_date", { ascending: false }),
+    adminClient.from("matches").select(fields).in("created_by", creatorIds).eq("status", "programme").order("match_date", { ascending: false }),
   ]);
 
   const all = [...(zoneRes.data || []), ...(directRes.data || [])];
