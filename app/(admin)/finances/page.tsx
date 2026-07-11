@@ -105,7 +105,7 @@ export default async function FinancesPage({
   const { data: matchesInPeriod } = await matchesPeriodQuery;
   const matchIdsInPeriod = (matchesInPeriod || []).map((m: any) => m.id as string);
 
-  // ── Tickets for those matches ────────────────────────────────────
+  // ── Regular tickets for those matches ───────────────────────────
   let periodTickets: any[] = [];
   if (matchIdsInPeriod.length > 0) {
     const { data } = await adminSupabase
@@ -115,11 +115,53 @@ export default async function FinancesPage({
     periodTickets = data || [];
   }
 
-  // ── Financial metrics (new model: ODCAV prints blocs → zones scan) ──
+  // ── Billeterie tickets covering matches in period ────────────────
+  let bilPrinted = 0;
+  let bilScanned = 0;
+  let bilRevenue = 0;
+
+  if (matchIdsInPeriod.length > 0) {
+    const matchIdSet = new Set(matchIdsInPeriod);
+
+    // All billeteries, filter in JS those covering any match in period
+    const { data: allBils } = await adminSupabase
+      .from("billeterie")
+      .select("id, price, match_ids");
+
+    const bilsInPeriod = (allBils || []).filter((b: any) =>
+      (b.match_ids || []).some((id: string) => matchIdSet.has(id))
+    );
+    const bilIds = bilsInPeriod.map((b: any) => b.id as string);
+    const bilPriceMap: Record<string, number> = {};
+    bilsInPeriod.forEach((b: any) => { bilPriceMap[b.id] = b.price || 0; });
+
+    if (bilIds.length > 0) {
+      const { data: bilTickets } = await adminSupabase
+        .from("billeterie_tickets")
+        .select("billeterie_id")
+        .in("billeterie_id", bilIds)
+        .neq("status", "annule");
+
+      bilPrinted = (bilTickets || []).length;
+      bilRevenue = (bilTickets || []).reduce(
+        (s: number, t: any) => s + (bilPriceMap[t.billeterie_id] || 0), 0
+      );
+
+      const { count: scanCount } = await adminSupabase
+        .from("billeterie_scans")
+        .select("*", { count: "exact", head: true })
+        .in("match_id", matchIdsInPeriod);
+      bilScanned = scanCount || 0;
+    }
+  }
+
+  // ── Financial metrics (regular tickets + billeterie combinés) ────
   const printedTickets = periodTickets.filter((t: any) => t.bloc_printed === true);
-  const totalPrinted = printedTickets.length;
+  const regularPrinted = printedTickets.length;
+  const totalPrinted = regularPrinted + bilPrinted;
   const totalBlocs = totalPrinted > 0 ? Math.ceil(totalPrinted / 100) : 0;
-  const totalScanned = periodTickets.filter((t: any) => t.status === "scanne").length;
+  const regularScanned = periodTickets.filter((t: any) => t.status === "scanne").length;
+  const totalScanned = regularScanned + bilScanned;
   const totalUnsold = Math.max(0, totalPrinted - totalScanned);
   const totalUnsoldValue = printedTickets
     .filter((t: any) => t.status !== "scanne")
@@ -128,7 +170,7 @@ export default async function FinancesPage({
   const totalSold = periodTickets.filter((t: any) => t.counts_as_revenue && t.status !== "annule").length;
   const totalRevenue = periodTickets
     .filter((t: any) => t.counts_as_revenue && t.status !== "annule")
-    .reduce((sum: number, t: any) => sum + t.price, 0);
+    .reduce((sum: number, t: any) => sum + t.price, 0) + bilRevenue;
 
   const odcavCommission = Math.round(totalRevenue * odcavRate);
   const fraisPlateformePeriod = totalPrinted * 10;

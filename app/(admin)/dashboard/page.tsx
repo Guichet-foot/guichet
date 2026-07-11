@@ -79,7 +79,7 @@ export default async function DashboardPage({
   const { data: matchesPeriodData } = await matchesPeriodQuery;
   const matchIdsInPeriod = (matchesPeriodData || []).map((m: any) => m.id as string);
 
-  // ── Tickets for those matches ────────────────────────────────────
+  // ── Regular tickets for those matches ───────────────────────────
   let periodTickets: any[] = [];
   if (matchIdsInPeriod.length > 0) {
     const { data } = await adminClient
@@ -89,18 +89,57 @@ export default async function DashboardPage({
     periodTickets = data || [];
   }
 
-  // ── New financial metrics (new model: ODCAV prints blocs → zones scan) ──
+  // ── Billeterie tickets covering matches in period ────────────────
+  let bilPrinted = 0;
+  let bilScanned = 0;
+  let bilRevenue = 0;
+
+  if (matchIdsInPeriod.length > 0) {
+    const matchIdSet = new Set(matchIdsInPeriod);
+
+    const { data: allBils } = await adminClient
+      .from("billeterie")
+      .select("id, price, match_ids");
+
+    const bilsInPeriod = (allBils || []).filter((b: any) =>
+      (b.match_ids || []).some((id: string) => matchIdSet.has(id))
+    );
+    const bilIds = bilsInPeriod.map((b: any) => b.id as string);
+    const bilPriceMap: Record<string, number> = {};
+    bilsInPeriod.forEach((b: any) => { bilPriceMap[b.id] = b.price || 0; });
+
+    if (bilIds.length > 0) {
+      const { data: bilTickets } = await adminClient
+        .from("billeterie_tickets")
+        .select("billeterie_id")
+        .in("billeterie_id", bilIds)
+        .neq("status", "annule");
+
+      bilPrinted = (bilTickets || []).length;
+      bilRevenue = (bilTickets || []).reduce(
+        (s: number, t: any) => s + (bilPriceMap[t.billeterie_id] || 0), 0
+      );
+
+      const { count: scanCount } = await adminClient
+        .from("billeterie_scans")
+        .select("*", { count: "exact", head: true })
+        .in("match_id", matchIdsInPeriod);
+      bilScanned = scanCount || 0;
+    }
+  }
+
+  // ── Financial metrics (regular tickets + billeterie combinés) ────
   const printedTickets = periodTickets.filter((t: any) => t.bloc_printed === true);
-  const totalPrinted = printedTickets.length;
+  const totalPrinted = printedTickets.length + bilPrinted;
   const totalBlocs = totalPrinted > 0 ? Math.ceil(totalPrinted / 100) : 0;
-  const totalScanned = periodTickets.filter((t: any) => t.status === "scanne").length;
+  const totalScanned = periodTickets.filter((t: any) => t.status === "scanne").length + bilScanned;
   const totalUnsold = Math.max(0, totalPrinted - totalScanned);
   const totalUnsoldValue = printedTickets
     .filter((t: any) => t.status !== "scanne")
     .reduce((s: number, t: any) => s + (t.price || 0), 0);
   const grossRevenue = periodTickets
     .filter((t: any) => t.counts_as_revenue && t.status !== "annule")
-    .reduce((s: number, t: any) => s + (t.price || 0), 0);
+    .reduce((s: number, t: any) => s + (t.price || 0), 0) + bilRevenue;
   const fraisODCAV = Math.round(grossRevenue * 0.05);
   const fraisBilleterie = totalPrinted * 10;
 
