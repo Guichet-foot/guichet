@@ -133,33 +133,6 @@ export default async function FinancesPage({
   const odcavCommission = Math.round(totalRevenue * odcavRate);
   const fraisPlateformePeriod = totalPrinted * 10;
 
-  // Build revenueByMatch: initialise from matches, fill from tickets
-  const revenueByMatch: Record<string, {
-    homeTeam: string; awayTeam: string; date: string;
-    printed: number; unsold: number; revenue: number;
-  }> = {};
-  (matchesInPeriod || []).forEach((m: any) => {
-    revenueByMatch[m.id] = {
-      homeTeam: m.home_team,
-      awayTeam: m.away_team,
-      date: m.match_date,
-      printed: 0,
-      unsold: 0,
-      revenue: 0,
-    };
-  });
-  periodTickets.forEach((t: any) => {
-    const matchData = revenueByMatch[t.match_id];
-    if (!matchData) return;
-    if (t.bloc_printed) {
-      matchData.printed++;
-      if (t.status !== "scanne") matchData.unsold++;
-    }
-    if (t.counts_as_revenue && t.status !== "annule") {
-      matchData.revenue += t.price;
-    }
-  });
-
   // ── Expenses ─────────────────────────────────────────────────────
   const expenseFrom = dateStart.toISOString().split("T")[0];
   const expenseTo = dateEnd.toISOString().split("T")[0];
@@ -182,13 +155,6 @@ export default async function FinancesPage({
   const { data: expenses } = (await expensesQuery) as { data: any[] | null };
   const totalExpenses = expenses?.reduce((sum: number, e: any) => sum + e.amount, 0) || 0;
   const balance = totalRevenue - totalExpenses - odcavCommission - fraisPlateformePeriod;
-
-  const expensesByMatchId: Record<string, number> = {};
-  expenses?.forEach((e: any) => {
-    if (e.match_id) {
-      expensesByMatchId[e.match_id] = (expensesByMatchId[e.match_id] || 0) + e.amount;
-    }
-  });
 
   // ── Matches for filter dropdown ───────────────────────────────────
   let matchesListQuery = supabase
@@ -340,56 +306,50 @@ export default async function FinancesPage({
               <p className={`text-3xl font-bold ${balance >= 0 ? "text-success" : "text-danger"}`}>
                 {formatFCFA(Math.max(0, balance))}
               </p>
-              <p className="text-xs text-muted-foreground mt-1">Recettes − Dépenses − ODCAV − Frais plateforme</p>
+              <p className="text-xs text-muted-foreground mt-1">Recettes − Dépenses − ODCAV − Frais billetterie</p>
             </div>
             <TrendingUp className="h-10 w-10 text-muted-foreground/20" />
           </div>
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader><CardTitle className="text-lg">Recettes par match</CardTitle></CardHeader>
-        <CardContent className="p-0 overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow className="text-xs">
-                <TableHead className="py-2 text-xs">Match</TableHead>
-                <TableHead className="py-2 text-xs text-right">Imprimé</TableHead>
-                <TableHead className="py-2 text-xs text-right text-red-600">Invendus</TableHead>
-                <TableHead className="py-2 text-xs text-right text-danger">Dépenses</TableHead>
-                <TableHead className="py-2 text-xs text-right font-bold text-brand">Recettes</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {Object.entries(revenueByMatch).length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
-                    Aucune recette sur cette période
-                  </TableCell>
-                </TableRow>
-              ) : (
-                Object.entries(revenueByMatch).map(([id, data]) => {
-                  const matchExp = expensesByMatchId[id] || 0;
-                  const recettes = data.revenue - matchExp;
-                  return (
-                    <TableRow key={id} className="text-sm">
-                      <TableCell className="py-2">
-                        <p className="font-medium text-xs leading-snug">{data.homeTeam} vs {data.awayTeam}</p>
-                        <p className="text-xs text-muted-foreground">{formatDate(data.date)}</p>
-                      </TableCell>
-                      <TableCell className="py-2 text-right text-xs">{data.printed}</TableCell>
-                      <TableCell className="py-2 text-right text-xs font-medium text-red-600">{data.unsold > 0 ? data.unsold : "—"}</TableCell>
-                      <TableCell className="py-2 text-right text-xs font-medium text-danger whitespace-nowrap">{matchExp > 0 ? `-${formatFCFA(matchExp)}` : "—"}</TableCell>
-                      <TableCell className={`py-2 text-right text-xs font-bold whitespace-nowrap ${recettes >= 0 ? "text-brand" : "text-danger"}`}>
-                        {formatFCFA(recettes)}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
+      <Card className="overflow-hidden">
+        <div className="bg-[#1a5c1a] text-white font-bold px-4 py-3 text-sm">
+          Match
+        </div>
+        {!matchesInPeriod || matchesInPeriod.length === 0 ? (
+          <div className="text-center text-muted-foreground py-8 text-sm">
+            Aucun match sur cette période
+          </div>
+        ) : (
+          <>
+            <div className="divide-y divide-border">
+              {matchesInPeriod.map((m: any) => (
+                <div key={m.id} className="px-4 py-3 text-sm">
+                  {m.home_team} vs {m.away_team}
+                </div>
+              ))}
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 border-t-2 border-border">
+              <div className="bg-green-100 dark:bg-green-950/40 px-3 py-3 border-r border-border">
+                <p className="text-xs text-green-700 dark:text-green-400">Billets Imprimés</p>
+                <p className="text-lg font-bold text-green-900 dark:text-green-200">{totalPrinted}</p>
+              </div>
+              <div className="bg-blue-600 px-3 py-3 border-r border-blue-500">
+                <p className="text-xs text-blue-200">Validé</p>
+                <p className="text-lg font-bold text-white">{totalScanned}</p>
+              </div>
+              <div className="bg-red-100 dark:bg-red-950/40 px-3 py-3 border-r border-border">
+                <p className="text-xs text-red-600 dark:text-red-400">Invendus</p>
+                <p className="text-lg font-bold text-red-700 dark:text-red-300">{totalUnsold}</p>
+              </div>
+              <div className="bg-yellow-50 dark:bg-yellow-950/30 px-3 py-3">
+                <p className="text-xs text-yellow-700 dark:text-yellow-400">Recettes Bruites</p>
+                <p className="text-lg font-bold text-yellow-900 dark:text-yellow-200 whitespace-nowrap">{formatFCFA(totalRevenue)}</p>
+              </div>
+            </div>
+          </>
+        )}
       </Card>
 
       <Card>
