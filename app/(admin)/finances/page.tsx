@@ -29,10 +29,24 @@ export default async function FinancesPage({
 }) {
   const profile = await requireRole(["super_admin", "admin_zone", "c3", "fondateur", "president_odcav", "tresorier"]);
   const params = await searchParams;
+
+  const isOdcavRole =
+    profile.role === "super_admin" ||
+    profile.role === "president_odcav" ||
+    profile.role === "tresorier";
+
   const { effectiveZoneId, selectedZone, ownedZones, needsZoneSelection, c3AccountId } =
     await getEffectiveZone(profile, params.zone);
 
   if (needsZoneSelection) {
+    if (isOdcavRole) {
+      return (
+        <div className="space-y-6">
+          <FinancesOdcavTabs active="zone" />
+          <ZoneCardGrid zones={ownedZones} title="Finances Zone" />
+        </div>
+      );
+    }
     return <ZoneCardGrid zones={ownedZones} title="Finances" />;
   }
 
@@ -216,11 +230,6 @@ export default async function FinancesPage({
     id: m.id,
     label: `${m.home_team} vs ${m.away_team}`,
   }));
-
-  const isOdcavRole =
-    profile.role === "super_admin" ||
-    profile.role === "president_odcav" ||
-    profile.role === "tresorier";
 
   return (
     <div className="space-y-6 min-w-0">
