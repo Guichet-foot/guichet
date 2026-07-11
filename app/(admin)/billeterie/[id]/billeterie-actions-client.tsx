@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { addTicketsToBilleterie } from "@/lib/actions/billeterie-actions";
+import { addTicketsToBilleterie, withdrawBilleterieBatch } from "@/lib/actions/billeterie-actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,7 +12,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Printer, Plus, Loader2 } from "lucide-react";
+import { Printer, Plus, Loader2, Minus } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 
@@ -25,6 +25,33 @@ export function PrintBatchButton({ batchId, count, fmt = "80" }: { batchId: stri
     >
       <Printer className="h-4 w-4 mr-1.5" />
       Imprimer ({count})
+    </Button>
+  );
+}
+
+export function WithdrawBatchButton({ batchId, activeCount }: { batchId: string; activeCount: number }) {
+  const router = useRouter();
+  const [loading, setLoading] = useState(false);
+
+  async function handleWithdraw() {
+    if (!confirm(`Retirer ${activeCount} billet(s) de ce lot ? Ils ne seront plus comptabilisés dans les statistiques, mais les QR codes restent valides.`)) return;
+    setLoading(true);
+    const result = await withdrawBilleterieBatch(batchId);
+    setLoading(false);
+    if (result.error) { toast.error(result.error); return; }
+    toast.success(`${result.count} billet(s) retiré(s)`);
+    router.refresh();
+  }
+
+  return (
+    <Button
+      variant="destructive"
+      size="sm"
+      onClick={handleWithdraw}
+      disabled={loading || activeCount === 0}
+    >
+      {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Minus className="h-4 w-4 mr-1.5" />}
+      {loading ? "" : "Retirer des Billets"}
     </Button>
   );
 }

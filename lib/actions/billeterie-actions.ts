@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { requireRole } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { format } from "date-fns";
 import type { ScanResult } from "@/lib/types";
@@ -256,7 +257,7 @@ export async function getBilleterieDetails(id: string): Promise<{
   price: number;
   createdAt: string;
   matches: MatchOption[];
-  batches: { batchId: string; createdAt: string; count: number }[];
+  batches: { batchId: string; createdAt: string; count: number; withdrawnCount: number }[];
   totalTickets: number;
   totalScans: number;
 } | null> {
@@ -276,24 +277,25 @@ export async function getBilleterieDetails(id: string): Promise<{
     matchIds.length > 0
       ? adminClient.from("matches").select("id, home_team, away_team, venue, match_date, match_type, status, home_team_zone, away_team_zone").in("id", matchIds)
       : Promise.resolve({ data: [] as any[] }),
-    adminClient.from("billeterie_tickets").select("id, sale_batch_id, created_at").eq("billeterie_id", id).order("created_at"),
+    adminClient.from("billeterie_tickets").select("id, sale_batch_id, created_at, withdrawn").eq("billeterie_id", id).order("created_at"),
   ]);
 
-  // Batch grouping
-  const batchMap: Record<string, { batchId: string; createdAt: string; count: number }> = {};
+  // Batch grouping with withdrawn count
+  const batchMap: Record<string, { batchId: string; createdAt: string; count: number; withdrawnCount: number }> = {};
   (ticketRows || []).forEach((t: any) => {
     if (!t.sale_batch_id) return;
     if (!batchMap[t.sale_batch_id]) {
-      batchMap[t.sale_batch_id] = { batchId: t.sale_batch_id, createdAt: t.created_at, count: 0 };
+      batchMap[t.sale_batch_id] = { batchId: t.sale_batch_id, createdAt: t.created_at, count: 0, withdrawnCount: 0 };
     }
     batchMap[t.sale_batch_id].count++;
+    if (t.withdrawn) batchMap[t.sale_batch_id].withdrawnCount++;
   });
   const batches = Object.values(batchMap).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-  // Scan count
-  const ticketIds = (ticketRows || []).map((t: any) => t.id as string);
-  const { count: scanCount } = ticketIds.length > 0
-    ? await adminClient.from("billeterie_scans").select("*", { count: "exact", head: true }).in("ticket_id", ticketIds)
+  // Scan count (only non-withdrawn tickets)
+  const activeTicketIds = (ticketRows || []).filter((t: any) => !t.withdrawn).map((t: any) => t.id as string);
+  const { count: scanCount } = activeTicketIds.length > 0
+    ? await adminClient.from("billeterie_scans").select("*", { count: "exact", head: true }).in("ticket_id", activeTicketIds)
     : { count: 0 };
 
   return {
@@ -304,9 +306,32 @@ export async function getBilleterieDetails(id: string): Promise<{
     createdAt: bil.created_at,
     matches: ((matches || []) as MatchOption[]).sort((a, b) => new Date(a.match_date).getTime() - new Date(b.match_date).getTime()),
     batches,
-    totalTickets: ticketRows?.length || 0,
+    totalTickets: (ticketRows || []).filter((t: any) => !t.withdrawn).length,
     totalScans: scanCount || 0,
   };
+}
+
+// ── Retrait de billets d'un lot (fondateur uniquement) ────────────────────────
+export async function withdrawBilleterieBatch(batchId: string): Promise<{ error?: string; count?: number }> {
+  await requireRole(["fondateur"]);
+  const adminClient = await createAdminClient();
+
+  const { data: tickets } = await adminClient
+    .from("billeterie_tickets")
+    .select("id")
+    .eq("sale_batch_id", batchId)
+    .eq("withdrawn", false);
+
+  if (!tickets || tickets.length === 0) return { error: "Tous les billets de ce lot sont déjà retirés" };
+
+  const { error } = await adminClient
+    .from("billeterie_tickets")
+    .update({ withdrawn: true })
+    .eq("sale_batch_id", batchId);
+
+  if (error) return { error: error.message };
+  revalidatePath("/fondateur/billeterie", "page");
+  return { count: tickets.length };
 }
 
 // ── Validation billet billetterie (scanner portier) ───────────────────────────

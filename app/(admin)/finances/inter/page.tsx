@@ -124,7 +124,8 @@ export default async function FinancesInterPage({
         .from("billeterie_tickets")
         .select("id, billeterie_id")
         .in("billeterie_id", bilIds)
-        .neq("status", "annule");
+        .neq("status", "annule")
+        .eq("withdrawn", false);
 
       bilPrinted = (bilTickets || []).length;
 
