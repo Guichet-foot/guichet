@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { updateMatchStatus, toggleMatchVente, deleteMatch } from "@/lib/actions/match-actions";
+import { updateMatchStatus, deleteMatch } from "@/lib/actions/match-actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -11,7 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Loader2, ShoppingCart, ShoppingCartIcon, CheckCircle, Trash2, Pencil } from "lucide-react";
+import { Loader2, CheckCircle, Trash2, Pencil } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 
@@ -19,26 +19,18 @@ interface MatchActionButtonsProps {
   matchId: string;
   zoneId: string | null;
   status: string;
-  venteActive: boolean;
+  venteActive?: boolean;
   homeTeam?: string;
   awayTeam?: string;
 }
 
-export function MatchActionButtons({ matchId, zoneId: _zoneId, status, venteActive, homeTeam, awayTeam }: MatchActionButtonsProps) {
+export function MatchActionButtons({ matchId, zoneId: _zoneId, status, homeTeam, awayTeam }: MatchActionButtonsProps) {
   const router = useRouter();
   const [loading, setLoading] = useState<string | null>(null);
   const [scoreOpen, setScoreOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [homeScore, setHomeScore] = useState("");
   const [awayScore, setAwayScore] = useState("");
-
-  async function handleToggleVente() {
-    setLoading("vente");
-    const result = await toggleMatchVente(matchId, !venteActive);
-    if (result.error) toast.error(result.error);
-    else toast.success(venteActive ? "Vente fermée" : "Vente ouverte !");
-    setLoading(null);
-  }
 
   function handleTerminerClick() {
     setHomeScore("");
@@ -95,40 +87,21 @@ export function MatchActionButtons({ matchId, zoneId: _zoneId, status, venteActi
           </Button>
         </Link>
         {status !== "termine" && status !== "annule" && (
-          <>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleToggleVente}
-              disabled={loading === "vente"}
-              className={venteActive ? "text-danger border-danger" : "text-brand border-brand"}
-              title={venteActive ? "Arrêter la vente" : "Démarrer la vente"}
-            >
-              {loading === "vente" ? (
-                <Loader2 className="h-3 w-3 animate-spin" />
-              ) : venteActive ? (
-                <><ShoppingCartIcon className="h-3 w-3 mr-1" />Arrêter</>
-              ) : (
-                <><ShoppingCart className="h-3 w-3 mr-1" />Démarrer</>
-              )}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleTerminerClick}
-              disabled={loading === "terminer"}
-              className="text-muted-foreground"
-              title="Terminer le match"
-            >
-              {loading === "terminer" ? (
-                <Loader2 className="h-3 w-3 animate-spin" />
-              ) : (
-                <><CheckCircle className="h-3 w-3 mr-1" />Terminer</>
-              )}
-            </Button>
-          </>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleTerminerClick}
+            disabled={loading === "terminer"}
+            className="text-muted-foreground"
+            title="Terminer le match"
+          >
+            {loading === "terminer" ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <><CheckCircle className="h-3 w-3 mr-1" />Terminer</>
+            )}
+          </Button>
         )}
         <Button
           type="button"

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { updateMatchStatus, toggleMatchVente, deleteMatch } from "@/lib/actions/match-actions";
+import { updateMatchStatus, deleteMatch } from "@/lib/actions/match-actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -14,8 +14,6 @@ import {
 } from "@/components/ui/dialog";
 import {
   Loader2,
-  ShoppingCart,
-  ShoppingCartIcon,
   CheckCircle,
   MoreVertical,
   Eye,
@@ -38,7 +36,7 @@ interface MatchMobileActionsProps {
     venue: string;
     match_date: string;
     status: string;
-    vente_active: boolean;
+    vente_active?: boolean;
     home_score: number | null;
     away_score: number | null;
   };
@@ -54,15 +52,6 @@ export function MatchMobileActions({ match, detailUrl, editUrl }: MatchMobileAct
   const [loading, setLoading] = useState<string | null>(null);
   const [homeScore, setHomeScore] = useState("");
   const [awayScore, setAwayScore] = useState("");
-
-  async function handleToggleVente() {
-    setLoading("vente");
-    const result = await toggleMatchVente(match.id, !match.vente_active);
-    if (result.error) toast.error(result.error);
-    else toast.success(match.vente_active ? "Vente fermée" : "Vente ouverte !");
-    setLoading(null);
-    setOpen(false);
-  }
 
   async function handleTerminer() {
     setOpen(false);
@@ -141,15 +130,10 @@ export function MatchMobileActions({ match, detailUrl, editUrl }: MatchMobileAct
 
             <div className="space-y-2">
               {!isFinished && (
-                <>
-                  <Button type="button" variant="outline" onClick={handleToggleVente} disabled={loading === "vente"} className={`w-full justify-start ${match.vente_active ? "text-danger border-danger" : "text-brand border-brand"}`}>
-                    {loading === "vente" ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : match.vente_active ? <><ShoppingCartIcon className="h-4 w-4 mr-2" />Arrêter la vente</> : <><ShoppingCart className="h-4 w-4 mr-2" />Démarrer la vente</>}
-                  </Button>
-                  <Button type="button" variant="outline" onClick={handleTerminer} className="w-full justify-start">
-                    <CheckCircle className="h-4 w-4 mr-2" />
-                    Terminer le match
-                  </Button>
-                </>
+                <Button type="button" variant="outline" onClick={handleTerminer} className="w-full justify-start">
+                  <CheckCircle className="h-4 w-4 mr-2" />
+                  Terminer le match
+                </Button>
               )}
               {editUrl && !isFinished && (
                 <Link href={editUrl} onClick={() => setOpen(false)}>

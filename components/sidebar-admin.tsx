@@ -94,7 +94,7 @@ export function SidebarAdmin({ userName, userRole, zoneName, permittedModules }:
   return (
     <>
       {/* Mobile/Tablet top header bar */}
-      <header className="fixed top-0 left-0 right-0 z-40 lg:hidden">
+      <header className="fixed top-0 left-0 right-0 z-40 lg:hidden print:hidden">
         <div className="mx-3 mt-2 flex items-center justify-between bg-white/80 backdrop-blur-xl border border-brand/10 rounded-2xl px-3 py-2 shadow-sm">
           <div className="flex items-center gap-2">
             <Image
@@ -161,7 +161,7 @@ export function SidebarAdmin({ userName, userRole, zoneName, permittedModules }:
 
       {/* Sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-64 bg-brand text-white transform transition-transform duration-200 lg:translate-x-0 lg:sticky lg:top-0 lg:h-screen ${
+        className={`fixed inset-y-0 left-0 z-50 w-64 bg-brand text-white transform transition-transform duration-200 lg:translate-x-0 lg:sticky lg:top-0 lg:h-screen print:hidden ${
           open ? "translate-x-0" : "-translate-x-full"
         }`}
       >

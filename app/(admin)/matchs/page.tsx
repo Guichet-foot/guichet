@@ -1,5 +1,5 @@
 import { requireRole } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { getEffectiveZone } from "@/lib/get-effective-zone";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import { formatDateShort } from "@/lib/format";
 import { buildZoneUrl } from "@/lib/zone-utils";
 import { MatchActionButtons } from "./match-action-buttons";
 import { MatchMobileActions } from "./match-mobile-actions";
+import { BilleterieSessionButton } from "./billeterie-session-button";
 import { PrintBlocsButton } from "./print-blocs-button";
 import { ZoneCardGrid } from "@/components/zone-card-grid";
 import { ZoneBackHeader } from "@/components/zone-back-header";
@@ -47,6 +48,18 @@ export default async function MatchsPage({
   }
 
   const supabase = await createClient();
+  const adminClient = await createAdminClient();
+
+  // Fetch zone billeterie session
+  let zoneOpenUntil: string | null = null;
+  if (effectiveZoneId) {
+    const { data: zoneData } = await adminClient
+      .from("zones")
+      .select("billeterie_open_until")
+      .eq("id", effectiveZoneId)
+      .single();
+    zoneOpenUntil = zoneData?.billeterie_open_until || null;
+  }
 
   let query = supabase.from("matches").select("*").order("match_date", { ascending: false });
   if (c3AccountId) query = query.eq("c3_account_id", c3AccountId);
@@ -63,12 +76,20 @@ export default async function MatchsPage({
           <h1 className="text-2xl font-bold font-heading">Matchs</h1>
           <p className="text-muted-foreground">{matches?.length || 0} match(s)</p>
         </div>
-        <Link href={buildZoneUrl("/matchs/nouveau", params.zone)}>
-          <Button className="bg-brand hover:bg-brand/90">
-            <Plus className="h-4 w-4 mr-2" />
-            Nouveau match
-          </Button>
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          {effectiveZoneId && (
+            <BilleterieSessionButton
+              zoneId={effectiveZoneId}
+              openUntil={zoneOpenUntil}
+            />
+          )}
+          <Link href={buildZoneUrl("/matchs/nouveau", params.zone)}>
+            <Button className="bg-brand hover:bg-brand/90">
+              <Plus className="h-4 w-4 mr-2" />
+              Nouveau match
+            </Button>
+          </Link>
+        </div>
       </div>
 
       <Card>
