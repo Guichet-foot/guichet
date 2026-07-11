@@ -186,7 +186,7 @@ export function MatchActionButtons({ matchId, zoneId: _zoneId, status, venteActi
               Vous êtes sur le point de supprimer <strong>{homeTeam} vs {awayTeam}</strong>. Cette action est irréversible.
             </p>
             <p className="text-xs text-muted-foreground bg-muted rounded-lg p-3">
-              La suppression est bloquée si des billets ont déjà été émis pour ce match.
+              La suppression est bloquée uniquement si le match est en cours.
             </p>
             <div className="flex gap-3">
               <Button variant="outline" className="flex-1" onClick={() => setDeleteOpen(false)} disabled={loading === "delete"}>

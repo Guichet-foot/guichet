@@ -193,7 +193,6 @@ export async function deleteMatch(matchId: string): Promise<{ error?: string }> 
 
   const adminClient = await createAdminClient();
 
-  // Check match status — only terminated/cancelled matches can be deleted with tickets
   const { data: match } = await adminClient
     .from("matches")
     .select("status")
@@ -202,30 +201,37 @@ export async function deleteMatch(matchId: string): Promise<{ error?: string }> 
 
   if (!match) return { error: "Match introuvable" };
 
-  const isFinished = match.status === "termine" || match.status === "annule";
-
-  if (!isFinished) {
-    // Block deletion of active/scheduled matches that have tickets
-    const { count } = await adminClient
-      .from("tickets")
-      .select("*", { count: "exact", head: true })
-      .eq("match_id", matchId);
-
-    if (count && count > 0) {
-      return { error: `Impossible de supprimer : ${count} billet(s) ont été émis pour ce match` };
-    }
+  // Only block deletion of matches currently in progress
+  if (match.status === "en_cours") {
+    return { error: "Impossible de supprimer un match en cours" };
   }
 
-  // Delete in the correct order to avoid FK constraint errors:
-  // 1. tickets (reference ticket_categories via category_id)
-  // 2. ticket_categories (reference matches via match_id)
-  // 3. match
+  // Step 1 — find all ticket_categories for this match
+  const { data: cats } = await adminClient
+    .from("ticket_categories")
+    .select("id")
+    .eq("match_id", matchId);
+
+  const catIds = (cats || []).map((c: { id: string }) => c.id);
+
+  // Step 2 — delete ALL tickets referencing these categories (regardless of match_id)
+  if (catIds.length > 0) {
+    const { error: tickCatErr } = await adminClient
+      .from("tickets")
+      .delete()
+      .in("category_id", catIds);
+    if (tickCatErr) return { error: tickCatErr.message };
+  }
+
+  // Step 3 — delete any remaining tickets linked to this match directly (null category_id, etc.)
   const { error: tickErr } = await adminClient.from("tickets").delete().eq("match_id", matchId);
   if (tickErr) return { error: tickErr.message };
 
+  // Step 4 — delete ticket_categories (now safe, no tickets reference them)
   const { error: catErr } = await adminClient.from("ticket_categories").delete().eq("match_id", matchId);
   if (catErr) return { error: catErr.message };
 
+  // Step 5 — delete the match
   const { error } = await adminClient.from("matches").delete().eq("id", matchId);
   if (error) return { error: error.message };
 
