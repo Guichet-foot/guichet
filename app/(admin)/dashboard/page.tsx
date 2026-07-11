@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Banknote, PackageX, Layers, ScanLine, Landmark, ReceiptText } from "lucide-react";
 import { formatFCFA, formatDateShort } from "@/lib/format";
+import { fetchAll } from "@/lib/supabase/paginate";
 import { MATCH_STATUS_LABELS, MATCH_STATUS_COLORS } from "@/lib/constants";
 import { SalesChart } from "./sales-chart";
 import { RevenueDonut } from "./revenue-donut";
@@ -82,11 +83,13 @@ export default async function DashboardPage({
   // ── Regular tickets for those matches ───────────────────────────
   let periodTickets: any[] = [];
   if (matchIdsInPeriod.length > 0) {
-    const { data } = await adminClient
-      .from("tickets")
-      .select("price, status, bloc_printed, counts_as_revenue, match_id")
-      .in("match_id", matchIdsInPeriod);
-    periodTickets = data || [];
+    periodTickets = await fetchAll<any>((from, to) =>
+      adminClient
+        .from("tickets")
+        .select("price, status, bloc_printed, counts_as_revenue, match_id")
+        .in("match_id", matchIdsInPeriod)
+        .range(from, to)
+    );
   }
 
   // ── Billeterie tickets covering matches in period ────────────────
@@ -109,25 +112,31 @@ export default async function DashboardPage({
     bilsInPeriod.forEach((b: any) => { bilPriceMap[b.id] = b.price || 0; });
 
     if (bilIds.length > 0) {
-      const { data: bilTickets } = await adminClient
-        .from("billeterie_tickets")
-        .select("id, billeterie_id")
-        .in("billeterie_id", bilIds)
-        .neq("status", "annule")
-        .eq("withdrawn", false);
+      const bilTickets = await fetchAll<any>((from, to) =>
+        adminClient
+          .from("billeterie_tickets")
+          .select("id, billeterie_id")
+          .in("billeterie_id", bilIds)
+          .neq("status", "annule")
+          .eq("withdrawn", false)
+          .range(from, to)
+      );
 
-      bilPrinted = (bilTickets || []).length;
+      bilPrinted = bilTickets.length;
 
       // Build ticket_id → billeterie_id map for scan-based revenue
       const bilTicketIdMap: Record<string, string> = {};
-      (bilTickets || []).forEach((t: any) => { bilTicketIdMap[t.id] = t.billeterie_id; });
+      bilTickets.forEach((t: any) => { bilTicketIdMap[t.id] = t.billeterie_id; });
 
-      const { data: scanData } = await adminClient
-        .from("billeterie_scans")
-        .select("ticket_id")
-        .in("match_id", matchIdsInPeriod);
-      bilScanned = (scanData || []).length;
-      bilRevenue = (scanData || []).reduce((s: number, scan: any) => {
+      const scanData = await fetchAll<any>((from, to) =>
+        adminClient
+          .from("billeterie_scans")
+          .select("ticket_id")
+          .in("match_id", matchIdsInPeriod)
+          .range(from, to)
+      );
+      bilScanned = scanData.length;
+      bilRevenue = scanData.reduce((s: number, scan: any) => {
         const bilId = bilTicketIdMap[scan.ticket_id];
         return s + (bilId ? (bilPriceMap[bilId] || 0) : 0);
       }, 0);
