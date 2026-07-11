@@ -7,6 +7,7 @@ import { readFileSync } from "fs";
 import { join } from "path";
 import { getPrintStyles } from "@/lib/ticket-print-template";
 import type { PrintFormat } from "@/lib/ticket-print-template";
+import { fmtZone } from "@/lib/format";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -18,7 +19,7 @@ function renderBilleterieTicket(
   ticket: { serial_number: string; qr_token: string; created_at: string },
   bilName: string,
   price: number,
-  matches: Array<{ home_team: string; away_team: string; match_date: string; match_type?: string | null }>,
+  matches: Array<{ home_team: string; away_team: string; match_date: string; home_team_zone?: string | null; away_team_zone?: string | null }>,
   sellerName: string,
   qrDataUrl: string,
   fmt: PrintFormat,
@@ -31,8 +32,9 @@ function renderBilleterieTicket(
   const matchLines = matches
     .map((m) => {
       const dateFmt = format(new Date(m.match_date), "dd/MM/yy · HH'h'mm", { locale: fr });
-      const type = m.match_type ? ` (${m.match_type})` : "";
-      return `${trunc(m.home_team, 14)} vs ${trunc(m.away_team, 14)}${type}<br><span style="font-style:italic">${dateFmt}</span>`;
+      const home = m.home_team_zone ? `${trunc(m.home_team, 12)} (${fmtZone(m.home_team_zone)})` : trunc(m.home_team, 14);
+      const away = m.away_team_zone ? `${trunc(m.away_team, 12)} (${fmtZone(m.away_team_zone)})` : trunc(m.away_team, 14);
+      return `${home} vs ${away}<br><span style="font-style:italic">${dateFmt}</span>`;
     })
     .join("<br>");
 
@@ -94,7 +96,7 @@ export async function GET(request: Request) {
 
   const matchIds: string[] = bil.match_ids || [];
   const { data: matches } = matchIds.length > 0
-    ? await adminClient.from("matches").select("id, home_team, away_team, match_date, match_type").in("id", matchIds).order("match_date")
+    ? await adminClient.from("matches").select("id, home_team, away_team, match_date, home_team_zone, away_team_zone").in("id", matchIds).order("match_date")
     : { data: [] as any[] };
 
   const logoBase64 = readFileSync(join(process.cwd(), "public", "logoticket.png")).toString("base64");
