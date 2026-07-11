@@ -9,7 +9,7 @@ import { notFound } from "next/navigation";
 import { formatFCFA } from "@/lib/format";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
-import { AddTicketsDialog, WithdrawBatchButton } from "./billeterie-actions-client";
+import { AddTicketsDialog, WithdrawTicketsDialog } from "./billeterie-actions-client";
 
 export const metadata = { title: "Détail Billetterie" };
 
@@ -117,39 +117,29 @@ export default async function BilleterieDetailPage({
       {/* Lots d'impression — fondateur uniquement */}
       {profile.role === "fondateur" && <Card>
         <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-2">
             <div>
-                <CardTitle className="text-base">Imprimer</CardTitle>
-                <p className="text-xs text-muted-foreground mt-0.5">{bil.totalTickets} billet{bil.totalTickets !== 1 ? "s" : ""} imprimé{bil.totalTickets !== 1 ? "s" : ""}</p>
-              </div>
-            <AddTicketsDialog billeterieId={bil.id} />
+              <CardTitle className="text-base">Imprimer</CardTitle>
+              <p className="text-xs text-muted-foreground mt-0.5">{bil.totalTickets} billet{bil.totalTickets !== 1 ? "s" : ""} imprimé{bil.totalTickets !== 1 ? "s" : ""}</p>
+            </div>
+            <div className="flex gap-2">
+              <WithdrawTicketsDialog billeterieId={bil.id} totalActive={bil.totalTickets} />
+              <AddTicketsDialog billeterieId={bil.id} />
+            </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-2">
           {bil.batches.length === 0 ? (
             <p className="text-sm text-muted-foreground">Aucun lot généré</p>
           ) : (
-            bil.batches.map((batch: any) => {
-              const activeCount = batch.count - batch.withdrawnCount;
-              return (
-                <div key={batch.batchId} className="flex items-center justify-between gap-2 rounded-lg border border-border p-3">
-                  <div>
-                    <p className="text-sm font-semibold">
-                      {activeCount} billet{activeCount !== 1 ? "s" : ""}
-                      {batch.withdrawnCount > 0 && (
-                        <span className="ml-2 text-xs text-red-500 font-normal">({batch.withdrawnCount} retiré{batch.withdrawnCount !== 1 ? "s" : ""})</span>
-                      )}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {format(new Date(batch.createdAt), "d MMM yyyy HH:mm", { locale: fr })}
-                    </p>
-                  </div>
-                  {activeCount > 0 && (
-                    <WithdrawBatchButton batchId={batch.batchId} activeCount={activeCount} />
-                  )}
-                </div>
-              );
-            })
+            bil.batches.map((batch: any) => (
+              <div key={batch.batchId} className="rounded-lg border border-border p-3">
+                <p className="text-sm font-semibold">{batch.count} billet{batch.count !== 1 ? "s" : ""}</p>
+                <p className="text-xs text-muted-foreground">
+                  {format(new Date(batch.createdAt), "d MMM yyyy HH:mm", { locale: fr })}
+                </p>
+              </div>
+            ))
           )}
         </CardContent>
       </Card>}

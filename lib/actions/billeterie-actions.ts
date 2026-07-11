@@ -311,27 +311,32 @@ export async function getBilleterieDetails(id: string): Promise<{
   };
 }
 
-// ── Retrait de billets d'un lot (fondateur uniquement) ────────────────────────
-export async function withdrawBilleterieBatch(batchId: string): Promise<{ error?: string; count?: number }> {
+// ── Retrait de billets (fondateur uniquement) ─────────────────────────────────
+export async function withdrawBilleterieTickets(
+  billeterieId: string,
+  count: number
+): Promise<{ error?: string; count?: number }> {
   await requireRole(["fondateur"]);
   const adminClient = await createAdminClient();
 
   const { data: tickets } = await adminClient
     .from("billeterie_tickets")
     .select("id")
-    .eq("sale_batch_id", batchId)
-    .eq("withdrawn", false);
+    .eq("billeterie_id", billeterieId)
+    .eq("withdrawn", false)
+    .limit(count);
 
-  if (!tickets || tickets.length === 0) return { error: "Tous les billets de ce lot sont déjà retirés" };
+  if (!tickets || tickets.length === 0) return { error: "Aucun billet disponible à retirer" };
 
+  const ids = tickets.map((t: any) => t.id);
   const { error } = await adminClient
     .from("billeterie_tickets")
     .update({ withdrawn: true })
-    .eq("sale_batch_id", batchId);
+    .in("id", ids);
 
   if (error) return { error: error.message };
   revalidatePath("/fondateur/billeterie", "page");
-  return { count: tickets.length };
+  return { count: ids.length };
 }
 
 // ── Validation billet billetterie (scanner portier) ───────────────────────────

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { addTicketsToBilleterie, withdrawBilleterieBatch } from "@/lib/actions/billeterie-actions";
+import { addTicketsToBilleterie, withdrawBilleterieTickets } from "@/lib/actions/billeterie-actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,30 +29,63 @@ export function PrintBatchButton({ batchId, count, fmt = "80" }: { batchId: stri
   );
 }
 
-export function WithdrawBatchButton({ batchId, activeCount }: { batchId: string; activeCount: number }) {
+export function WithdrawTicketsDialog({ billeterieId, totalActive }: { billeterieId: string; totalActive: number }) {
   const router = useRouter();
+  const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [quantity, setQuantity] = useState("1");
 
-  async function handleWithdraw() {
-    if (!confirm(`Retirer ${activeCount} billet(s) de ce lot ? Ils ne seront plus comptabilisés dans les statistiques, mais les QR codes restent valides.`)) return;
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const qty = parseInt(quantity);
+    if (isNaN(qty) || qty < 1) { toast.error("Quantité invalide"); return; }
+    if (qty > totalActive) { toast.error(`Impossible de retirer plus que le total (${totalActive})`); return; }
+
     setLoading(true);
-    const result = await withdrawBilleterieBatch(batchId);
+    const result = await withdrawBilleterieTickets(billeterieId, qty);
     setLoading(false);
+
     if (result.error) { toast.error(result.error); return; }
     toast.success(`${result.count} billet(s) retiré(s)`);
+    setOpen(false);
+    setQuantity("1");
     router.refresh();
   }
 
   return (
-    <Button
-      variant="destructive"
-      size="sm"
-      onClick={handleWithdraw}
-      disabled={loading || activeCount === 0}
-    >
-      {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Minus className="h-4 w-4 mr-1.5" />}
-      {loading ? "" : "Retirer des Billets"}
-    </Button>
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger render={<Button variant="destructive" size="sm" />}>
+        <Minus className="h-4 w-4 mr-2" />
+        Retirer des Billets
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Retirer des billets</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="withdraw-qty">Nombre de billets à retirer</Label>
+            <Input
+              id="withdraw-qty"
+              type="number"
+              min="1"
+              max={totalActive}
+              value={quantity}
+              onChange={(e) => setQuantity(e.target.value)}
+              required
+            />
+            <p className="text-xs text-muted-foreground">{totalActive} billet(s) disponible(s)</p>
+          </div>
+          <p className="text-xs text-orange-600 bg-orange-50 border border-orange-200 rounded p-2">
+            Les billets retirés ne seront plus comptabilisés dans les statistiques. Les QR codes restent valides.
+          </p>
+          <Button type="submit" variant="destructive" className="w-full" disabled={loading}>
+            {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+            {loading ? "Retrait en cours…" : `Retirer ${quantity} billet(s)`}
+          </Button>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
