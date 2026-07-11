@@ -72,8 +72,10 @@ export function SidebarAdmin({ userName, userRole, zoneName, permittedModules }:
   const baseLinks =
     userRole === "c3"
       ? c3Links
-      : userRole === "super_admin" || userRole === "president_odcav" || userRole === "fondateur" || userRole === "tresorier"
+      : userRole === "fondateur"
       ? [...adminLinks, ...superAdminLinks]
+      : userRole === "super_admin" || userRole === "president_odcav" || userRole === "tresorier"
+      ? [...adminLinks, ...superAdminLinks.filter((l) => l.href !== "/billeterie")]
       : adminLinks;
 
   // Filter by permitted_modules when set (null = all modules visible)

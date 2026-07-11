@@ -11,6 +11,8 @@ import { formatDateShort } from "@/lib/format";
 import { PrintBlocsButton } from "@/app/(admin)/matchs/print-blocs-button";
 import { MatchActionButtons } from "@/app/(admin)/matchs/match-action-buttons";
 import { MatchTabBar } from "@/app/(admin)/matchs/match-tab-bar";
+import { OdcavSessionButton } from "@/app/(admin)/matchs/odcav-session-button";
+import { getOdcavScanSession } from "@/lib/actions/billeterie-session-actions";
 
 export const metadata = { title: "Matchs Départementals" };
 
@@ -18,7 +20,10 @@ export const metadata = { title: "Matchs Départementals" };
 
 export default async function MatchsDepartementauxPage() {
   const profile = await requireRole(["super_admin", "fondateur"]);
-  const matches = await getOdcavInterMatches("Match Départemental");
+  const [matches, odcavOpenUntil] = await Promise.all([
+    getOdcavInterMatches("Match Départemental"),
+    getOdcavScanSession(),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -28,12 +33,15 @@ export default async function MatchsDepartementauxPage() {
           <h1 className="text-2xl font-bold font-heading">Matchs Départementals</h1>
           <p className="text-muted-foreground">{matches.length} match(s)</p>
         </div>
-        <Link href="/matchs/departementaux/nouveau">
-          <Button className="bg-brand hover:bg-brand/90">
-            <Plus className="h-4 w-4 mr-2" />
-            Nouveau match départemental
-          </Button>
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <OdcavSessionButton openUntil={odcavOpenUntil} />
+          <Link href="/matchs/departementaux/nouveau">
+            <Button className="bg-brand hover:bg-brand/90">
+              <Plus className="h-4 w-4 mr-2" />
+              Nouveau match départemental
+            </Button>
+          </Link>
+        </div>
       </div>
 
       <Card>

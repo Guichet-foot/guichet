@@ -25,3 +25,38 @@ export async function closeBilleterieSession(zoneId: string) {
   if (error) return { error: error.message };
   return { success: true };
 }
+
+// ── ODCAV inter-match sessions (communaux/départementaux) ─────────────────────
+
+export async function openOdcavScanSession() {
+  await requireRole(["super_admin", "fondateur", "president_odcav"]);
+  const adminClient = await createAdminClient();
+  const openUntil = new Date(Date.now() + 10 * 60 * 60 * 1000).toISOString();
+  const { error } = await adminClient
+    .from("scan_sessions")
+    .upsert({ scope: "odcav", open_until: openUntil, updated_at: new Date().toISOString() });
+  if (error) return { error: error.message };
+  return { success: true, openUntil };
+}
+
+export async function closeOdcavScanSession() {
+  await requireRole(["super_admin", "fondateur", "president_odcav"]);
+  const adminClient = await createAdminClient();
+  const { error } = await adminClient
+    .from("scan_sessions")
+    .upsert({ scope: "odcav", open_until: null, updated_at: new Date().toISOString() });
+  if (error) return { error: error.message };
+  return { success: true };
+}
+
+export async function getOdcavScanSession(): Promise<string | null> {
+  const adminClient = await createAdminClient();
+  const { data } = await adminClient
+    .from("scan_sessions")
+    .select("open_until")
+    .eq("scope", "odcav")
+    .maybeSingle();
+  const openUntil = data?.open_until || null;
+  if (!openUntil || new Date(openUntil) <= new Date()) return null;
+  return openUntil;
+}
