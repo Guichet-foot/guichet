@@ -1,5 +1,5 @@
 import { requireRole } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { getEffectiveZone } from "@/lib/get-effective-zone";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Card, CardContent } from "@/components/ui/card";
 import { Plus, Trophy, Eye, Pencil } from "lucide-react";
 import { MATCH_STATUS_LABELS, MATCH_STATUS_COLORS } from "@/lib/constants";
-import { formatDateShort, formatFCFA } from "@/lib/format";
+import { formatDateShort } from "@/lib/format";
 import { buildZoneUrl } from "@/lib/zone-utils";
 import { MatchActionButtons } from "./match-action-buttons";
 import { MatchMobileActions } from "./match-mobile-actions";
@@ -58,11 +58,12 @@ export default async function MatchsPage({
   let ticketStats: Record<string, { count: number; revenue: number }> = {};
 
   if (matchIds.length > 0) {
-    const { data: tickets } = await supabase
+    const adminClient = await createAdminClient();
+    const { data: tickets } = await adminClient
       .from("tickets")
       .select("match_id, price")
       .in("match_id", matchIds)
-      .eq("counts_as_revenue", true);
+      .or("bloc_printed.eq.true,counts_as_revenue.eq.true");
 
     if (tickets) {
       ticketStats = tickets.reduce(
@@ -110,7 +111,6 @@ export default async function MatchsPage({
                   <TableHead className="hidden sm:table-cell">Statut</TableHead>
                   <TableHead className="text-center">Score</TableHead>
                   <TableHead className="hidden lg:table-cell text-right">Billets</TableHead>
-                  <TableHead className="hidden lg:table-cell text-right">Recettes</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -145,7 +145,6 @@ export default async function MatchsPage({
                           )}
                         </div>
                       </TableCell>
-                      <TableCell className="hidden lg:table-cell text-right">{formatFCFA(stats.revenue)}</TableCell>
                       <TableCell className="text-right">
                         <div className="hidden sm:flex items-center gap-1 justify-end">
                           {(profile.role === "super_admin" || profile.role === "fondateur" || profile.role === "president_odcav") &&

@@ -100,20 +100,17 @@ export default function NewUserPage() {
       // Zone-based creation (from ?zone=xxx or zone card): no C3, no super_admin
       return [
         { value: "admin_zone", label: "Admin Zone" },
-        { value: "caissier",   label: "Caissier" },
         { value: "portier",    label: "Portier" },
       ];
     }
     if (currentUserRole === "admin_zone" && currentUserIsPresident) {
       return [
         { value: "admin_zone", label: "Admin Zone" },
-        { value: "caissier",   label: "Caissier" },
         { value: "portier",    label: "Portier" },
       ];
     }
     return [
-      { value: "caissier", label: "Caissier" },
-      { value: "portier",  label: "Portier" },
+      { value: "portier", label: "Portier" },
     ];
   })();
 

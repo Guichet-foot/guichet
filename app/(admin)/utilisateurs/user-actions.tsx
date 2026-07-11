@@ -86,12 +86,12 @@ export function UserActions({
   // Roles available in the edit dialog
   const editableRoles = (() => {
     if (currentUserRole === "super_admin") {
-      return ["caissier", "portier", "admin_zone", "super_admin"];
+      return ["portier", "admin_zone", "super_admin"];
     }
     if (currentUserRole === "admin_zone" && currentUserIsPresident) {
-      return ["caissier", "portier", "admin_zone"];
+      return ["portier", "admin_zone"];
     }
-    return ["caissier", "portier"];
+    return ["portier"];
   })();
 
   async function handleUpdateInfo() {
