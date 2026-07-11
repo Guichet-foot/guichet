@@ -18,7 +18,7 @@ const links = [
   { href: "/fondateur/matchs", label: "Matchs", icon: Trophy },
   { href: "/fondateur/cartes", label: "Cartes d'accès", icon: IdCard },
   { href: "/fondateur/equipes", label: "Équipes", icon: Shield },
-  { href: "/billeterie", label: "Billetterie", icon: TicketCheck },
+  { href: "/fondateur/billeterie", label: "Billetterie", icon: TicketCheck },
   { href: "/fondateur/parametres", label: "Paramètres", icon: Settings2 },
 ];
 

@@ -1,0 +1,145 @@
+import { requireRole } from "@/lib/auth";
+import { getBilleterieDetails } from "@/lib/actions/billeterie-actions";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { ArrowLeft, Trophy, Ticket, ScanLine } from "lucide-react";
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { formatFCFA } from "@/lib/format";
+import { format } from "date-fns";
+import { fr } from "date-fns/locale";
+import { PrintBatchButton, AddTicketsDialog } from "@/app/(admin)/billeterie/[id]/billeterie-actions-client";
+
+export const metadata = { title: "Détail Billetterie — Fondateur" };
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
+function matchStatus(status: string) {
+  if (status === "en_cours") return <Badge className="bg-green-600 text-white text-xs">En cours</Badge>;
+  if (status === "termine") return <Badge variant="secondary" className="text-xs">Terminé</Badge>;
+  return <Badge variant="outline" className="text-xs">Programmé</Badge>;
+}
+
+export default async function FondateurBilleterieDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  await requireRole(["fondateur"]);
+  const { id } = await params;
+  const bil = await getBilleterieDetails(id);
+  if (!bil) notFound();
+
+  return (
+    <div className="space-y-6 max-w-2xl mx-auto">
+      <div className="flex items-center gap-4">
+        <Link href="/fondateur/billeterie">
+          <Button variant="ghost" size="sm">
+            <ArrowLeft className="h-4 w-4 mr-1" />
+            Retour
+          </Button>
+        </Link>
+        <div>
+          <h1 className="text-2xl font-bold font-heading">{bil.name}</h1>
+          <p className="text-sm text-muted-foreground">
+            Créé le {format(new Date(bil.createdAt), "d MMMM yyyy", { locale: fr })}
+          </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-4">
+        <Card>
+          <CardContent className="pt-4 pb-4">
+            <div className="flex items-center gap-2">
+              <Ticket className="h-5 w-5 text-brand" />
+              <div>
+                <p className="text-2xl font-bold">{bil.totalTickets}</p>
+                <p className="text-xs text-muted-foreground">Billets</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4 pb-4">
+            <div className="flex items-center gap-2">
+              <ScanLine className="h-5 w-5 text-green-600" />
+              <div>
+                <p className="text-2xl font-bold">{bil.totalScans}</p>
+                <p className="text-xs text-muted-foreground">Scans</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4 pb-4">
+            <div>
+              <p className="text-2xl font-bold text-brand">{formatFCFA(bil.price)}</p>
+              <p className="text-xs text-muted-foreground">Prix / billet</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Trophy className="h-4 w-4 text-brand" />
+            Matchs inclus ({bil.matches.length})
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {bil.matches.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Aucun match</p>
+          ) : (
+            bil.matches.map((m: any) => (
+              <div key={m.id} className="flex items-center justify-between gap-2 rounded-lg border border-border p-3">
+                <div>
+                  <p className="text-sm font-semibold">
+                    {m.home_team_zone ? `${m.home_team} (${m.home_team_zone})` : m.home_team}
+                    {" vs "}
+                    {m.away_team_zone ? `${m.away_team} (${m.away_team_zone})` : m.away_team}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {format(new Date(m.match_date), "EEE d MMM yyyy · HH'h'mm", { locale: fr })}
+                    {m.match_type && ` · ${m.match_type}`}
+                  </p>
+                </div>
+                {matchStatus(m.status)}
+              </div>
+            ))
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base">Lots de billets</CardTitle>
+            <AddTicketsDialog billeterieId={bil.id} />
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {bil.batches.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Aucun lot généré</p>
+          ) : (
+            bil.batches.map((batch: any) => (
+              <div key={batch.batchId} className="flex items-center justify-between gap-2 rounded-lg border border-border p-3">
+                <div>
+                  <p className="text-sm font-semibold">{batch.count} billet{batch.count !== 1 ? "s" : ""}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {format(new Date(batch.createdAt), "d MMM yyyy HH:mm", { locale: fr })}
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <PrintBatchButton batchId={batch.batchId} count={batch.count} fmt="80" />
+                  <PrintBatchButton batchId={batch.batchId} count={batch.count} fmt="58" />
+                </div>
+              </div>
+            ))
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
