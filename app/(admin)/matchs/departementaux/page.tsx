@@ -17,7 +17,7 @@ export const metadata = { title: "Matchs Départementals" };
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 export default async function MatchsDepartementauxPage() {
-  await requireRole(["super_admin", "fondateur"]);
+  const profile = await requireRole(["super_admin", "fondateur"]);
   const matches = await getOdcavInterMatches("Match Départemental");
 
   return (
@@ -79,7 +79,7 @@ export default async function MatchsDepartementauxPage() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center gap-1 justify-end">
-                          {match.status !== "termine" && match.status !== "annule" && (
+                          {profile.role === "fondateur" && match.status !== "termine" && match.status !== "annule" && (
                             <PrintBlocsButton
                               matchId={match.id}
                               matchName={`${match.home_team} vs ${match.away_team}`}

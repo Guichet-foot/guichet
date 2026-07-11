@@ -131,7 +131,7 @@ export default async function MatchsPage({
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="hidden sm:flex items-center gap-1 justify-end">
-                        {(profile.role === "super_admin" || profile.role === "fondateur" || profile.role === "president_odcav") &&
+                        {profile.role === "fondateur" &&
                           match.status !== "termine" && match.status !== "annule" && (
                             <PrintBlocsButton
                               matchId={match.id}

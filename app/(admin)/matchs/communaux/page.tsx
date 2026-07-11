@@ -17,7 +17,7 @@ export const metadata = { title: "Matchs Communal" };
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 export default async function MatchsCommunauxPage() {
-  await requireRole(["super_admin", "fondateur"]);
+  const profile = await requireRole(["super_admin", "fondateur"]);
   const matches = await getOdcavInterMatches("Match Communal");
 
   return (
@@ -79,7 +79,7 @@ export default async function MatchsCommunauxPage() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center gap-1 justify-end">
-                          {match.status !== "termine" && match.status !== "annule" && (
+                          {profile.role === "fondateur" && match.status !== "termine" && match.status !== "annule" && (
                             <PrintBlocsButton
                               matchId={match.id}
                               matchName={`${match.home_team} vs ${match.away_team}`}

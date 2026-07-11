@@ -26,7 +26,7 @@ export default async function BilleterieDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireRole(["super_admin", "fondateur"]);
+  const profile = await requireRole(["super_admin", "fondateur"]);
   const { id } = await params;
   const bil = await getBilleterieDetails(id);
   if (!bil) notFound();
@@ -114,8 +114,8 @@ export default async function BilleterieDetailPage({
         </CardContent>
       </Card>
 
-      {/* Lots d'impression */}
-      <Card>
+      {/* Lots d'impression — fondateur uniquement */}
+      {profile.role === "fondateur" && <Card>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <div>
@@ -145,7 +145,7 @@ export default async function BilleterieDetailPage({
             ))
           )}
         </CardContent>
-      </Card>
+      </Card>}
     </div>
   );
 }
