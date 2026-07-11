@@ -163,7 +163,7 @@ export async function updateSession(request: NextRequest) {
 
   const adminRoutes = [
     "/dashboard", "/equipes", "/utilisateurs",
-    "/zones", "/billets", "/matchs", "/finances", "/rapports", "/parametres",
+    "/zones", "/matchs", "/finances", "/rapports", "/parametres",
     "/invendus", "/cartes", "/parametres-odcav", "/parametres-c3", "/billeterie",
   ];
 
@@ -173,7 +173,7 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(new URL("/fondateur/dashboard", request.url));
   }
 
-  // Fondateur may access their own routes (/fondateur/*) OR other admin routes (/matchs, /billets, etc.)
+  // Fondateur may access their own routes (/fondateur/*) OR other admin routes (/matchs, etc.)
   // but NOT /dashboard (handled above)
   const fondateurAllowedAdminRoutes = adminRoutes.filter((r) => r !== "/dashboard");
   const isAdminRouteForFondateur = fondateurAllowedAdminRoutes.some((r) => pathname.startsWith(r));

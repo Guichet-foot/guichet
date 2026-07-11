@@ -16,7 +16,6 @@ import {
   X,
   Shield,
   Settings,
-  Ticket,
   User,
   Building2,
   ContactRound,
@@ -38,7 +37,6 @@ interface SidebarProps {
 const adminLinks = [
   { href: "/dashboard", label: "Tableau de bord", icon: LayoutDashboard },
   { href: "/equipes", label: "Équipes", icon: Shield },
-  { href: "/billets", label: "Billets", icon: Ticket },
   { href: "/matchs", label: "Matchs", icon: Trophy },
   { href: "/finances", label: "Finances", icon: Wallet },
   { href: "/invendus", label: "Invendus", icon: PackageX },
@@ -58,7 +56,6 @@ const superAdminLinks = [
 const c3Links = [
   { href: "/dashboard",      label: "Tableau de bord",  icon: LayoutDashboard },
   { href: "/equipes",        label: "Équipes",           icon: Shield },
-  { href: "/billets",        label: "Catégories billets",icon: Ticket },
   { href: "/matchs",         label: "Matchs",            icon: Trophy },
   { href: "/finances",       label: "Finances",          icon: Wallet },
   { href: "/invendus",       label: "Invendus",          icon: PackageX },

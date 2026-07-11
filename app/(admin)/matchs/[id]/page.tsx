@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { ArrowLeft, Pencil, Settings, Ticket } from "lucide-react";
+import { ArrowLeft, Pencil } from "lucide-react";
 import {
   MATCH_STATUS_LABELS,
   MATCH_STATUS_COLORS,
@@ -34,24 +34,16 @@ export default async function MatchDetailPage({
 
   if (!match) notFound();
 
-  const { data: categories } = await adminClient
-    .from("ticket_categories")
-    .select("*")
-    .eq("match_id", id)
-    .order("display_order");
-
   const { data: tickets } = await adminClient
     .from("tickets")
-    .select("category_id, price, status, counts_as_revenue")
+    .select("price, counts_as_revenue")
     .eq("match_id", id)
     .neq("status", "annule");
 
-  const catStats: Record<string, number> = {};
   let totalRevenue = 0;
   let totalSold = 0;
 
   tickets?.forEach((t) => {
-    catStats[t.category_id] = (catStats[t.category_id] || 0) + 1;
     if (t.counts_as_revenue) {
       totalRevenue += t.price;
       totalSold++;
@@ -60,8 +52,6 @@ export default async function MatchDetailPage({
 
   const backUrl = zone ? `/matchs?zone=${zone}` : "/matchs";
   const editUrl = zone ? `/matchs/${id}/modifier?zone=${zone}` : `/matchs/${id}/modifier`;
-  const billetsUrl = zone ? `/matchs/${id}/billets?zone=${zone}` : `/matchs/${id}/billets`;
-
   const canEdit = profile.role !== "fondateur";
 
   return (
@@ -125,62 +115,7 @@ export default async function MatchDetailPage({
             </p>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-sm text-muted-foreground">Catégories</p>
-            <p className="text-2xl font-bold">{categories?.length || 0}</p>
-          </CardContent>
-        </Card>
       </div>
-
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold font-heading">Catégories de billets</h2>
-        {canEdit && (
-          <Link href={billetsUrl}>
-            <Button variant="outline" size="sm">
-              <Settings className="h-4 w-4 mr-2" />
-              Configurer
-            </Button>
-          </Link>
-        )}
-      </div>
-
-      {categories && categories.length > 0 ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {categories.map((cat) => {
-            const sold = catStats[cat.id] || 0;
-            return (
-              <Card key={cat.id}>
-                <CardContent className="pt-6">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-semibold">{cat.name}</span>
-                    <span className="font-bold text-brand">
-                      {formatFCFA(cat.price)}
-                    </span>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    {sold} vendus
-                  </p>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      ) : (
-        <Card>
-          <CardContent className="py-8 text-center text-muted-foreground">
-            <Ticket className="h-8 w-8 mx-auto mb-2" />
-            <p>Aucune catégorie de billets configurée</p>
-            {canEdit && (
-              <Link href={billetsUrl}>
-                <Button variant="outline" size="sm" className="mt-4">
-                  Configurer les billets
-                </Button>
-              </Link>
-            )}
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 }

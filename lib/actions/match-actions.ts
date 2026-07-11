@@ -94,21 +94,6 @@ export async function getTeamsForZone(zoneId: string): Promise<{ id: string; nam
   return (data || []) as { id: string; name: string }[];
 }
 
-/**
- * Templates de billets d'une zone — bypass RLS via adminClient.
- */
-export async function getTicketTemplatesForZone(zoneId: string): Promise<{
-  id: string; name: string; price: number; default_quantity: number; color: string;
-}[]> {
-  const adminClient = await createAdminClient();
-  const { data } = await adminClient
-    .from("ticket_templates")
-    .select("id, name, price, default_quantity, color")
-    .eq("zone_id", zoneId)
-    .order("price");
-  return (data || []) as { id: string; name: string; price: number; default_quantity: number; color: string }[];
-}
-
 export async function createMatch(formData: {
   zoneId?: string | null;
   c3AccountId?: string | null;
@@ -168,68 +153,6 @@ export async function updateMatchStatus(
 
   revalidatePath("/matchs");
   revalidatePath(`/matchs/${matchId}`);
-  return { success: true };
-}
-
-export async function upsertTicketCategory(formData: {
-  id?: string;
-  matchId: string;
-  name: string;
-  price: number;
-  displayOrder: number;
-}) {
-  const supabase = await createClient();
-
-  if (formData.id) {
-    const { error } = await supabase
-      .from("ticket_categories")
-      .update({
-        name: formData.name,
-        price: formData.price,
-        quantity_total: 999999,
-        display_order: formData.displayOrder,
-      })
-      .eq("id", formData.id);
-
-    if (error) return { error: error.message };
-  } else {
-    const { error } = await supabase.from("ticket_categories").insert({
-      match_id: formData.matchId,
-      name: formData.name,
-      price: formData.price,
-      quantity_total: 999999,
-      display_order: formData.displayOrder,
-      active: true,
-    });
-
-    if (error) return { error: error.message };
-  }
-
-  revalidatePath(`/matchs/${formData.matchId}/billets`);
-  revalidatePath(`/matchs/${formData.matchId}`);
-  return { success: true };
-}
-
-export async function deleteTicketCategory(categoryId: string, matchId: string) {
-  const supabase = await createClient();
-
-  const { count } = await supabase
-    .from("tickets")
-    .select("*", { count: "exact", head: true })
-    .eq("category_id", categoryId);
-
-  if (count && count > 0) {
-    return { error: "Impossible de supprimer : des billets ont été vendus" };
-  }
-
-  const { error } = await supabase
-    .from("ticket_categories")
-    .delete()
-    .eq("id", categoryId);
-
-  if (error) return { error: error.message };
-
-  revalidatePath(`/matchs/${matchId}/billets`);
   return { success: true };
 }
 
