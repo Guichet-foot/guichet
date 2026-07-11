@@ -232,7 +232,8 @@ export async function getBilleterieList(): Promise<BilleterieItem[]> {
   const { data: ticketRows } = await adminClient
     .from("billeterie_tickets")
     .select("billeterie_id")
-    .in("billeterie_id", billIds);
+    .in("billeterie_id", billIds)
+    .limit(1000000);
 
   const ticketMap: Record<string, number> = {};
   (ticketRows || []).forEach((t: any) => {
@@ -277,7 +278,7 @@ export async function getBilleterieDetails(id: string): Promise<{
     matchIds.length > 0
       ? adminClient.from("matches").select("id, home_team, away_team, venue, match_date, match_type, status, home_team_zone, away_team_zone").in("id", matchIds)
       : Promise.resolve({ data: [] as any[] }),
-    adminClient.from("billeterie_tickets").select("id, sale_batch_id, created_at, withdrawn").eq("billeterie_id", id).order("created_at"),
+    adminClient.from("billeterie_tickets").select("id, sale_batch_id, created_at, withdrawn").eq("billeterie_id", id).order("created_at").limit(100000),
   ]);
 
   // Batch grouping with withdrawn count

@@ -80,7 +80,8 @@ export async function GET(request: Request) {
     .from("billeterie_tickets")
     .select("id, qr_token, serial_number, created_at, billeterie_id, sold_by, seller:profiles!billeterie_tickets_sold_by_fkey(full_name)")
     .eq("sale_batch_id", batchId)
-    .order("serial_number");
+    .order("serial_number")
+    .limit(100000);
 
   if (!tickets || tickets.length === 0) return new NextResponse("Aucun billet trouvé", { status: 404 });
 
