@@ -270,14 +270,38 @@ export async function deleteMatch(matchId: string): Promise<{ error?: string }> 
 
   const adminClient = await createAdminClient();
 
-  const { count } = await adminClient
-    .from("tickets")
-    .select("*", { count: "exact", head: true })
-    .eq("match_id", matchId);
+  // Check match status — only terminated/cancelled matches can be deleted with tickets
+  const { data: match } = await adminClient
+    .from("matches")
+    .select("status")
+    .eq("id", matchId)
+    .single();
 
-  if (count && count > 0) {
-    return { error: `Impossible de supprimer : ${count} billet(s) ont été émis pour ce match` };
+  if (!match) return { error: "Match introuvable" };
+
+  const isFinished = match.status === "termine" || match.status === "annule";
+
+  if (!isFinished) {
+    // Block deletion of active/scheduled matches that have tickets
+    const { count } = await adminClient
+      .from("tickets")
+      .select("*", { count: "exact", head: true })
+      .eq("match_id", matchId);
+
+    if (count && count > 0) {
+      return { error: `Impossible de supprimer : ${count} billet(s) ont été émis pour ce match` };
+    }
   }
+
+  // Delete in the correct order to avoid FK constraint errors:
+  // 1. tickets (reference ticket_categories via category_id)
+  // 2. ticket_categories (reference matches via match_id)
+  // 3. match
+  const { error: tickErr } = await adminClient.from("tickets").delete().eq("match_id", matchId);
+  if (tickErr) return { error: tickErr.message };
+
+  const { error: catErr } = await adminClient.from("ticket_categories").delete().eq("match_id", matchId);
+  if (catErr) return { error: catErr.message };
 
   const { error } = await adminClient.from("matches").delete().eq("id", matchId);
   if (error) return { error: error.message };
