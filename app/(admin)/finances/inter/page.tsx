@@ -1,50 +1,36 @@
 import { requireRole } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/server";
-import { getEffectiveZone } from "@/lib/get-effective-zone";
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Banknote, TrendingDown, TrendingUp, Landmark, PackageX, Layers, ScanLine, ReceiptText } from "lucide-react";
+import { Banknote, TrendingDown, TrendingUp, Landmark, PackageX, Layers, ScanLine, ReceiptText } from "lucide-react";
 import { formatFCFA, formatDate } from "@/lib/format";
-import { EXPENSE_CATEGORY_LABELS } from "@/lib/constants";
-import { buildZoneUrl } from "@/lib/zone-utils";
-import { ZoneCardGrid } from "@/components/zone-card-grid";
-import { ZoneBackHeader } from "@/components/zone-back-header";
-import { FinancesFilters } from "./finances-filters";
-import { PrintButton } from "@/components/print-button";
-import { FinancesOdcavTabs } from "./finances-odcav-tabs";
+import { FinancesOdcavTabs } from "@/app/(admin)/finances/finances-odcav-tabs";
+import { InterFilters } from "./inter-filters";
 
-export const metadata = { title: "Finances" };
+export const metadata = { title: "Finances Inter-Zones" };
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 type Period = "24h" | "jour" | "mois" | "custom";
 
-export default async function FinancesPage({
+export default async function FinancesInterPage({
   searchParams,
 }: {
-  searchParams: Promise<{ zone?: string; period?: string; date?: string; from?: string; to?: string; match?: string }>;
+  searchParams: Promise<{ type?: string; period?: string; date?: string; from?: string; to?: string; match?: string }>;
 }) {
-  const profile = await requireRole(["super_admin", "admin_zone", "c3", "fondateur", "president_odcav", "tresorier"]);
+  await requireRole(["super_admin", "fondateur", "president_odcav", "tresorier"]);
   const params = await searchParams;
-  const { effectiveZoneId, selectedZone, ownedZones, needsZoneSelection, c3AccountId } =
-    await getEffectiveZone(profile, params.zone);
 
-  if (needsZoneSelection) {
-    return <ZoneCardGrid zones={ownedZones} title="Finances" />;
-  }
+  const typeParam = params.type === "departemental" ? "departemental" : "communal";
+  const matchType = typeParam === "departemental" ? "Match Départemental" : "Match Communal";
+  const tabLabel = typeParam === "departemental" ? "Départemental" : "Communal";
 
-  const supabase = await createClient();
   const adminSupabase = await createAdminClient();
-  const zoneId = effectiveZoneId;
 
   const today = new Date().toISOString().split("T")[0];
   const period = (params.period as Period) || "24h";
   const filterMatchId = params.match || null;
 
-  // ── Date range from period params ────────────────────────────────
   let dateStart: Date;
   let dateEnd: Date;
   let periodLabel: string;
@@ -54,7 +40,6 @@ export default async function FinancesPage({
     dateEnd = new Date();
     dateStart = new Date(Date.now() - 24 * 60 * 60 * 1000);
     periodLabel = "Dernières 24h";
-    settingsDate = today;
   } else if (period === "jour") {
     const d = params.date || today;
     dateStart = new Date(d + "T00:00:00");
@@ -67,7 +52,6 @@ export default async function FinancesPage({
     periodLabel = `Du ${formatDate(params.from)} au ${formatDate(params.to)}`;
     settingsDate = params.to;
   } else {
-    // Mois en cours
     dateStart = new Date();
     dateStart.setDate(1);
     dateStart.setHours(0, 0, 0, 0);
@@ -88,10 +72,12 @@ export default async function FinancesPage({
     .single();
   const odcavRate = platformData?.odcav_rate ?? 0.05;
 
-  // ── Matches in period (zone-scoped) — source of truth for period filter ──
-  let matchesPeriodQuery = adminSupabase
+  // ── Matches in period (inter-zone scoped) ────────────────────────
+  let matchesPeriodQuery: any = adminSupabase
     .from("matches")
-    .select("id, home_team, away_team, match_date");
+    .select("id, home_team, away_team, match_date")
+    .eq("match_type", matchType)
+    .is("zone_id", null);
 
   if (filterMatchId) {
     matchesPeriodQuery = matchesPeriodQuery.eq("id", filterMatchId);
@@ -100,8 +86,6 @@ export default async function FinancesPage({
       .gte("match_date", dateStart.toISOString())
       .lte("match_date", dateEnd.toISOString());
   }
-  if (c3AccountId) matchesPeriodQuery = (matchesPeriodQuery as any).eq("c3_account_id", c3AccountId);
-  else if (zoneId) matchesPeriodQuery = matchesPeriodQuery.eq("zone_id", zoneId);
 
   const { data: matchesInPeriod } = await matchesPeriodQuery;
   const matchIdsInPeriod = (matchesInPeriod || []).map((m: any) => m.id as string);
@@ -124,7 +108,6 @@ export default async function FinancesPage({
   if (matchIdsInPeriod.length > 0) {
     const matchIdSet = new Set(matchIdsInPeriod);
 
-    // All billeteries, filter in JS those covering any match in period
     const { data: allBils } = await adminSupabase
       .from("billeterie")
       .select("id, price, match_ids");
@@ -145,7 +128,6 @@ export default async function FinancesPage({
 
       bilPrinted = (bilTickets || []).length;
 
-      // Build ticket_id → billeterie_id map for scan-based revenue
       const bilTicketIdMap: Record<string, string> = {};
       (bilTickets || []).forEach((t: any) => { bilTicketIdMap[t.id] = t.billeterie_id; });
 
@@ -161,7 +143,7 @@ export default async function FinancesPage({
     }
   }
 
-  // ── Financial metrics (regular tickets + billeterie combinés) ────
+  // ── Financial metrics ────────────────────────────────────────────
   const printedTickets = periodTickets.filter((t: any) => t.bloc_printed === true);
   const regularPrinted = printedTickets.length;
   const totalPrinted = regularPrinted + bilPrinted;
@@ -181,92 +163,53 @@ export default async function FinancesPage({
   const odcavCommission = Math.round(totalRevenue * odcavRate);
   const fraisPlateformePeriod = totalPrinted * 10;
 
-  // ── Expenses ─────────────────────────────────────────────────────
-  const expenseFrom = dateStart.toISOString().split("T")[0];
-  const expenseTo = dateEnd.toISOString().split("T")[0];
-
-  let expensesQuery = supabase
-    .from("expenses")
-    .select("*, match:matches(home_team, away_team), adder:profiles!expenses_added_by_fkey(full_name)")
-    .order("expense_date", { ascending: false });
-
-  if (filterMatchId) {
-    expensesQuery = expensesQuery.eq("match_id", filterMatchId);
-  } else {
-    expensesQuery = expensesQuery
-      .gte("expense_date", expenseFrom)
-      .lte("expense_date", expenseTo);
+  // ── Expenses for these inter-matches ────────────────────────────
+  let expenses: any[] = [];
+  let totalExpenses = 0;
+  if (matchIdsInPeriod.length > 0) {
+    const { data: expData } = await adminSupabase
+      .from("expenses")
+      .select("*, match:matches(home_team, away_team)")
+      .in("match_id", matchIdsInPeriod)
+      .order("expense_date", { ascending: false });
+    expenses = expData || [];
+    totalExpenses = expenses.reduce((s: number, e: any) => s + e.amount, 0);
   }
 
-  if (zoneId) expensesQuery = expensesQuery.eq("zone_id", zoneId);
-
-  const { data: expenses } = (await expensesQuery) as { data: any[] | null };
-  const totalExpenses = expenses?.reduce((sum: number, e: any) => sum + e.amount, 0) || 0;
   const balance = totalRevenue - totalExpenses - odcavCommission - fraisPlateformePeriod;
 
-  // ── Matches for filter dropdown ───────────────────────────────────
-  let matchesListQuery = supabase
+  // ── Match list for filter dropdown ───────────────────────────────
+  const { data: matchesList } = await adminSupabase
     .from("matches")
     .select("id, home_team, away_team")
+    .eq("match_type", matchType)
+    .is("zone_id", null)
     .order("match_date", { ascending: false });
-  if (c3AccountId) matchesListQuery = matchesListQuery.eq("c3_account_id", c3AccountId);
-  else if (zoneId) matchesListQuery = matchesListQuery.eq("zone_id", zoneId);
-  const { data: matchesList } = await matchesListQuery;
   const filterMatches = (matchesList || []).map((m: any) => ({
     id: m.id,
     label: `${m.home_team} vs ${m.away_team}`,
   }));
 
-  const isOdcavRole =
-    profile.role === "super_admin" ||
-    profile.role === "president_odcav" ||
-    profile.role === "tresorier";
-
   return (
     <div className="space-y-6 min-w-0">
-      {isOdcavRole && <FinancesOdcavTabs active="zone" />}
-      {/* Print-only header */}
-      <div className="hidden print:block border-b-2 border-gray-800 pb-4 mb-6">
-        <div className="flex items-start justify-between">
-          <div>
-            <h1 className="text-2xl font-bold">Rapport Financier — Guichet Foot</h1>
-            <p className="text-base text-gray-600 mt-1">{selectedZone?.name || profile.zone?.name || "Zone"}</p>
-            <p className="text-sm text-gray-500 mt-0.5">Période : {periodLabel}</p>
-          </div>
-          <p className="text-xs text-gray-400">Imprimé le {dateEnd.toLocaleDateString("fr-FR")}</p>
-        </div>
-      </div>
+      <FinancesOdcavTabs active={typeParam as "communal" | "departemental"} />
 
-      <div className="print:hidden">
-        {["super_admin","president_odcav","tresorier"].includes(profile.role) && selectedZone && <ZoneBackHeader zoneName={selectedZone.name} />}
-      </div>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold font-heading print:hidden">Finances</h1>
-          <p className="text-muted-foreground print:hidden">{periodLabel}</p>
-        </div>
-        <div className="flex gap-2 print:hidden">
-          <PrintButton label="PDF" />
-          <Link href={buildZoneUrl("/finances/depenses/nouveau", params.zone)}>
-            <Button className="bg-brand hover:bg-brand/90">
-              <Plus className="h-4 w-4 mr-2" />
-              Ajouter une dépense
-            </Button>
-          </Link>
+          <h1 className="text-2xl font-bold font-heading">Finances {tabLabel}</h1>
+          <p className="text-muted-foreground">{periodLabel}</p>
         </div>
       </div>
 
-      <div className="print:hidden">
-        <FinancesFilters
-          currentPeriod={period}
-          currentDate={period === "jour" ? (params.date || today) : undefined}
-          currentFrom={params.from}
-          currentTo={params.to}
-          currentMatch={filterMatchId || undefined}
-          zoneParam={params.zone}
-          matches={filterMatches}
-        />
-      </div>
+      <InterFilters
+        typeParam={typeParam}
+        currentPeriod={period}
+        currentDate={period === "jour" ? (params.date || today) : undefined}
+        currentFrom={params.from}
+        currentTo={params.to}
+        currentMatch={filterMatchId || undefined}
+        matches={filterMatches}
+      />
 
       {/* Blocs imprimés + Validés + Invendus */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -377,7 +320,7 @@ export default async function FinancesPage({
         <CardContent className="pt-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-muted-foreground">Net à reverser à la zone</p>
+              <p className="text-sm text-muted-foreground">Net à reverser à l&apos;ODCAV</p>
               <p className={`text-3xl font-bold ${balance >= 0 ? "text-success" : "text-danger"}`}>
                 {formatFCFA(Math.max(0, balance))}
               </p>
@@ -388,13 +331,14 @@ export default async function FinancesPage({
         </CardContent>
       </Card>
 
+      {/* Matchs de la période */}
       <Card className="overflow-hidden">
         <div className="bg-[#1a5c1a] text-white font-bold px-4 py-3 text-sm">
-          Match
+          Matchs {tabLabel}
         </div>
         {!matchesInPeriod || matchesInPeriod.length === 0 ? (
           <div className="text-center text-muted-foreground py-8 text-sm">
-            Aucun match sur cette période
+            Aucun match {tabLabel.toLowerCase()} sur cette période
           </div>
         ) : (
           <>
@@ -419,7 +363,7 @@ export default async function FinancesPage({
                 <p className="text-lg font-bold text-red-700 dark:text-red-300">{totalUnsold}</p>
               </div>
               <div className="bg-yellow-50 dark:bg-yellow-950/30 px-3 py-3">
-                <p className="text-xs text-yellow-700 dark:text-yellow-400">Recettes Bruites</p>
+                <p className="text-xs text-yellow-700 dark:text-yellow-400">Recettes Brutes</p>
                 <p className="text-lg font-bold text-yellow-900 dark:text-yellow-200 whitespace-nowrap">{formatFCFA(totalRevenue)}</p>
               </div>
             </div>
@@ -427,45 +371,36 @@ export default async function FinancesPage({
         )}
       </Card>
 
-      <Card>
-        <CardHeader><CardTitle className="text-lg">Dépenses</CardTitle></CardHeader>
-        <CardContent className="p-0 overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="hidden sm:table-cell">Date</TableHead>
-                <TableHead>Libellé</TableHead>
-                <TableHead className="hidden sm:table-cell">Catégorie</TableHead>
-                <TableHead className="hidden md:table-cell">Match</TableHead>
-                <TableHead className="text-right">Montant</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {!expenses || expenses.length === 0 ? (
+      {/* Dépenses liées aux matchs */}
+      {expenses.length > 0 && (
+        <Card>
+          <CardHeader><CardTitle className="text-lg">Dépenses</CardTitle></CardHeader>
+          <CardContent className="p-0 overflow-x-auto">
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
-                    Aucune dépense sur cette période
-                  </TableCell>
+                  <TableHead className="hidden sm:table-cell">Date</TableHead>
+                  <TableHead>Libellé</TableHead>
+                  <TableHead className="hidden md:table-cell">Match</TableHead>
+                  <TableHead className="text-right">Montant</TableHead>
                 </TableRow>
-              ) : (
-                expenses.map((expense: any) => (
+              </TableHeader>
+              <TableBody>
+                {expenses.map((expense: any) => (
                   <TableRow key={expense.id}>
                     <TableCell className="hidden sm:table-cell text-sm">{formatDate(expense.expense_date)}</TableCell>
                     <TableCell className="font-medium">{expense.label}</TableCell>
-                    <TableCell className="hidden sm:table-cell capitalize">
-                      {EXPENSE_CATEGORY_LABELS[expense.category] || expense.category}
-                    </TableCell>
                     <TableCell className="hidden md:table-cell">
-                      {expense.match ? `${expense.match.home_team} vs ${expense.match.away_team}` : "Global zone"}
+                      {expense.match ? `${expense.match.home_team} vs ${expense.match.away_team}` : "—"}
                     </TableCell>
                     <TableCell className="text-right font-bold text-danger">-{formatFCFA(expense.amount)}</TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
