@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, Trophy, Ticket, ScanLine } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { formatFCFA } from "@/lib/format";
+import { formatFCFA, fmtZone } from "@/lib/format";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { AddTicketsDialog, WithdrawTicketsDialog } from "@/app/(admin)/billeterie/[id]/billeterie-actions-client";
@@ -96,9 +96,9 @@ export default async function FondateurBilleterieDetailPage({
               <div key={m.id} className="flex items-center justify-between gap-2 rounded-lg border border-border p-3">
                 <div>
                   <p className="text-sm font-semibold">
-                    {m.home_team_zone ? `${m.home_team} (${m.home_team_zone})` : m.home_team}
+                    {m.home_team_zone ? `${m.home_team} (${fmtZone(m.home_team_zone)})` : m.home_team}
                     {" vs "}
-                    {m.away_team_zone ? `${m.away_team} (${m.away_team_zone})` : m.away_team}
+                    {m.away_team_zone ? `${m.away_team} (${fmtZone(m.away_team_zone)})` : m.away_team}
                   </p>
                   <p className="text-xs text-muted-foreground">
                     {format(new Date(m.match_date), "EEE d MMM yyyy · HH'h'mm", { locale: fr })}

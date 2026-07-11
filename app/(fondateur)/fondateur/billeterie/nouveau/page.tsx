@@ -12,15 +12,15 @@ import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Loader2, Check, Trophy } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
-import { formatFCFA } from "@/lib/format";
+import { formatFCFA, fmtZone } from "@/lib/format";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 function matchLabel(m: MatchOption): string {
-  const home = m.home_team_zone ? `${m.home_team} (${m.home_team_zone})` : m.home_team;
-  const away = m.away_team_zone ? `${m.away_team} (${m.away_team_zone})` : m.away_team;
+  const home = m.home_team_zone ? `${m.home_team} (${fmtZone(m.home_team_zone)})` : m.home_team;
+  const away = m.away_team_zone ? `${m.away_team} (${fmtZone(m.away_team_zone)})` : m.away_team;
   return `${home} vs ${away}`;
 }
 

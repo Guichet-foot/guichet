@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, Trophy, MapPin, Users, Building2 } from "lucide-react";
 import { MATCH_STATUS_LABELS, MATCH_STATUS_COLORS } from "@/lib/constants";
-import { formatDateShort } from "@/lib/format";
+import { formatDateShort, fmtZone } from "@/lib/format";
 import { PrintBlocsButton } from "@/app/(admin)/matchs/print-blocs-button";
 import { MatchActionButtons } from "@/app/(admin)/matchs/match-action-buttons";
 
@@ -71,10 +71,10 @@ export default async function FondateurMatchsDepartementauxPage() {
               <TableBody>
                 {(matches as any[]).map((match) => {
                   const homeDisplay = match.home_team_zone
-                    ? `${match.home_team} (${match.home_team_zone})`
+                    ? `${match.home_team} (${fmtZone(match.home_team_zone)})`
                     : match.home_team;
                   const awayDisplay = match.away_team_zone
-                    ? `${match.away_team} (${match.away_team_zone})`
+                    ? `${match.away_team} (${fmtZone(match.away_team_zone)})`
                     : match.away_team;
                   return (
                     <TableRow key={match.id}>

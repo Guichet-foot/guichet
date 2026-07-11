@@ -41,3 +41,8 @@ export function generateSerialNumber(date: Date, count: number): string {
   const num = String(count).padStart(4, "0");
   return `GF-${dateStr}-${num}`;
 }
+
+// "Zone 5A" → "ZONE5A"  |  "ZONE 2B" → "ZONE2B"
+export function fmtZone(zone: string): string {
+  return zone.replace(/\s+/g, "").toUpperCase();
+}
