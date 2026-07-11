@@ -12,7 +12,14 @@ import { formatDateShort } from "@/lib/format";
 import { buildZoneUrl } from "@/lib/zone-utils";
 import { MatchActionButtons } from "./match-action-buttons";
 import { MatchMobileActions } from "./match-mobile-actions";
-import { BilleterieSessionButton } from "./billeterie-session-button";
+import { ScanSessionButton } from "@/components/scan-session-button";
+import {
+  openBilleterieSession,
+  closeBilleterieSession,
+  openC3ScanSession,
+  closeC3ScanSession,
+  getC3ScanSession,
+} from "@/lib/actions/billeterie-session-actions";
 import { PrintBlocsButton } from "./print-blocs-button";
 import { ZoneCardGrid } from "@/components/zone-card-grid";
 import { ZoneBackHeader } from "@/components/zone-back-header";
@@ -50,15 +57,18 @@ export default async function MatchsPage({
   const supabase = await createClient();
   const adminClient = await createAdminClient();
 
-  // Fetch zone billeterie session
-  let zoneOpenUntil: string | null = null;
+  // Fetch session state
+  let sessionOpenUntil: string | null = null;
   if (effectiveZoneId) {
     const { data: zoneData } = await adminClient
       .from("zones")
       .select("billeterie_open_until")
       .eq("id", effectiveZoneId)
       .single();
-    zoneOpenUntil = zoneData?.billeterie_open_until || null;
+    const raw = zoneData?.billeterie_open_until || null;
+    sessionOpenUntil = raw && new Date(raw) > new Date() ? raw : null;
+  } else if (c3AccountId) {
+    sessionOpenUntil = await getC3ScanSession(c3AccountId);
   }
 
   let query = supabase.from("matches").select("*").order("match_date", { ascending: false });
@@ -78,9 +88,17 @@ export default async function MatchsPage({
         </div>
         <div className="flex flex-wrap gap-2">
           {effectiveZoneId && (
-            <BilleterieSessionButton
-              zoneId={effectiveZoneId}
-              openUntil={zoneOpenUntil}
+            <ScanSessionButton
+              openUntil={sessionOpenUntil}
+              openAction={openBilleterieSession.bind(null, effectiveZoneId)}
+              closeAction={closeBilleterieSession.bind(null, effectiveZoneId)}
+            />
+          )}
+          {c3AccountId && (
+            <ScanSessionButton
+              openUntil={sessionOpenUntil}
+              openAction={openC3ScanSession.bind(null, c3AccountId)}
+              closeAction={closeC3ScanSession.bind(null, c3AccountId)}
             />
           )}
           <Link href={buildZoneUrl("/matchs/nouveau", params.zone)}>

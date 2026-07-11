@@ -11,8 +11,8 @@ import { formatDateShort } from "@/lib/format";
 import { PrintBlocsButton } from "@/app/(admin)/matchs/print-blocs-button";
 import { MatchActionButtons } from "@/app/(admin)/matchs/match-action-buttons";
 import { MatchTabBar } from "@/app/(admin)/matchs/match-tab-bar";
-import { OdcavSessionButton } from "@/app/(admin)/matchs/odcav-session-button";
-import { getOdcavScanSession } from "@/lib/actions/billeterie-session-actions";
+import { ScanSessionButton } from "@/components/scan-session-button";
+import { openOdcavScanSession, closeOdcavScanSession, getOdcavScanSession } from "@/lib/actions/billeterie-session-actions";
 
 export const metadata = { title: "Matchs Départementals" };
 
@@ -34,7 +34,11 @@ export default async function MatchsDepartementauxPage() {
           <p className="text-muted-foreground">{matches.length} match(s)</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <OdcavSessionButton openUntil={odcavOpenUntil} />
+          <ScanSessionButton
+            openUntil={odcavOpenUntil}
+            openAction={openOdcavScanSession}
+            closeAction={closeOdcavScanSession}
+          />
           <Link href="/matchs/departementaux/nouveau">
             <Button className="bg-brand hover:bg-brand/90">
               <Plus className="h-4 w-4 mr-2" />

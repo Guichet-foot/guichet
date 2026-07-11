@@ -3,15 +3,52 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/auth";
 
+// ── Helper : passe les matchs du jour en "En cours" ──────────────────────────
+
+async function setTodayMatchesEnCours(filter: {
+  zoneId?: string;
+  c3AccountId?: string;
+  odcav?: boolean;
+}) {
+  const adminClient = await createAdminClient();
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const todayEnd = new Date();
+  todayEnd.setHours(23, 59, 59, 999);
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let query: any = adminClient
+    .from("matches")
+    .update({ status: "en_cours" })
+    .eq("status", "programme")
+    .gte("match_date", todayStart.toISOString())
+    .lte("match_date", todayEnd.toISOString());
+
+  if (filter.zoneId) {
+    query = query.eq("zone_id", filter.zoneId);
+  } else if (filter.c3AccountId) {
+    query = query.eq("c3_account_id", filter.c3AccountId);
+  } else if (filter.odcav) {
+    query = query.in("match_type", ["Match Communal", "Match Départemental"]);
+  }
+
+  await query;
+}
+
+// ── Sessions de zone ──────────────────────────────────────────────────────────
+
 export async function openBilleterieSession(zoneId: string) {
   await requireRole(["super_admin", "admin_zone", "fondateur", "president_odcav"]);
   const adminClient = await createAdminClient();
   const openUntil = new Date(Date.now() + 10 * 60 * 60 * 1000).toISOString();
+
   const { error } = await adminClient
     .from("zones")
     .update({ billeterie_open_until: openUntil })
     .eq("id", zoneId);
   if (error) return { error: error.message };
+
+  await setTodayMatchesEnCours({ zoneId });
   return { success: true, openUntil };
 }
 
@@ -26,16 +63,57 @@ export async function closeBilleterieSession(zoneId: string) {
   return { success: true };
 }
 
-// ── ODCAV inter-match sessions (communaux/départementaux) ─────────────────────
+// ── Sessions C3 ───────────────────────────────────────────────────────────────
+
+export async function openC3ScanSession(c3AccountId: string) {
+  await requireRole(["c3"]);
+  const adminClient = await createAdminClient();
+  const openUntil = new Date(Date.now() + 10 * 60 * 60 * 1000).toISOString();
+
+  const { error } = await adminClient
+    .from("scan_sessions")
+    .upsert({ scope: c3AccountId, open_until: openUntil, updated_at: new Date().toISOString() });
+  if (error) return { error: error.message };
+
+  await setTodayMatchesEnCours({ c3AccountId });
+  return { success: true, openUntil };
+}
+
+export async function closeC3ScanSession(c3AccountId: string) {
+  await requireRole(["c3"]);
+  const adminClient = await createAdminClient();
+  const { error } = await adminClient
+    .from("scan_sessions")
+    .upsert({ scope: c3AccountId, open_until: null, updated_at: new Date().toISOString() });
+  if (error) return { error: error.message };
+  return { success: true };
+}
+
+export async function getC3ScanSession(c3AccountId: string): Promise<string | null> {
+  const adminClient = await createAdminClient();
+  const { data } = await adminClient
+    .from("scan_sessions")
+    .select("open_until")
+    .eq("scope", c3AccountId)
+    .maybeSingle();
+  const openUntil = data?.open_until || null;
+  if (!openUntil || new Date(openUntil) <= new Date()) return null;
+  return openUntil;
+}
+
+// ── Sessions ODCAV (matchs communaux/départementaux) ─────────────────────────
 
 export async function openOdcavScanSession() {
   await requireRole(["super_admin", "fondateur", "president_odcav"]);
   const adminClient = await createAdminClient();
   const openUntil = new Date(Date.now() + 10 * 60 * 60 * 1000).toISOString();
+
   const { error } = await adminClient
     .from("scan_sessions")
     .upsert({ scope: "odcav", open_until: openUntil, updated_at: new Date().toISOString() });
   if (error) return { error: error.message };
+
+  await setTodayMatchesEnCours({ odcav: true });
   return { success: true, openUntil };
 }
 
