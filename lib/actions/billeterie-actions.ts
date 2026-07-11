@@ -75,7 +75,7 @@ export async function getAllMatchesForBilleterie(): Promise<MatchOption[]> {
     zoneIds.length > 0
       ? adminClient.from("matches").select(fields).in("zone_id", zoneIds).neq("status", "annule").neq("status", "termine").order("match_date", { ascending: false })
       : Promise.resolve({ data: [] as any[] }),
-    adminClient.from("matches").select(fields).in("created_by", creatorIds).eq("is_direct", true).neq("status", "annule").neq("status", "termine").order("match_date", { ascending: false }),
+    adminClient.from("matches").select(fields).in("created_by", creatorIds).neq("status", "annule").neq("status", "termine").order("match_date", { ascending: false }),
   ]);
 
   const all = [...(zoneRes.data || []), ...(directRes.data || [])];

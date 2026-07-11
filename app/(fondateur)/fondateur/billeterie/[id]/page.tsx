@@ -115,7 +115,10 @@ export default async function FondateurBilleterieDetailPage({
       <Card>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-base">Lots de billets</CardTitle>
+            <div>
+                <CardTitle className="text-base">Imprimer</CardTitle>
+                <p className="text-xs text-muted-foreground mt-0.5">{bil.totalTickets} billet{bil.totalTickets !== 1 ? "s" : ""} imprimé{bil.totalTickets !== 1 ? "s" : ""}</p>
+              </div>
             <AddTicketsDialog billeterieId={bil.id} />
           </div>
         </CardHeader>
