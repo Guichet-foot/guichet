@@ -2,6 +2,7 @@
 
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/auth";
+import { fetchAll } from "@/lib/supabase/paginate";
 import { revalidatePath } from "next/cache";
 import { format } from "date-fns";
 import type { ScanResult } from "@/lib/types";
@@ -227,16 +228,14 @@ export async function getBilleterieList(): Promise<BilleterieItem[]> {
   const { data } = await query.order("created_at", { ascending: false });
   if (!data || data.length === 0) return [];
 
-  // Count tickets per billeterie
+  // Count tickets per billeterie (paginated — avoids server max_rows cap)
   const billIds = data.map((b: any) => b.id as string);
-  const { data: ticketRows } = await adminClient
-    .from("billeterie_tickets")
-    .select("billeterie_id")
-    .in("billeterie_id", billIds)
-    .limit(1000000);
+  const ticketRows = await fetchAll<any>((from, to) =>
+    adminClient.from("billeterie_tickets").select("billeterie_id").in("billeterie_id", billIds).eq("withdrawn", false).range(from, to)
+  );
 
   const ticketMap: Record<string, number> = {};
-  (ticketRows || []).forEach((t: any) => {
+  ticketRows.forEach((t: any) => {
     ticketMap[t.billeterie_id] = (ticketMap[t.billeterie_id] || 0) + 1;
   });
 
@@ -274,16 +273,18 @@ export async function getBilleterieDetails(id: string): Promise<{
 
   const matchIds: string[] = bil.match_ids || [];
 
-  const [{ data: matches }, { data: ticketRows }] = await Promise.all([
+  const [{ data: matches }, allTicketRows] = await Promise.all([
     matchIds.length > 0
       ? adminClient.from("matches").select("id, home_team, away_team, venue, match_date, match_type, status, home_team_zone, away_team_zone").in("id", matchIds)
       : Promise.resolve({ data: [] as any[] }),
-    adminClient.from("billeterie_tickets").select("id, sale_batch_id, created_at, withdrawn").eq("billeterie_id", id).order("created_at").limit(100000),
+    fetchAll<any>((from, to) =>
+      adminClient.from("billeterie_tickets").select("id, sale_batch_id, created_at, withdrawn").eq("billeterie_id", id).order("created_at").range(from, to)
+    ),
   ]);
 
   // Batch grouping with withdrawn count
   const batchMap: Record<string, { batchId: string; createdAt: string; count: number; withdrawnCount: number }> = {};
-  (ticketRows || []).forEach((t: any) => {
+  allTicketRows.forEach((t: any) => {
     if (!t.sale_batch_id) return;
     if (!batchMap[t.sale_batch_id]) {
       batchMap[t.sale_batch_id] = { batchId: t.sale_batch_id, createdAt: t.created_at, count: 0, withdrawnCount: 0 };
@@ -294,7 +295,7 @@ export async function getBilleterieDetails(id: string): Promise<{
   const batches = Object.values(batchMap).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   // Scan count (only non-withdrawn tickets)
-  const activeTicketIds = (ticketRows || []).filter((t: any) => !t.withdrawn).map((t: any) => t.id as string);
+  const activeTicketIds = allTicketRows.filter((t: any) => !t.withdrawn).map((t: any) => t.id as string);
   const { count: scanCount } = activeTicketIds.length > 0
     ? await adminClient.from("billeterie_scans").select("*", { count: "exact", head: true }).in("ticket_id", activeTicketIds)
     : { count: 0 };
@@ -307,7 +308,7 @@ export async function getBilleterieDetails(id: string): Promise<{
     createdAt: bil.created_at,
     matches: ((matches || []) as MatchOption[]).sort((a, b) => new Date(a.match_date).getTime() - new Date(b.match_date).getTime()),
     batches,
-    totalTickets: (ticketRows || []).filter((t: any) => !t.withdrawn).length,
+    totalTickets: allTicketRows.filter((t: any) => !t.withdrawn).length,
     totalScans: scanCount || 0,
   };
 }

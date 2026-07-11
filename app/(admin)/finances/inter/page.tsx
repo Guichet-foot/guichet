@@ -6,6 +6,7 @@ import { Banknote, TrendingDown, TrendingUp, Landmark, PackageX, Layers, ScanLin
 import { formatFCFA, formatDate } from "@/lib/format";
 import { FinancesOdcavTabs } from "@/app/(admin)/finances/finances-odcav-tabs";
 import { InterFilters } from "./inter-filters";
+import { fetchAll } from "@/lib/supabase/paginate";
 
 export const metadata = { title: "Finances Inter-Zones" };
 
@@ -93,11 +94,9 @@ export default async function FinancesInterPage({
   // ── Regular tickets for those matches ───────────────────────────
   let periodTickets: any[] = [];
   if (matchIdsInPeriod.length > 0) {
-    const { data } = await adminSupabase
-      .from("tickets")
-      .select("price, status, bloc_printed, counts_as_revenue, match_id")
-      .in("match_id", matchIdsInPeriod);
-    periodTickets = data || [];
+    periodTickets = await fetchAll<any>((from, to) =>
+      adminSupabase.from("tickets").select("price, status, bloc_printed, counts_as_revenue, match_id").in("match_id", matchIdsInPeriod).range(from, to)
+    );
   }
 
   // ── Billeterie tickets covering matches in period ────────────────
@@ -120,24 +119,19 @@ export default async function FinancesInterPage({
     bilsInPeriod.forEach((b: any) => { bilPriceMap[b.id] = b.price || 0; });
 
     if (bilIds.length > 0) {
-      const { data: bilTickets } = await adminSupabase
-        .from("billeterie_tickets")
-        .select("id, billeterie_id")
-        .in("billeterie_id", bilIds)
-        .neq("status", "annule")
-        .eq("withdrawn", false);
-
-      bilPrinted = (bilTickets || []).length;
+      const bilTickets = await fetchAll<any>((from, to) =>
+        adminSupabase.from("billeterie_tickets").select("id, billeterie_id").in("billeterie_id", bilIds).neq("status", "annule").eq("withdrawn", false).range(from, to)
+      );
+      bilPrinted = bilTickets.length;
 
       const bilTicketIdMap: Record<string, string> = {};
-      (bilTickets || []).forEach((t: any) => { bilTicketIdMap[t.id] = t.billeterie_id; });
+      bilTickets.forEach((t: any) => { bilTicketIdMap[t.id] = t.billeterie_id; });
 
-      const { data: scanData } = await adminSupabase
-        .from("billeterie_scans")
-        .select("ticket_id")
-        .in("match_id", matchIdsInPeriod);
-      bilScanned = (scanData || []).length;
-      bilRevenue = (scanData || []).reduce((s: number, scan: any) => {
+      const scanData = await fetchAll<any>((from, to) =>
+        adminSupabase.from("billeterie_scans").select("ticket_id").in("match_id", matchIdsInPeriod).range(from, to)
+      );
+      bilScanned = scanData.length;
+      bilRevenue = scanData.reduce((s: number, scan: any) => {
         const bilId = bilTicketIdMap[scan.ticket_id];
         return s + (bilId ? (bilPriceMap[bilId] || 0) : 0);
       }, 0);

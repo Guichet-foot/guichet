@@ -8,6 +8,7 @@ import { join } from "path";
 import { getPrintStyles } from "@/lib/ticket-print-template";
 import type { PrintFormat } from "@/lib/ticket-print-template";
 import { fmtZone } from "@/lib/format";
+import { fetchAll } from "@/lib/supabase/paginate";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -76,14 +77,16 @@ export async function GET(request: Request) {
 
   const adminClient = await createAdminClient();
 
-  const { data: tickets } = await adminClient
-    .from("billeterie_tickets")
-    .select("id, qr_token, serial_number, created_at, billeterie_id, sold_by, seller:profiles!billeterie_tickets_sold_by_fkey(full_name)")
-    .eq("sale_batch_id", batchId)
-    .order("serial_number")
-    .limit(100000);
+  const tickets = await fetchAll<any>((from, to) =>
+    adminClient
+      .from("billeterie_tickets")
+      .select("id, qr_token, serial_number, created_at, billeterie_id, sold_by, seller:profiles!billeterie_tickets_sold_by_fkey(full_name)")
+      .eq("sale_batch_id", batchId)
+      .order("serial_number")
+      .range(from, to)
+  );
 
-  if (!tickets || tickets.length === 0) return new NextResponse("Aucun billet trouvé", { status: 404 });
+  if (tickets.length === 0) return new NextResponse("Aucun billet trouvé", { status: 404 });
 
   // Get billeterie details (all tickets in batch share the same billeterie)
   const billeterieId = tickets[0].billeterie_id;
