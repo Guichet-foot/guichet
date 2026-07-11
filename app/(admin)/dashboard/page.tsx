@@ -131,7 +131,7 @@ export default async function DashboardPage({
   // ── Financial metrics (regular tickets + billeterie combinés) ────
   const printedTickets = periodTickets.filter((t: any) => t.bloc_printed === true);
   const totalPrinted = printedTickets.length + bilPrinted;
-  const totalBlocs = totalPrinted > 0 ? Math.ceil(totalPrinted / 100) : 0;
+  const totalBlocs = Math.floor(totalPrinted / 100);
   const totalScanned = periodTickets.filter((t: any) => t.status === "scanne").length + bilScanned;
   const totalUnsold = Math.max(0, totalPrinted - totalScanned);
   const totalUnsoldValue = printedTickets

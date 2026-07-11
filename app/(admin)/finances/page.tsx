@@ -159,7 +159,7 @@ export default async function FinancesPage({
   const printedTickets = periodTickets.filter((t: any) => t.bloc_printed === true);
   const regularPrinted = printedTickets.length;
   const totalPrinted = regularPrinted + bilPrinted;
-  const totalBlocs = totalPrinted > 0 ? Math.ceil(totalPrinted / 100) : 0;
+  const totalBlocs = Math.floor(totalPrinted / 100);
   const regularScanned = periodTickets.filter((t: any) => t.status === "scanne").length;
   const totalScanned = regularScanned + bilScanned;
   const totalUnsold = Math.max(0, totalPrinted - totalScanned);
@@ -213,13 +213,27 @@ export default async function FinancesPage({
 
   return (
     <div className="space-y-6 min-w-0">
-      {["super_admin","president_odcav","tresorier"].includes(profile.role) && selectedZone && <ZoneBackHeader zoneName={selectedZone.name} />}
+      {/* Print-only header */}
+      <div className="hidden print:block border-b-2 border-gray-800 pb-4 mb-6">
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">Rapport Financier — Guichet Foot</h1>
+            <p className="text-base text-gray-600 mt-1">{selectedZone?.name || profile.zone?.name || "Zone"}</p>
+            <p className="text-sm text-gray-500 mt-0.5">Période : {periodLabel}</p>
+          </div>
+          <p className="text-xs text-gray-400">Imprimé le {dateEnd.toLocaleDateString("fr-FR")}</p>
+        </div>
+      </div>
+
+      <div className="print:hidden">
+        {["super_admin","president_odcav","tresorier"].includes(profile.role) && selectedZone && <ZoneBackHeader zoneName={selectedZone.name} />}
+      </div>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold font-heading">Finances</h1>
-          <p className="text-muted-foreground">{periodLabel}</p>
+          <h1 className="text-2xl font-bold font-heading print:hidden">Finances</h1>
+          <p className="text-muted-foreground print:hidden">{periodLabel}</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 print:hidden">
           <PrintButton label="PDF" />
           <Link href={buildZoneUrl("/finances/depenses/nouveau", params.zone)}>
             <Button className="bg-brand hover:bg-brand/90">
@@ -230,15 +244,17 @@ export default async function FinancesPage({
         </div>
       </div>
 
-      <FinancesFilters
-        currentPeriod={period}
-        currentDate={period === "jour" ? (params.date || today) : undefined}
-        currentFrom={params.from}
-        currentTo={params.to}
-        currentMatch={filterMatchId || undefined}
-        zoneParam={params.zone}
-        matches={filterMatches}
-      />
+      <div className="print:hidden">
+        <FinancesFilters
+          currentPeriod={period}
+          currentDate={period === "jour" ? (params.date || today) : undefined}
+          currentFrom={params.from}
+          currentTo={params.to}
+          currentMatch={filterMatchId || undefined}
+          zoneParam={params.zone}
+          matches={filterMatches}
+        />
+      </div>
 
       {/* Blocs imprimés + Validés + Invendus */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -248,7 +264,12 @@ export default async function FinancesPage({
               <div>
                 <p className="text-sm text-muted-foreground">Blocs imprimés</p>
                 <p className="text-2xl font-bold">{totalBlocs}</p>
-                <p className="text-xs text-muted-foreground mt-1">{totalPrinted} billet{totalPrinted !== 1 ? "s" : ""}</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {totalPrinted} billet{totalPrinted !== 1 ? "s" : ""}
+                  {totalPrinted % 100 !== 0 && totalPrinted > 0 && (
+                    <span className="text-orange-500"> · {totalPrinted % 100} hors bloc</span>
+                  )}
+                </p>
               </div>
               <Layers className="h-8 w-8 text-accent/60" />
             </div>
