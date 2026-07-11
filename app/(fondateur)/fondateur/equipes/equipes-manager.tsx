@@ -62,6 +62,66 @@ function TeamColorSwatches({ colors }: { colors: string }) {
   }
 }
 
+function parseColors(colors: string | null) {
+  try {
+    const parsed = JSON.parse(colors || "{}");
+    return {
+      off1: parsed.official?.[0] || "#000000",
+      off2: parsed.official?.[1] || "#ffffff",
+      sub1: parsed.substitute?.[0] || "#000000",
+      sub2: parsed.substitute?.[1] || "#ffffff",
+    };
+  } catch {
+    return { off1: "#000000", off2: "#ffffff", sub1: "#000000", sub2: "#ffffff" };
+  }
+}
+
+function buildColors(off1: string, off2: string, sub1: string, sub2: string) {
+  return JSON.stringify({ official: [off1, off2], substitute: [sub1, sub2] });
+}
+
+function ColorPairPicker({
+  label,
+  color1,
+  color2,
+  onChange1,
+  onChange2,
+}: {
+  label: string;
+  color1: string;
+  color2: string;
+  onChange1: (v: string) => void;
+  onChange2: (v: string) => void;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs text-muted-foreground">{label}</Label>
+      <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          <input
+            type="color"
+            value={color1}
+            onChange={(e) => onChange1(e.target.value)}
+            className="h-8 w-10 cursor-pointer rounded border border-border bg-transparent p-0.5"
+            title="Couleur principale"
+          />
+          <input
+            type="color"
+            value={color2}
+            onChange={(e) => onChange2(e.target.value)}
+            className="h-8 w-10 cursor-pointer rounded border border-border bg-transparent p-0.5"
+            title="Couleur secondaire"
+          />
+        </div>
+        <span
+          className="inline-block h-8 w-8 rounded border border-border shrink-0"
+          style={{ background: `linear-gradient(135deg, ${color1} 50%, ${color2} 50%)` }}
+        />
+      </div>
+    </div>
+  );
+}
+
 export function EquipesManager({ zones }: { zones: Zone[] }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -70,12 +130,20 @@ export function EquipesManager({ zones }: { zones: Zone[] }) {
   const [createOpen, setCreateOpen] = useState(false);
   const [createZoneId, setCreateZoneId] = useState("");
   const [createName, setCreateName] = useState("");
+  const [createOff1, setCreateOff1] = useState("#000000");
+  const [createOff2, setCreateOff2] = useState("#ffffff");
+  const [createSub1, setCreateSub1] = useState("#000000");
+  const [createSub2, setCreateSub2] = useState("#ffffff");
 
   // Edit dialog
   const [editOpen, setEditOpen] = useState(false);
   const [editTeamId, setEditTeamId] = useState("");
   const [editName, setEditName] = useState("");
   const [editTeamData, setEditTeamData] = useState<Team | null>(null);
+  const [editOff1, setEditOff1] = useState("#000000");
+  const [editOff2, setEditOff2] = useState("#ffffff");
+  const [editSub1, setEditSub1] = useState("#000000");
+  const [editSub2, setEditSub2] = useState("#ffffff");
 
   // Delete dialog
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -86,6 +154,11 @@ export function EquipesManager({ zones }: { zones: Zone[] }) {
     setEditTeamId(team.id);
     setEditName(team.name);
     setEditTeamData(team);
+    const c = parseColors(team.colors);
+    setEditOff1(c.off1);
+    setEditOff2(c.off2);
+    setEditSub1(c.sub1);
+    setEditSub2(c.sub2);
     setEditOpen(true);
   }
 
@@ -105,7 +178,7 @@ export function EquipesManager({ zones }: { zones: Zone[] }) {
       name: createName.trim(),
       president: "",
       delegates: [],
-      colors: "",
+      colors: buildColors(createOff1, createOff2, createSub1, createSub2),
     });
     setLoading(false);
     if (result.error) { toast.error(result.error); return; }
@@ -113,6 +186,8 @@ export function EquipesManager({ zones }: { zones: Zone[] }) {
     setCreateOpen(false);
     setCreateName("");
     setCreateZoneId("");
+    setCreateOff1("#000000"); setCreateOff2("#ffffff");
+    setCreateSub1("#000000"); setCreateSub2("#ffffff");
     router.refresh();
   }
 
@@ -124,7 +199,7 @@ export function EquipesManager({ zones }: { zones: Zone[] }) {
       name: editName.trim(),
       president: editTeamData?.president || "",
       delegates: editTeamData?.delegates || [],
-      colors: editTeamData?.colors || "",
+      colors: buildColors(editOff1, editOff2, editSub1, editSub2),
     });
     setLoading(false);
     if (result.error) { toast.error(result.error); return; }
@@ -256,6 +331,19 @@ export function EquipesManager({ zones }: { zones: Zone[] }) {
                 autoFocus
               />
             </div>
+            <div className="space-y-3">
+              <Label>Couleurs</Label>
+              <ColorPairPicker
+                label="Tenue officielle"
+                color1={createOff1} color2={createOff2}
+                onChange1={setCreateOff1} onChange2={setCreateOff2}
+              />
+              <ColorPairPicker
+                label="Tenue de substitution"
+                color1={createSub1} color2={createSub2}
+                onChange1={setCreateSub1} onChange2={setCreateSub2}
+              />
+            </div>
             <div className="flex gap-3 pt-1">
               <Button type="button" variant="outline" className="flex-1" onClick={() => setCreateOpen(false)} disabled={loading}>
                 Annuler
@@ -283,6 +371,19 @@ export function EquipesManager({ zones }: { zones: Zone[] }) {
                 onChange={(e) => setEditName(e.target.value)}
                 required
                 autoFocus
+              />
+            </div>
+            <div className="space-y-3">
+              <Label>Couleurs</Label>
+              <ColorPairPicker
+                label="Tenue officielle"
+                color1={editOff1} color2={editOff2}
+                onChange1={setEditOff1} onChange2={setEditOff2}
+              />
+              <ColorPairPicker
+                label="Tenue de substitution"
+                color1={editSub1} color2={editSub2}
+                onChange1={setEditSub1} onChange2={setEditSub2}
               />
             </div>
             <div className="flex gap-3 pt-1">
