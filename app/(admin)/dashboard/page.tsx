@@ -111,20 +111,25 @@ export default async function DashboardPage({
     if (bilIds.length > 0) {
       const { data: bilTickets } = await adminClient
         .from("billeterie_tickets")
-        .select("billeterie_id")
+        .select("id, billeterie_id")
         .in("billeterie_id", bilIds)
         .neq("status", "annule");
 
       bilPrinted = (bilTickets || []).length;
-      bilRevenue = (bilTickets || []).reduce(
-        (s: number, t: any) => s + (bilPriceMap[t.billeterie_id] || 0), 0
-      );
 
-      const { count: scanCount } = await adminClient
+      // Build ticket_id → billeterie_id map for scan-based revenue
+      const bilTicketIdMap: Record<string, string> = {};
+      (bilTickets || []).forEach((t: any) => { bilTicketIdMap[t.id] = t.billeterie_id; });
+
+      const { data: scanData } = await adminClient
         .from("billeterie_scans")
-        .select("*", { count: "exact", head: true })
+        .select("ticket_id")
         .in("match_id", matchIdsInPeriod);
-      bilScanned = scanCount || 0;
+      bilScanned = (scanData || []).length;
+      bilRevenue = (scanData || []).reduce((s: number, scan: any) => {
+        const bilId = bilTicketIdMap[scan.ticket_id];
+        return s + (bilId ? (bilPriceMap[bilId] || 0) : 0);
+      }, 0);
     }
   }
 
@@ -138,7 +143,7 @@ export default async function DashboardPage({
     .filter((t: any) => t.status !== "scanne")
     .reduce((s: number, t: any) => s + (t.price || 0), 0);
   const grossRevenue = periodTickets
-    .filter((t: any) => t.counts_as_revenue && t.status !== "annule")
+    .filter((t: any) => t.counts_as_revenue && t.status === "scanne")
     .reduce((s: number, t: any) => s + (t.price || 0), 0) + bilRevenue;
   const fraisODCAV = Math.round(grossRevenue * 0.05);
   const fraisBilleterie = totalPrinted * 10;
