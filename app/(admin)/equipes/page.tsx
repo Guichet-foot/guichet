@@ -4,11 +4,12 @@ import { getEffectiveZone } from "@/lib/get-effective-zone";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Shield } from "lucide-react";
+import { Shield, FileDown } from "lucide-react";
 import { TeamFormDialog } from "./team-form-dialog";
 import { TeamActions } from "./team-actions-buttons";
 import { ZoneCardGrid } from "@/components/zone-card-grid";
 import { ZoneBackHeader } from "@/components/zone-back-header";
+import Link from "next/link";
 
 export const metadata = { title: "Équipes" };
 
@@ -76,9 +77,19 @@ export default async function EquipesPage({
 
     return (
       <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold font-heading">Équipes</h1>
-          <p className="text-muted-foreground">{allTeams.length} équipe(s)</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold font-heading">Équipes</h1>
+            <p className="text-muted-foreground">{allTeams.length} équipe(s)</p>
+          </div>
+          <Link
+            href="/api/reports/teams"
+            target="_blank"
+            className="inline-flex items-center gap-2 h-9 px-4 rounded-lg bg-green-700 text-white text-sm font-medium hover:bg-green-800 transition-colors"
+          >
+            <FileDown className="h-4 w-4" />
+            Télécharger PDF
+          </Link>
         </div>
 
         {allTeams.length === 0 ? (
@@ -148,12 +159,22 @@ export default async function EquipesPage({
   return (
     <div className="space-y-6">
       {["super_admin","president_odcav","tresorier"].includes(profile.role) && selectedZone && <ZoneBackHeader zoneName={selectedZone.name} />}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold font-heading">Équipes</h1>
           <p className="text-muted-foreground">{teams?.length || 0} équipe(s)</p>
         </div>
-        {profile.role !== "tresorier" && <TeamFormDialog zoneId={effectiveZoneId} userRole={profile.role} />}
+        <div className="flex items-center gap-2">
+          <Link
+            href="/api/reports/teams"
+            target="_blank"
+            className="inline-flex items-center gap-2 h-9 px-4 rounded-lg bg-green-700 text-white text-sm font-medium hover:bg-green-800 transition-colors"
+          >
+            <FileDown className="h-4 w-4" />
+            PDF
+          </Link>
+          {profile.role !== "tresorier" && <TeamFormDialog zoneId={effectiveZoneId} userRole={profile.role} />}
+        </div>
       </div>
 
       <Card>

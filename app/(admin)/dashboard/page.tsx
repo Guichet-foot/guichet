@@ -155,7 +155,7 @@ export default async function DashboardPage({
     const prevMatchIds = (prevMatchesPeriod || []).map((m: any) => m.id as string);
 
     // 4. Tickets — current and previous periods in parallel
-    const [allTickets, prevTickets, teamsRaw] = await Promise.all([
+    const [allTickets, prevTickets] = await Promise.all([
       matchIds.length > 0
         ? fetchAll<any>((from, to) =>
             adminClient
@@ -174,7 +174,6 @@ export default async function DashboardPage({
               .range(from, to)
           )
         : Promise.resolve([]),
-      adminClient.from("equipes").select("id, zone_id"),
     ]);
 
     // 5. Billeterie (global contribution only, no per-zone breakdown)
@@ -309,13 +308,6 @@ export default async function DashboardPage({
     const zoneNameMap: Record<string, string> = {};
     allZones.forEach((z) => { zoneNameMap[z.id] = z.name; });
 
-    // ── Teams active ─────────────────────────────────────────────────────
-    const teamsInPeriod = new Set<string>();
-    (matchesPeriod || []).forEach((m: any) => {
-      if (m.home_team) teamsInPeriod.add(m.home_team);
-      if (m.away_team) teamsInPeriod.add(m.away_team);
-    });
-    const teamsActive  = teamsInPeriod.size;
     const unsoldRate   = totalPrinted > 0 ? (totalUnsold / totalPrinted) * 100 : 0;
     const fraisODCAV   = Math.round(grossRevenue * 0.05);
     const fraisBil     = totalScanned * 10;
@@ -374,40 +366,6 @@ export default async function DashboardPage({
           />
         </div>
 
-        {/* Charts row — 2 cols on desktop */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 sm:gap-6">
-          <Card className="rounded-2xl shadow-sm border-border/40">
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between gap-2">
-                <CardTitle className="text-base sm:text-lg">Statistiques globales</CardTitle>
-                <span className="text-xs text-muted-foreground hidden sm:block">{periodLabel}</span>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <GlobalStatsChart data={chartData} />
-            </CardContent>
-          </Card>
-
-          <Card className="rounded-2xl shadow-sm border-border/40">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base sm:text-lg">Recettes par zone</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ZoneDonutChart zones={revenueByZone} total={grossRevenue} />
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Zone performance table — full width */}
-        <Card className="rounded-2xl shadow-sm border-border/40">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base sm:text-lg">Performances par zone</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ZonePerformanceTable zones={zonePerformance} />
-          </CardContent>
-        </Card>
-
         {/* Frais summary */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Card className="rounded-2xl border-blue-200 bg-blue-50/40">
@@ -442,12 +400,45 @@ export default async function DashboardPage({
             <SecondaryIndicators
               data={{
                 matchesPlayed: (matchesPeriod || []).filter((m: any) => m.status === "termine").length,
-                teamsActive,
                 ticketsSold: totalScanned,
                 unsoldRate,
                 totalRevenue: grossRevenue,
               }}
             />
+          </CardContent>
+        </Card>
+
+        {/* Charts row — 2 cols on desktop */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 sm:gap-6">
+          <Card className="rounded-2xl shadow-sm border-border/40">
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between gap-2">
+                <CardTitle className="text-base sm:text-lg">Statistiques globales</CardTitle>
+                <span className="text-xs text-muted-foreground hidden sm:block">{periodLabel}</span>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <GlobalStatsChart data={chartData} />
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-2xl shadow-sm border-border/40">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base sm:text-lg">Recettes par zone</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ZoneDonutChart zones={revenueByZone} total={grossRevenue} />
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Zone performance table — full width */}
+        <Card className="rounded-2xl shadow-sm border-border/40">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base sm:text-lg">Performances par zone</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ZonePerformanceTable zones={zonePerformance} />
           </CardContent>
         </Card>
       </div>
