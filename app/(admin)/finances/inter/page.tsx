@@ -1,5 +1,5 @@
 import { requireRole } from "@/lib/auth";
-import { createAdminClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Banknote, TrendingDown, TrendingUp, Landmark, PackageX, Layers, ScanLine, ReceiptText } from "lucide-react";
@@ -19,7 +19,7 @@ export default async function FinancesInterPage({
 }: {
   searchParams: Promise<{ type?: string; period?: string; date?: string; from?: string; to?: string; match?: string }>;
 }) {
-  await requireRole(["super_admin", "fondateur", "president_odcav", "tresorier"]);
+  const profile = await requireRole(["super_admin", "fondateur", "president_odcav", "tresorier"]);
   const params = await searchParams;
 
   const typeParam = params.type === "departemental" ? "departemental" : "communal";
@@ -27,6 +27,23 @@ export default async function FinancesInterPage({
   const tabLabel = typeParam === "departemental" ? "Départemental" : "Communal";
 
   const adminSupabase = await createAdminClient();
+
+  // ── ODCAV isolation: build the set of creator IDs this user can see ──
+  // fondateur → no filter (sees all)
+  // super_admin / tresorier → inherit parent's identity via created_by_admin
+  // president_odcav → use their own ID
+  let creatorIds: string[] | null = null; // null = no filter (fondateur)
+  if (profile.role !== "fondateur") {
+    const ownerId =
+      (profile.role === "super_admin" || profile.role === "tresorier") && profile.created_by_admin
+        ? profile.created_by_admin
+        : profile.id;
+    const { data: subAdmins } = await adminSupabase
+      .from("profiles")
+      .select("id")
+      .eq("created_by_admin", ownerId);
+    creatorIds = [ownerId, ...((subAdmins || []) as any[]).map((p: any) => p.id as string)];
+  }
 
   const today = new Date().toISOString().split("T")[0];
   const period = (params.period as Period) || "24h";
@@ -73,12 +90,15 @@ export default async function FinancesInterPage({
     .single();
   const odcavRate = platformData?.odcav_rate ?? 0.05;
 
-  // ── Matches in period (inter-zone scoped) ────────────────────────
+  // ── Matches in period (inter-zone scoped, ODCAV-isolated) ────────
   let matchesPeriodQuery: any = adminSupabase
     .from("matches")
     .select("id, home_team, away_team, match_date")
     .eq("match_type", matchType)
     .is("zone_id", null);
+
+  // Restrict to this ODCAV's matches (fondateur sees all)
+  if (creatorIds) matchesPeriodQuery = matchesPeriodQuery.in("created_by", creatorIds);
 
   if (filterMatchId) {
     matchesPeriodQuery = matchesPeriodQuery.eq("id", filterMatchId);
@@ -173,13 +193,15 @@ export default async function FinancesInterPage({
 
   const balance = totalRevenue - totalExpenses - odcavCommission - fraisPlateformePeriod;
 
-  // ── Match list for filter dropdown ───────────────────────────────
-  const { data: matchesList } = await adminSupabase
+  // ── Match list for filter dropdown (same ODCAV isolation) ────────
+  let matchesListQuery: any = adminSupabase
     .from("matches")
     .select("id, home_team, away_team")
     .eq("match_type", matchType)
     .is("zone_id", null)
     .order("match_date", { ascending: false });
+  if (creatorIds) matchesListQuery = matchesListQuery.in("created_by", creatorIds);
+  const { data: matchesList } = await matchesListQuery;
   const filterMatches = (matchesList || []).map((m: any) => ({
     id: m.id,
     label: `${m.home_team} vs ${m.away_team}`,
