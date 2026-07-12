@@ -59,16 +59,20 @@ function ScannerContent() {
 
     async function initScanner() {
       try {
-        const { Html5Qrcode } = await import("html5-qrcode");
+        const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import("html5-qrcode");
         if (!scannerRef.current) return;
 
-        const html5QrCode = new Html5Qrcode("qr-reader");
+        // Restrict to QR_CODE only — avoids decoding barcodes/DataMatrix on every frame
+        const html5QrCode = new Html5Qrcode("qr-reader", {
+          formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
+          verbose: false,
+        });
         html5QrCodeRef.current = html5QrCode;
         scanner = html5QrCode as unknown as { clear: () => Promise<void> };
 
         await html5QrCode.start(
           { facingMode: "environment" },
-          { fps: 10, qrbox: { width: 250, height: 250 } },
+          { fps: 15, qrbox: { width: 220, height: 220 } },
           async (decodedText: string) => {
             if (!scanning) return;
             setScanning(false);
@@ -88,11 +92,10 @@ function ScannerContent() {
                 } else {
                   setScanResult({ status: "invalid", message: "Carte inconnue dans le système." });
                   vibrate([100, 50, 100, 50, 100]);
-                  // Fermeture auto pour les erreurs (pas de bouton à afficher)
                   setTimeout(async () => {
                     try { await html5QrCode.resume(); } catch { }
                     resumeScanning();
-                  }, 3000);
+                  }, 2500);
                 }
               } catch {
                 setScanResult({ status: "invalid", message: "Erreur réseau. Réessayez." });
@@ -100,10 +103,11 @@ function ScannerContent() {
                 setTimeout(async () => {
                   try { await html5QrCode.resume(); } catch { }
                   resumeScanning();
-                }, 3000);
+                }, 2500);
               }
             } else {
               // ── Scan billet (ordinaire ou billetterie) ──
+              let dismissDelay = 2500;
               try {
                 const result = decodedText.startsWith("BIL-")
                   ? await validateBilleterieTicket(decodedText)
@@ -112,20 +116,22 @@ function ScannerContent() {
                 if (result.status === "valid") {
                   setStats((prev) => ({ ...prev, validated: prev.validated + 1 }));
                   vibrate([100]);
+                  dismissDelay = 1200; // entrée validée — message court, retour rapide
                 } else if (result.status === "already_scanned") {
                   vibrate([100, 50, 100]);
+                  dismissDelay = 1800;
                 } else {
                   vibrate([100, 50, 100, 50, 100]);
+                  dismissDelay = 2500; // message d'erreur à lire
                 }
               } catch {
                 setScanResult({ status: "invalid", message: "Erreur réseau. Vérifiez votre connexion." });
                 vibrate([100, 50, 100, 50, 100]);
               }
-              // Fermeture auto billets (2.5 s)
               setTimeout(async () => {
                 try { await html5QrCode.resume(); } catch { }
                 resumeScanning();
-              }, 2500);
+              }, dismissDelay);
             }
           },
           () => {}
