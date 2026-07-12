@@ -112,27 +112,45 @@ export default async function DashboardPage({
   if (isOdcavRole) {
     const zoneFilter = effectiveZoneId; // null = all zones
 
-    // 1. Zones list
-    const { data: zonesData } = await adminClient.from("zones").select("id, name").order("name");
-    const allZones = (zonesData || []) as { id: string; name: string }[];
+    // ODCAV isolation — build creatorIds (same pattern as finances/inter)
+    const ownerId =
+      (profile.role === "super_admin" || profile.role === "tresorier") && (profile as any).created_by_admin
+        ? (profile as any).created_by_admin as string
+        : profile.id;
+    const { data: subAdminsData } = await adminClient
+      .from("profiles").select("id, zone_id").eq("created_by_admin", ownerId);
+    const subAdminList = (subAdminsData || []) as any[];
+    const creatorIds = [ownerId, ...subAdminList.map((p: any) => p.id as string)];
+    // Zone IDs managed by this ODCAV (from sub-admin zone assignments)
+    const odcavZoneIds = new Set<string>(
+      subAdminList.filter((p: any) => p.zone_id).map((p: any) => p.zone_id as string)
+    );
 
-    // 2. Matches in period
+    // 1. Zones list — only zones belonging to this ODCAV
+    const { data: zonesData } = await adminClient.from("zones").select("id, name").order("name");
+    const allZones = ((zonesData || []) as { id: string; name: string }[]).filter(
+      (z) => odcavZoneIds.size === 0 || odcavZoneIds.has(z.id)
+    );
+
+    // 2. Matches in period — isolated to this ODCAV
     let matchQuery = adminClient
       .from("matches")
       .select("id, zone_id, home_team, away_team, match_date, status")
       .gte("match_date", dateStart.toISOString())
       .lte("match_date", dateEnd.toISOString())
+      .in("created_by", creatorIds)
       .order("match_date", { ascending: false });
     if (zoneFilter) matchQuery = matchQuery.eq("zone_id", zoneFilter);
     const { data: matchesPeriod } = await matchQuery;
     const matchIds = (matchesPeriod || []).map((m: any) => m.id as string);
 
-    // 3. Prev period matches (for trends)
+    // 3. Prev period matches (for trends) — isolated to this ODCAV
     let prevMatchQuery = adminClient
       .from("matches")
       .select("id")
       .gte("match_date", prevDateStart.toISOString())
-      .lte("match_date", prevDateEnd.toISOString());
+      .lte("match_date", prevDateEnd.toISOString())
+      .in("created_by", creatorIds);
     if (zoneFilter) prevMatchQuery = prevMatchQuery.eq("zone_id", zoneFilter);
     const { data: prevMatchesPeriod } = await prevMatchQuery;
     const prevMatchIds = (prevMatchesPeriod || []).map((m: any) => m.id as string);
