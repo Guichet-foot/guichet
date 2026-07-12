@@ -46,7 +46,7 @@ export default async function FinancesInterPage({
   }
 
   const today = new Date().toISOString().split("T")[0];
-  const period = (params.period as Period) || "24h";
+  const period = (params.period as Period) || "jour";
   const filterMatchId = params.match || null;
 
   let dateStart: Date;

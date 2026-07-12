@@ -1,5 +1,5 @@
 import { requireRole } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Table,
@@ -15,14 +15,27 @@ import { CreateZoneForm } from "./create-zone-form";
 
 export const metadata = { title: "Zones" };
 
-export default async function ZonesPage() {
-  await requireRole(["super_admin"]);
-  const supabase = await createClient();
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
-  const { data: zones } = await supabase
+export default async function ZonesPage() {
+  const profile = await requireRole(["super_admin", "president_odcav", "tresorier"]);
+  const adminClient = await createAdminClient();
+
+  // Determine the ODCAV owner ID to filter zones:
+  // - president_odcav is the top-level account → use their own ID
+  // - super_admin / tresorier are sub-accounts → inherit from their parent (created_by_admin)
+  const ownerId =
+    (profile.role === "super_admin" || profile.role === "tresorier") && (profile as any).created_by_admin
+      ? (profile as any).created_by_admin as string
+      : profile.id;
+
+  const { data: zones } = await adminClient
     .from("zones")
     .select("*")
+    .eq("created_by", ownerId)
     .order("name");
+
+  const canCreateZone = profile.role !== "tresorier";
 
   return (
     <div className="space-y-6">
@@ -33,7 +46,7 @@ export default async function ZonesPage() {
             {zones?.length || 0} zone(s)
           </p>
         </div>
-        <CreateZoneForm />
+        {canCreateZone && <CreateZoneForm />}
       </div>
 
       <Card>

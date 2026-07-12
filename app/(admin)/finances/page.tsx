@@ -56,7 +56,7 @@ export default async function FinancesPage({
   const zoneId = effectiveZoneId;
 
   const today = new Date().toISOString().split("T")[0];
-  const period = (params.period as Period) || "24h";
+  const period = (params.period as Period) || "jour";
   const filterMatchId = params.match || null;
 
   // ── Date range from period params ────────────────────────────────

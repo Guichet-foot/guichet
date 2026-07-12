@@ -105,7 +105,6 @@ export function InterFilters({
             type="date"
             value={date}
             onChange={(e) => handleDateChange(e.target.value)}
-            max={todayStr}
             className="w-auto"
           />
         </div>
@@ -119,7 +118,6 @@ export function InterFilters({
               type="date"
               value={from}
               onChange={(e) => setFrom(e.target.value)}
-              max={todayStr}
               className="w-auto"
             />
           </div>
@@ -130,7 +128,6 @@ export function InterFilters({
               value={to}
               onChange={(e) => setTo(e.target.value)}
               min={from}
-              max={todayStr}
               className="w-auto"
             />
           </div>
