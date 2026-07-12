@@ -16,8 +16,10 @@ const BODY_H   = CARD_H * 0.70;     // 107.10 pt
 const INFO_W   = CARD_W * 0.65;     // 157.72 pt (65% of card)
 const QR_COL_W = CARD_W * 0.35;     // 84.93 pt
 
-// Photo circle matches HTML: 24% of card width
-const PHOTO_D  = CARD_W * 0.24;     // 58.24 pt
+// Photo: portrait rectangle — same width as before, but taller
+const PHOTO_W  = CARD_W * 0.24;     // 58.24 pt
+const PHOTO_H  = CARD_H * 0.55;     // 84.15 pt — spans header + top of body
+const PHOTO_RADIUS = 4;             // rounded rectangle (not circle)
 
 // ── Fonts: scaled to CARD_W exactly like cqi units in the HTML ─────
 // HTML cartes-grid uses cqi (% of container inline-size = card width)
@@ -159,7 +161,9 @@ export function CardPDFView({ card }: { card: CardPDFData }) {
   const rows: CardRow[] = [
     { label: "NOM COMPLET", value: card.full_name,  icon: <IconUser /> },
     { label: "TÉLÉPHONE",   value: card.phone,       icon: <IconPhone /> },
-    { label: "ZONE",        value: card.zone_name,   icon: <IconMapPin /> },
+    ...(!isPaid
+      ? [{ label: "ZONE", value: card.zone_name, icon: <IconMapPin /> }]
+      : []),
     ...(!isPaid && card.poste
       ? [{ label: "POSTE", value: card.poste, icon: <IconBriefcase /> }]
       : []),
@@ -177,7 +181,7 @@ export function CardPDFView({ card }: { card: CardPDFData }) {
   const rowPad = CARD_W * 0.02;
 
   // Padding to reserve space for the photo in the header title area
-  const titlePadRight = PHOTO_D + CARD_W * 0.025;
+  const titlePadRight = PHOTO_W + CARD_W * 0.025;
 
   return (
     <View style={{
@@ -299,31 +303,31 @@ export function CardPDFView({ card }: { card: CardPDFData }) {
           width: QR_COL_W, height: BODY_H,
           alignItems: "center",
           justifyContent: "flex-end",
-          paddingBottom: CARD_H * 0.035,
+          paddingBottom: CARD_H * 0.03,
         }}>
           <View style={{
-            borderWidth: 0.5, borderColor: "#1a5c2a",
-            padding: CARD_W * 0.005,
+            borderWidth: 0.8, borderColor: "#1a5c2a",
+            padding: CARD_W * 0.007,
           }}>
             <Image
               src={card.qrDataUrl}
               style={{
-                width:  QR_COL_W * 0.88,
-                height: QR_COL_W * 0.88,
+                width:  QR_COL_W * 0.96,
+                height: QR_COL_W * 0.96,
               }}
             />
           </View>
         </View>
       </View>
 
-      {/* ── PHOTO — absolute circle, top-right, matching HTML 24% ── */}
+      {/* ── PHOTO — portrait rectangle, top-right, spans header+body ── */}
       <View style={{
         position: "absolute",
-        top:   CARD_H * 0.04,
+        top:   CARD_H * 0.03,
         right: CARD_W * 0.02,
-        width:  PHOTO_D,
-        height: PHOTO_D,
-        borderRadius: PHOTO_D / 2,
+        width:  PHOTO_W,
+        height: PHOTO_H,
+        borderRadius: PHOTO_RADIUS,
         borderWidth: 1.5,
         borderColor: "#1a5c2a",
         overflow: "hidden",
@@ -332,7 +336,7 @@ export function CardPDFView({ card }: { card: CardPDFData }) {
         {card.photoDataUrl ? (
           <Image
             src={card.photoDataUrl}
-            style={{ width: PHOTO_D, height: PHOTO_D, objectFit: "cover" }}
+            style={{ width: PHOTO_W, height: PHOTO_H, objectFit: "cover" }}
           />
         ) : null}
       </View>

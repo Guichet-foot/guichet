@@ -71,7 +71,7 @@ function CardDesign({ card, qrDataUrl, zoneLogo }: { card: AccessCard; qrDataUrl
   const rows = [
     { Icon: User,      label: "NOM COMPLET", value: card.full_name },
     { Icon: Phone,     label: "TÉLÉPHONE",   value: card.phone },
-    { Icon: MapPin,    label: "ZONE",        value: card.zone_name },
+    ...(!isPaidCard ? [{ Icon: MapPin, label: "ZONE", value: card.zone_name }] : []),
     ...(!isPaidCard ? [{ Icon: Briefcase, label: "POSTE", value: card.poste }] : []),
     ...(card.asc_name ? [{ Icon: Shield, label: "ASC", value: card.asc_name }] : []),
     ...(price != null && price > 0
@@ -175,7 +175,7 @@ function CardDesign({ card, qrDataUrl, zoneLogo }: { card: AccessCard; qrDataUrl
           className="flex items-end justify-center bg-white"
           style={{ width: "35%", paddingBottom: "2%" }}
         >
-          <div className="border border-green-800" style={{ width: "70%", padding: "1%" }}>
+          <div className="border border-green-800" style={{ width: "84%", padding: "1%" }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={qrDataUrl}
@@ -187,14 +187,15 @@ function CardDesign({ card, qrDataUrl, zoneLogo }: { card: AccessCard; qrDataUrl
         </div>
       </div>
 
-      {/* Photo */}
+      {/* Photo — portrait rectangle spanning header+body */}
       <div
-        className="absolute rounded-full overflow-hidden bg-green-50"
+        className="absolute overflow-hidden bg-green-50"
         style={{
           width: "22%",
-          aspectRatio: "1 / 1",
+          height: "55%",
           top: "3%",
           right: "2%",
+          borderRadius: "6px",
           border: "2.5px solid #1a5c2a",
         }}
       >

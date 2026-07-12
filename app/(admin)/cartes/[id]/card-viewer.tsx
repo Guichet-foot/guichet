@@ -68,7 +68,7 @@ export function CardViewer({ card, qrDataUrl, printUrl, zoneLogo }: CardViewerPr
   const infoRows = [
     { Icon: User,      label: "NOM COMPLET", value: card.full_name },
     { Icon: Phone,     label: "TÉLÉPHONE",   value: card.phone },
-    { Icon: MapPin,    label: "ZONE",        value: card.zone_name },
+    ...(!isPaidCard ? [{ Icon: MapPin, label: "ZONE", value: card.zone_name }] : []),
     ...(!isPaidCard ? [{ Icon: Briefcase, label: "POSTE", value: card.poste }] : []),
     ...(card.asc_name ? [{ Icon: Shield, label: "ASC", value: card.asc_name }] : []),
     ...(card.price != null && card.price > 0
@@ -211,9 +211,9 @@ export function CardViewer({ card, qrDataUrl, printUrl, zoneLogo }: CardViewerPr
               {/* QR — 35% */}
               <div
                 className="flex items-end justify-center bg-white"
-                style={{ width: "35%", paddingBottom: "2.5%" }}
+                style={{ width: "35%", paddingBottom: "2%" }}
               >
-                <div className="border border-green-800 p-[1.5%]" style={{ width: "72%" }}>
+                <div className="border border-green-800 p-[1%]" style={{ width: "84%" }}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={qrDataUrl}
@@ -225,15 +225,16 @@ export function CardViewer({ card, qrDataUrl, printUrl, zoneLogo }: CardViewerPr
               </div>
             </div>
 
-            {/* ── PHOTO — top-right absolu ── */}
+            {/* ── PHOTO — portrait rectangle, top-right, spans header+body ── */}
             <div
-              className="absolute rounded-full overflow-hidden bg-green-100"
+              className="absolute overflow-hidden bg-green-100"
               style={{
-                width: "24%",
-                aspectRatio: "1 / 1",
-                top: "4%",
+                width: "22%",
+                height: "55%",
+                top: "3%",
                 right: "2%",
-                border: "3px solid #1a5c2a",
+                borderRadius: "6px",
+                border: "2.5px solid #1a5c2a",
               }}
             >
               {card.photo_url ? (
