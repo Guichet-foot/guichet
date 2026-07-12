@@ -127,3 +127,112 @@ export async function resetSuperAdminPassword(userId: string) {
   if (error) return { error: error.message };
   return { password: newPassword };
 }
+
+// ── createUserForOdcav ────────────────────────────────────────────────────────
+// Allows the fondateur to create any sub-account under a specific ODCAV admin.
+// The new user's created_by_admin = odcavId so they belong to that ODCAV.
+export async function createUserForOdcav(
+  odcavId: string,
+  formData: {
+    email: string;
+    fullName: string;
+    phone: string;
+    role: "admin_zone" | "tresorier" | "c3" | "caissier" | "portier";
+    zoneId: string | null;
+    isPresident?: boolean;
+  }
+) {
+  const supabase = await createClient();
+  const { data: { user: currentUser } } = await supabase.auth.getUser();
+  if (!currentUser) return { error: "Non authentifié" };
+
+  const { data: caller } = await supabase.from("profiles").select("role").eq("id", currentUser.id).single();
+  if (caller?.role !== "fondateur") return { error: "Non autorisé" };
+
+  const adminClient = await createAdminClient();
+
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+  let tempPassword = "";
+  for (let i = 0; i < 8; i++) tempPassword += chars.charAt(Math.floor(Math.random() * chars.length));
+
+  const { data: authUser, error: authError } = await adminClient.auth.admin.createUser({
+    email: formData.email,
+    password: tempPassword,
+    email_confirm: true,
+  });
+
+  if (authError || !authUser.user) return { error: authError?.message || "Erreur création compte" };
+
+  const isPresident =
+    formData.role === "admin_zone" ? (formData.isPresident ?? false) : false;
+
+  const { error: profileError } = await adminClient.from("profiles").insert({
+    id: authUser.user.id,
+    full_name: formData.fullName,
+    phone: formData.phone || null,
+    role: formData.role,
+    zone_id: formData.role === "admin_zone" ? formData.zoneId : null,
+    active: true,
+    is_president: isPresident,
+    created_by_admin: odcavId,
+  });
+
+  if (profileError) {
+    await adminClient.auth.admin.deleteUser(authUser.user.id);
+    return { error: profileError.message };
+  }
+
+  revalidatePath(`/fondateur/super-admins/${odcavId}`);
+  return { password: tempPassword };
+}
+
+// ── fondateurToggleUserActive ─────────────────────────────────────────────────
+export async function fondateurToggleUserActive(userId: string, active: boolean) {
+  const supabase = await createClient();
+  const { data: { user: currentUser } } = await supabase.auth.getUser();
+  if (!currentUser) return { error: "Non authentifié" };
+  const { data: caller } = await supabase.from("profiles").select("role").eq("id", currentUser.id).single();
+  if (caller?.role !== "fondateur") return { error: "Non autorisé" };
+
+  const adminClient = await createAdminClient();
+  const { data: target } = await adminClient.from("profiles").select("created_by_admin").eq("id", userId).single();
+  if (!target) return { error: "Utilisateur introuvable" };
+
+  const { error } = await adminClient.from("profiles").update({ active }).eq("id", userId);
+  if (error) return { error: error.message };
+  revalidatePath(`/fondateur/super-admins/${target.created_by_admin}`);
+  return { success: true };
+}
+
+// ── fondateurDeleteUser ───────────────────────────────────────────────────────
+export async function fondateurDeleteUser(userId: string, odcavId: string) {
+  const supabase = await createClient();
+  const { data: { user: currentUser } } = await supabase.auth.getUser();
+  if (!currentUser) return { error: "Non authentifié" };
+  const { data: caller } = await supabase.from("profiles").select("role").eq("id", currentUser.id).single();
+  if (caller?.role !== "fondateur") return { error: "Non autorisé" };
+
+  const adminClient = await createAdminClient();
+  await adminClient.from("profiles").delete().eq("id", userId);
+  await adminClient.auth.admin.deleteUser(userId);
+  revalidatePath(`/fondateur/super-admins/${odcavId}`);
+  return { success: true };
+}
+
+// ── fondateurResetPassword ────────────────────────────────────────────────────
+export async function fondateurResetPassword(userId: string) {
+  const supabase = await createClient();
+  const { data: { user: currentUser } } = await supabase.auth.getUser();
+  if (!currentUser) return { error: "Non authentifié" };
+  const { data: caller } = await supabase.from("profiles").select("role").eq("id", currentUser.id).single();
+  if (caller?.role !== "fondateur") return { error: "Non autorisé" };
+
+  const adminClient = await createAdminClient();
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+  let newPassword = "";
+  for (let i = 0; i < 8; i++) newPassword += chars.charAt(Math.floor(Math.random() * chars.length));
+
+  const { error } = await adminClient.auth.admin.updateUserById(userId, { password: newPassword });
+  if (error) return { error: error.message };
+  return { password: newPassword };
+}
