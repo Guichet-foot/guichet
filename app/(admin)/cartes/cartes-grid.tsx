@@ -187,12 +187,12 @@ function CardDesign({ card, qrDataUrl, zoneLogo }: { card: AccessCard; qrDataUrl
         </div>
       </div>
 
-      {/* Photo — portrait rectangle spanning header+body */}
+      {/* Photo — portrait rectangle, header height + small overflow into body */}
       <div
         className="absolute overflow-hidden bg-green-50"
         style={{
-          width: "22%",
-          height: "55%",
+          width: "25%",
+          height: "38%",
           top: "3%",
           right: "2%",
           borderRadius: "6px",

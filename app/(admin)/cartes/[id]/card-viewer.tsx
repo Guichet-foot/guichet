@@ -225,12 +225,12 @@ export function CardViewer({ card, qrDataUrl, printUrl, zoneLogo }: CardViewerPr
               </div>
             </div>
 
-            {/* ── PHOTO — portrait rectangle, top-right, spans header+body ── */}
+            {/* ── PHOTO — portrait rectangle, header + small overflow ── */}
             <div
               className="absolute overflow-hidden bg-green-100"
               style={{
-                width: "22%",
-                height: "55%",
+                width: "25%",
+                height: "38%",
                 top: "3%",
                 right: "2%",
                 borderRadius: "6px",

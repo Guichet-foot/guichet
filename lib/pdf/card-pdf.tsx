@@ -16,9 +16,9 @@ const BODY_H   = CARD_H * 0.70;     // 107.10 pt
 const INFO_W   = CARD_W * 0.65;     // 157.72 pt (65% of card)
 const QR_COL_W = CARD_W * 0.35;     // 84.93 pt
 
-// Photo: portrait rectangle — same width as before, but taller
-const PHOTO_W  = CARD_W * 0.24;     // 58.24 pt
-const PHOTO_H  = CARD_H * 0.55;     // 84.15 pt — spans header + top of body
+// Photo: portrait rectangle — slightly wider, height covers header + small part of body
+const PHOTO_W  = CARD_W * 0.25;     // 60.66 pt
+const PHOTO_H  = CARD_H * 0.38;     // 58.14 pt — spans header + ~8% into body
 const PHOTO_RADIUS = 4;             // rounded rectangle (not circle)
 
 // ── Fonts: scaled to CARD_W exactly like cqi units in the HTML ─────
@@ -181,7 +181,7 @@ export function CardPDFView({ card }: { card: CardPDFData }) {
   const rowPad = CARD_W * 0.02;
 
   // Padding to reserve space for the photo in the header title area
-  const titlePadRight = PHOTO_W + CARD_W * 0.025;
+  const titlePadRight = PHOTO_W + CARD_W * 0.02;
 
   return (
     <View style={{
