@@ -11,7 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Loader2, CheckCircle, Trash2, Pencil } from "lucide-react";
+import { Loader2, CheckCircle, Trash2, Pencil, PlayCircle } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 
@@ -24,7 +24,7 @@ interface MatchActionButtonsProps {
   awayTeam?: string;
 }
 
-export function MatchActionButtons({ matchId, zoneId: _zoneId, status, homeTeam, awayTeam }: MatchActionButtonsProps) {
+export function MatchActionButtons({ matchId, zoneId, status, homeTeam, awayTeam }: MatchActionButtonsProps) {
   const router = useRouter();
   const [loading, setLoading] = useState<string | null>(null);
   const [scoreOpen, setScoreOpen] = useState(false);
@@ -72,6 +72,15 @@ export function MatchActionButtons({ matchId, zoneId: _zoneId, status, homeTeam,
     router.refresh();
   }
 
+  async function handleDemarrer() {
+    setLoading("demarrer");
+    const result = await updateMatchStatus(matchId, "en_cours");
+    setLoading(null);
+    if (result.error) { toast.error(result.error); return; }
+    toast.success("Match démarré");
+    router.refresh();
+  }
+
   return (
     <>
       <div className="flex gap-1">
@@ -86,6 +95,23 @@ export function MatchActionButtons({ matchId, zoneId: _zoneId, status, homeTeam,
             <Pencil className="h-3 w-3" />
           </Button>
         </Link>
+        {zoneId === null && status === "programme" && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleDemarrer}
+            disabled={loading === "demarrer"}
+            className="text-green-700 border-green-600 hover:bg-green-50"
+            title="Démarrer le match"
+          >
+            {loading === "demarrer" ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <><PlayCircle className="h-3 w-3 mr-1" />Démarrer</>
+            )}
+          </Button>
+        )}
         {status !== "termine" && status !== "annule" && (
           <Button
             type="button"

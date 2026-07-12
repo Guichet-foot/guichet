@@ -155,6 +155,8 @@ export async function updateMatchStatus(
 
   revalidatePath("/matchs");
   revalidatePath(`/matchs/${matchId}`);
+  revalidatePath("/matchs/communaux");
+  revalidatePath("/matchs/departementaux");
   return { success: true };
 }
 

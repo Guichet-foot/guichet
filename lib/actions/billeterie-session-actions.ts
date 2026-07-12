@@ -11,6 +11,18 @@ async function setTodayMatchesEnCours(filter: {
   odcav?: boolean;
 }) {
   const adminClient = await createAdminClient();
+
+  // ODCAV matches have no zone_id and may span multiple days — set ALL
+  // programme communal/départemental matches en_cours regardless of date.
+  if (filter.odcav) {
+    await adminClient
+      .from("matches")
+      .update({ status: "en_cours" })
+      .eq("status", "programme")
+      .in("match_type", ["Match Communal", "Match Départemental"]);
+    return;
+  }
+
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
   const todayEnd = new Date();
@@ -28,8 +40,6 @@ async function setTodayMatchesEnCours(filter: {
     query = query.eq("zone_id", filter.zoneId);
   } else if (filter.c3AccountId) {
     query = query.eq("c3_account_id", filter.c3AccountId);
-  } else if (filter.odcav) {
-    query = query.in("match_type", ["Match Communal", "Match Départemental"]);
   }
 
   await query;
