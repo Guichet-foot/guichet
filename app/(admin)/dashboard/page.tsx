@@ -29,8 +29,10 @@ export const metadata = { title: "Tableau de bord" };
 function parsePeriod(params: Record<string, string | undefined>) {
   const p = params.period || "30d";
   const now = new Date();
+  // End-of-today: ensures matches scheduled later today are counted in Billets imprimés
+  const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
   let dateStart: Date;
-  let dateEnd: Date = new Date(now);
+  let dateEnd: Date = todayEnd;
   let periodLabel = "30 derniers jours";
   let periodDays = 30;
 
