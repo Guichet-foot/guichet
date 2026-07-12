@@ -123,6 +123,7 @@ export default async function UsersPage({
                             role: user.role,
                             active: user.active,
                             is_president: user.is_president ?? false,
+                            permitted_modules: user.permitted_modules ?? null,
                           }}
                           currentUserId={profile.id}
                           currentUserRole={profile.role}
@@ -239,6 +240,7 @@ export default async function UsersPage({
                           role: user.role,
                           active: user.active,
                           is_president: user.is_president ?? false,
+                          permitted_modules: user.permitted_modules ?? null,
                         }}
                         currentUserId={profile.id}
                         currentUserRole={profile.role}

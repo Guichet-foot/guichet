@@ -6,10 +6,12 @@ import {
   deleteSuperAdmin,
   updateSuperAdminInfo,
   resetSuperAdminPassword,
+  fondateurUpdateSuperAdminModules,
 } from "@/lib/actions/fondateur-actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -25,6 +27,7 @@ import {
 } from "@/components/ui/dialog";
 import { Loader2, Ban, CheckCircle, Trash2, Pencil, KeyRound, Copy } from "lucide-react";
 import { toast } from "sonner";
+import { ADMIN_MODULES } from "@/lib/constants";
 
 interface SuperAdminActionsProps {
   userId: string;
@@ -33,9 +36,10 @@ interface SuperAdminActionsProps {
   phone?: string;
   email?: string;
   role: string;
+  permittedModules?: string[] | null;
 }
 
-export function SuperAdminActions({ userId, active, name, phone, email, role }: SuperAdminActionsProps) {
+export function SuperAdminActions({ userId, active, name, phone, email, role, permittedModules }: SuperAdminActionsProps) {
   const [loading, setLoading] = useState<string | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [passwordOpen, setPasswordOpen] = useState(false);
@@ -47,12 +51,14 @@ export function SuperAdminActions({ userId, active, name, phone, email, role }: 
   const [editRole, setEditRole] = useState<"super_admin" | "president_odcav">(
     role === "president_odcav" ? "president_odcav" : "super_admin"
   );
+  const [selectedModules, setSelectedModules] = useState<string[]>(permittedModules || []);
 
   function openEdit() {
     setEditName(name);
     setEditPhone(phone || "");
     setEditEmail(email || "");
     setEditRole(role === "president_odcav" ? "president_odcav" : "super_admin");
+    setSelectedModules(permittedModules || []);
     setEditOpen(true);
   }
 
@@ -81,8 +87,13 @@ export function SuperAdminActions({ userId, active, name, phone, email, role }: 
       email: editEmail,
       role: editRole,
     }) as any;
-    if (result.error) toast.error(result.error);
-    else { toast.success("Informations modifiées"); setEditOpen(false); }
+    if (result.error) { toast.error(result.error); setLoading(null); return; }
+
+    const modResult = await fondateurUpdateSuperAdminModules(userId, selectedModules) as any;
+    if (modResult.error) { toast.error(modResult.error); setLoading(null); return; }
+
+    toast.success("Informations modifiées");
+    setEditOpen(false);
     setLoading(null);
   }
 
@@ -148,6 +159,28 @@ export function SuperAdminActions({ userId, active, name, phone, email, role }: 
             <div className="space-y-2">
               <Label>Téléphone</Label>
               <Input value={editPhone} onChange={(e) => setEditPhone(e.target.value)} placeholder="+221 77 000 00 00" />
+            </div>
+            <div className="space-y-2">
+              <Label>Modules autorisés</Label>
+              <p className="text-xs text-muted-foreground">Laissez tout décoché pour accès complet.</p>
+              <div className="grid grid-cols-2 gap-2 border rounded-lg p-3">
+                {ADMIN_MODULES.map((mod) => (
+                  <div key={mod.key} className="flex items-center gap-2">
+                    <Checkbox
+                      id={`sa-mod-${mod.key}`}
+                      checked={selectedModules.includes(mod.key)}
+                      onCheckedChange={(checked) => {
+                        setSelectedModules((prev) =>
+                          checked ? [...prev, mod.key] : prev.filter((k) => k !== mod.key)
+                        );
+                      }}
+                    />
+                    <label htmlFor={`sa-mod-${mod.key}`} className="text-sm cursor-pointer">
+                      {mod.label}
+                    </label>
+                  </div>
+                ))}
+              </div>
             </div>
             <Button type="button" onClick={handleUpdateInfo} disabled={loading === "edit"} className="w-full bg-amber-600 hover:bg-amber-700">
               {loading === "edit" ? <Loader2 className="h-4 w-4 animate-spin" /> : "Enregistrer"}

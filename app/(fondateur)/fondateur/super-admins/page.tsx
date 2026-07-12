@@ -27,7 +27,7 @@ export default async function SuperAdminsPage({
 
   const { data: superAdmins } = await supabase
     .from("profiles")
-    .select("id, full_name, phone, active, role, created_at")
+    .select("id, full_name, phone, active, role, created_at, permitted_modules")
     .in("role", ["super_admin", "president_odcav"])
     .eq("created_by_admin", profile.id)
     .order("created_at", { ascending: false });
@@ -128,7 +128,7 @@ export default async function SuperAdminsPage({
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex gap-1 justify-end">
-                          <SuperAdminActions userId={sa.id} active={sa.active} name={sa.full_name} phone={sa.phone} email={emails[sa.id]} role={sa.role} />
+                          <SuperAdminActions userId={sa.id} active={sa.active} name={sa.full_name} phone={sa.phone} email={emails[sa.id]} role={sa.role} permittedModules={(sa as any).permitted_modules} />
                           <Link href={`/fondateur/super-admins/${sa.id}`}>
                             <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
                               <Eye className="h-3 w-3" />

@@ -7,7 +7,10 @@ import {
   updateSelfInfo,
   resetUserPassword,
   deleteUser,
+  updateUserPermittedModules,
 } from "@/lib/actions/user-actions";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ADMIN_MODULES } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,6 +51,7 @@ interface UserActionsProps {
     role: string;
     active: boolean;
     is_president: boolean;
+    permitted_modules?: string[] | null;
   };
   currentUserId: string;
   currentUserRole: string;
@@ -68,6 +72,7 @@ export function UserActions({
   const [fullName, setFullName] = useState(user.full_name);
   const [phone, setPhone] = useState(user.phone || "");
   const [role, setRole] = useState(user.role);
+  const [selectedModules, setSelectedModules] = useState<string[]>(user.permitted_modules || []);
 
   // Self password change fields
   const [selfPassword, setSelfPassword] = useState("");
@@ -100,8 +105,16 @@ export function UserActions({
   async function handleUpdateInfo() {
     setLoading("edit");
     const result = await updateUserInfo(user.id, { fullName, phone, role });
-    if (result.error) toast.error(result.error);
-    else { toast.success("Informations modifiées"); setEditOpen(false); }
+    if (result.error) { toast.error(result.error); setLoading(null); return; }
+
+    // Save module permissions when president_odcav edits a super_admin
+    if (currentUserRole === "president_odcav" && (user.role === "super_admin" || role === "super_admin")) {
+      const modResult = await updateUserPermittedModules(user.id, selectedModules);
+      if (modResult.error) { toast.error(modResult.error); setLoading(null); return; }
+    }
+
+    toast.success("Informations modifiées");
+    setEditOpen(false);
     setLoading(null);
   }
 
@@ -356,6 +369,33 @@ export function UserActions({
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Module permissions — only when president_odcav edits a super_admin */}
+            {currentUserRole === "president_odcav" && (user.role === "super_admin" || role === "super_admin") && (
+              <div className="space-y-2">
+                <Label>Modules autorisés</Label>
+                <p className="text-xs text-muted-foreground">Laissez tout décoché pour accès complet.</p>
+                <div className="grid grid-cols-2 gap-2 border rounded-lg p-3">
+                  {ADMIN_MODULES.map((mod) => (
+                    <div key={mod.key} className="flex items-center gap-2">
+                      <Checkbox
+                        id={`mod-${mod.key}`}
+                        checked={selectedModules.includes(mod.key)}
+                        onCheckedChange={(checked) => {
+                          setSelectedModules((prev) =>
+                            checked ? [...prev, mod.key] : prev.filter((k) => k !== mod.key)
+                          );
+                        }}
+                      />
+                      <label htmlFor={`mod-${mod.key}`} className="text-sm cursor-pointer">
+                        {mod.label}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <Button
               type="button"
               onClick={handleUpdateInfo}

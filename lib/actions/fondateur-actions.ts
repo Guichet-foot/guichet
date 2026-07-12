@@ -337,3 +337,32 @@ export async function fondateurSubUserResetPassword(userId: string) {
   if (error) return { error: error.message };
   return { password: newPassword };
 }
+
+// ── fondateurUpdateSuperAdminModules ──────────────────────────────
+export async function fondateurUpdateSuperAdminModules(userId: string, modules: string[]) {
+  const supabase = await createClient();
+  const { data: { user: currentUser } } = await supabase.auth.getUser();
+  if (!currentUser) return { error: "Non authentifié" };
+  const { data: caller } = await supabase.from("profiles").select("role").eq("id", currentUser.id).single();
+  if (caller?.role !== "fondateur") return { error: "Non autorisé" };
+
+  const adminClient = await createAdminClient();
+  const { data: target } = await adminClient
+    .from("profiles")
+    .select("role")
+    .eq("id", userId)
+    .single();
+
+  if (!target || !["super_admin", "president_odcav"].includes(target.role)) {
+    return { error: "Non autorisé" };
+  }
+
+  const { error } = await adminClient
+    .from("profiles")
+    .update({ permitted_modules: modules.length > 0 ? modules : null })
+    .eq("id", userId);
+
+  if (error) return { error: error.message };
+  revalidatePath("/fondateur/super-admins");
+  return { success: true };
+}

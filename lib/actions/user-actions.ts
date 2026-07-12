@@ -260,6 +260,36 @@ export async function updateSelfInfo(formData: { fullName: string; phone: string
   return { success: true };
 }
 
+// ── updateUserPermittedModules ────────────────────────────────────
+export async function updateUserPermittedModules(userId: string, modules: string[]) {
+  const check = await canManage(userId);
+  if ("error" in check) return { error: check.error };
+
+  if (check.caller.role !== "president_odcav") {
+    return { error: "Non autorisé" };
+  }
+
+  const adminClient = await createAdminClient();
+  const { data: target } = await adminClient
+    .from("profiles")
+    .select("role")
+    .eq("id", userId)
+    .single();
+
+  if (!target || target.role !== "super_admin") {
+    return { error: "Les modules ne s'appliquent qu'aux comptes Super Admin" };
+  }
+
+  const { error } = await adminClient
+    .from("profiles")
+    .update({ permitted_modules: modules.length > 0 ? modules : null })
+    .eq("id", userId);
+
+  if (error) return { error: error.message };
+  revalidatePath("/utilisateurs");
+  return { success: true };
+}
+
 // ── deleteUser ────────────────────────────────────────────────────
 export async function deleteUser(userId: string) {
   const check = await canManage(userId);
