@@ -19,7 +19,7 @@ export default async function InvendusPage({
 }: {
   searchParams: Promise<{ zone?: string; tab?: string }>;
 }) {
-  const profile = await requireRole(["super_admin", "admin_zone", "c3"]);
+  const profile = await requireRole(["super_admin", "admin_zone", "c3", "president_odcav", "tresorier"]);
   const params = await searchParams;
 
   const isOdcavRole =

@@ -5,9 +5,9 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 
-// Lecture seule pour president_odcav : matchs terminés d'une zone spécifique
+// Lecture seule pour president_odcav / tresorier : matchs terminés d'une zone spécifique
 export async function getFinishedMatchesForZone(zoneId: string): Promise<any[]> {
-  await requireRole(["super_admin"]);
+  await requireRole(["super_admin", "president_odcav", "tresorier"]);
   const adminClient = await createAdminClient();
   const { data } = await adminClient
     .from("matches")
@@ -42,16 +42,13 @@ export async function getFinishedMatches() {
   } else if (profile.role === "c3") {
     // C3: only their own matches
     query = query.eq("c3_account_id", profile.id);
-  } else if (profile.role === "super_admin") {
-    // Sub-admins inherit parent's zones
-    const ownerId = profile.created_by_admin ?? profile.id;
-    const { data: ownedZones } = await adminClient
-      .from("zones")
-      .select("id")
-      .eq("created_by", ownerId);
-    const zoneIds = (ownedZones || []).map((z: any) => z.id);
-    if (zoneIds.length === 0) return [];
-    query = query.in("zone_id", zoneIds);
+  } else if (profile.role === "super_admin" || profile.role === "president_odcav" || profile.role === "tresorier") {
+    const ownerId = (profile.role === "tresorier" && (profile as any).created_by_admin)
+      ? (profile as any).created_by_admin as string : profile.id;
+    const { data: subAdmins } = await adminClient
+      .from("profiles").select("id").eq("created_by_admin", ownerId);
+    const creatorIds = [ownerId, ...((subAdmins || []) as any[]).map((p: any) => p.id as string)];
+    query = query.in("created_by", creatorIds).not("zone_id", "is", null);
   }
   // fondateur: no filter — sees all
 
@@ -291,12 +288,12 @@ export async function getMatchesForReassignment(excludeMatchId: string): Promise
     else return [];
   } else if (profile.role === "c3") {
     query = query.eq("c3_account_id", profile.id);
-  } else if (profile.role === "super_admin") {
-    const ownerId = profile.created_by_admin ?? profile.id;
-    const { data: ownedZones } = await adminClient.from("zones").select("id").eq("created_by", ownerId);
-    const zoneIds = ((ownedZones || []) as any[]).map((z) => z.id);
-    if (zoneIds.length === 0) return [];
-    query = query.in("zone_id", zoneIds);
+  } else if (profile.role === "super_admin" || profile.role === "president_odcav" || profile.role === "tresorier") {
+    const ownerId = (profile.role === "tresorier" && (profile as any).created_by_admin)
+      ? (profile as any).created_by_admin as string : profile.id;
+    const { data: subAdmins } = await adminClient.from("profiles").select("id").eq("created_by_admin", ownerId);
+    const creatorIds = [ownerId, ...((subAdmins || []) as any[]).map((p: any) => p.id as string)];
+    query = query.in("created_by", creatorIds).not("zone_id", "is", null);
   }
 
   const { data } = await query;
@@ -345,13 +342,14 @@ export async function reassignTicketsToMatch(
 
 // Matchs communaux/départementaux terminés — pour les onglets invendus ODCAV
 export async function getFinishedInterMatches(matchType: "Match Communal" | "Match Départemental"): Promise<any[]> {
-  const profile = await requireRole(["super_admin"]);
+  const profile = await requireRole(["super_admin", "president_odcav", "tresorier"]);
   const adminClient = await createAdminClient();
-  const ownerId = profile.created_by_admin ?? profile.id;
+  // Use profile.id as root identity; tresorier inherits from their parent
+  const ownerId = (profile.role === "tresorier" && profile.created_by_admin)
+    ? profile.created_by_admin as string : profile.id;
 
-  // Include sub-admins of the same ODCAV
   const { data: subAdmins } = await adminClient.from("profiles").select("id").eq("created_by_admin", ownerId);
-  const creatorIds = [ownerId, ...(subAdmins || []).map((p: any) => p.id as string)];
+  const creatorIds = [ownerId, ...((subAdmins || []) as any[]).map((p: any) => p.id as string)];
 
   const { data } = await adminClient
     .from("matches")
@@ -374,12 +372,13 @@ export async function getInterMatchesForReassignment(
   excludeMatchId: string,
   matchType: "Match Communal" | "Match Départemental"
 ): Promise<{ id: string; home_team: string; away_team: string; match_date: string }[]> {
-  const profile = await requireRole(["super_admin"]);
+  const profile = await requireRole(["super_admin", "president_odcav", "tresorier"]);
   const adminClient = await createAdminClient();
-  const ownerId = profile.created_by_admin ?? profile.id;
+  const ownerId = (profile.role === "tresorier" && profile.created_by_admin)
+    ? profile.created_by_admin as string : profile.id;
 
   const { data: subAdmins } = await adminClient.from("profiles").select("id").eq("created_by_admin", ownerId);
-  const creatorIds = [ownerId, ...(subAdmins || []).map((p: any) => p.id as string)];
+  const creatorIds = [ownerId, ...((subAdmins || []) as any[]).map((p: any) => p.id as string)];
 
   const { data } = await adminClient
     .from("matches")

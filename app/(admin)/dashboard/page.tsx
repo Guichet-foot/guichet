@@ -13,14 +13,11 @@ import { RevenueDonut } from "./revenue-donut";
 import { DashboardFilters } from "./dashboard-filters";
 import { ZoneCardGrid } from "@/components/zone-card-grid";
 import { ZoneBackHeader } from "@/components/zone-back-header";
-import { PrintButton } from "@/components/print-button";
 import { StatCard } from "./stat-card";
 import { GlobalStatsChart } from "./global-stats-chart";
 import { ZoneDonutChart } from "./zone-donut-chart";
 import { ZonePerformanceTable } from "./zone-performance-table";
-import { RecentMatchesList } from "./recent-matches-list";
 import { SecondaryIndicators } from "./secondary-indicators";
-import dynamic from "next/dynamic";
 import type { ChartPoint } from "./global-stats-chart";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -306,39 +303,9 @@ export default async function DashboardPage({
       }
     }
 
-    // ── Recent matches ────────────────────────────────────────────────────
-    const recentMatchRows = (matchesPeriod || []).slice(0, 5);
-    const recentMatchIds  = recentMatchRows.map((m: any) => m.id);
-    let recentTickets: any[] = [];
-    if (recentMatchIds.length > 0) {
-      recentTickets = await fetchAll<any>((from, to) =>
-        adminClient.from("tickets")
-          .select("match_id, price, status, bloc_printed, counts_as_revenue")
-          .in("match_id", recentMatchIds)
-          .range(from, to)
-      );
-    }
+    // Zone name map (for StatCard zone label)
     const zoneNameMap: Record<string, string> = {};
     allZones.forEach((z) => { zoneNameMap[z.id] = z.name; });
-
-    const recentMatches = recentMatchRows.map((m: any) => {
-      const mTickets = recentTickets.filter((t: any) => t.match_id === m.id);
-      const printed  = mTickets.filter((t: any) => t.bloc_printed).length;
-      const sold     = mTickets.filter((t: any) => t.status === "scanne").length;
-      const revenue  = mTickets
-        .filter((t: any) => t.counts_as_revenue && t.status === "scanne")
-        .reduce((s: number, t: any) => s + t.price, 0);
-      return {
-        id: m.id,
-        homeTeam: m.home_team,
-        awayTeam: m.away_team,
-        zoneName: m.zone_id ? (zoneNameMap[m.zone_id] || "Zone") : "ODCAV",
-        matchDate: m.match_date,
-        printed,
-        unsold: Math.max(0, printed - sold),
-        revenue,
-      };
-    });
 
     // ── Teams active ─────────────────────────────────────────────────────
     const teamsInPeriod = new Set<string>();
@@ -360,9 +327,6 @@ export default async function DashboardPage({
           <div>
             <h1 className="text-xl sm:text-2xl font-bold font-heading">Tableau de bord</h1>
             <p className="text-sm text-muted-foreground mt-0.5">{periodLabel}</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <PrintButton />
           </div>
         </div>
 
@@ -432,29 +396,15 @@ export default async function DashboardPage({
           </Card>
         </div>
 
-        {/* Table + Recent matches — 2 cols on desktop */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 sm:gap-6">
-          <Card className="rounded-2xl shadow-sm border-border/40">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base sm:text-lg">Performances par zone</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ZonePerformanceTable zones={zonePerformance} />
-            </CardContent>
-          </Card>
-
-          <Card className="rounded-2xl shadow-sm border-border/40">
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base sm:text-lg">Matchs récents</CardTitle>
-                <a href="/matchs" className="text-xs text-brand hover:underline font-medium">Voir tous</a>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <RecentMatchesList matches={recentMatches} />
-            </CardContent>
-          </Card>
-        </div>
+        {/* Zone performance table — full width */}
+        <Card className="rounded-2xl shadow-sm border-border/40">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base sm:text-lg">Performances par zone</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ZonePerformanceTable zones={zonePerformance} />
+          </CardContent>
+        </Card>
 
         {/* Frais summary */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -697,12 +647,9 @@ export default async function DashboardPage({
   return (
     <div className="space-y-5 sm:space-y-6">
       {selectedZone && <ZoneBackHeader zoneName={selectedZone.name} />}
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold font-heading">Tableau de bord</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">{periodLabel2}</p>
-        </div>
-        <PrintButton />
+      <div>
+        <h1 className="text-xl sm:text-2xl font-bold font-heading">Tableau de bord</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">{periodLabel2}</p>
       </div>
 
       <DashboardFilters matches={filterMatches} />

@@ -13,7 +13,6 @@ import { buildZoneUrl } from "@/lib/zone-utils";
 import { ZoneCardGrid } from "@/components/zone-card-grid";
 import { ZoneBackHeader } from "@/components/zone-back-header";
 import { FinancesFilters } from "./finances-filters";
-import { PrintButton } from "@/components/print-button";
 import { FinancesOdcavTabs } from "./finances-odcav-tabs";
 import { fetchAll } from "@/lib/supabase/paginate";
 
@@ -249,7 +248,6 @@ export default async function FinancesPage({
           <p className="text-muted-foreground print:hidden">{periodLabel}</p>
         </div>
         <div className="flex gap-2 print:hidden">
-          <PrintButton label="PDF" />
           <Link href={buildZoneUrl("/finances/depenses/nouveau", params.zone)}>
             <Button className="bg-brand hover:bg-brand/90">
               <Plus className="h-4 w-4 mr-2" />
