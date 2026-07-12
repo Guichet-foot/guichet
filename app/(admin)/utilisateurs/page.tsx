@@ -28,10 +28,29 @@ export default async function UsersPage({
   // ── Comptes directs tab ──────────────────────────────────────────
   if (isOdcavRole && activeTab === "directs") {
     const adminClient = await createAdminClient();
+
+    // All super_admins of the same ODCAV share visibility:
+    // president sees everyone created by any of their super_admins + themselves
+    // super_admin sees everyone created by their siblings (same president) + president + themselves
+    const odcavPresidentId =
+      profile.role === "super_admin" && profile.created_by_admin
+        ? profile.created_by_admin
+        : profile.id;
+
+    // Get all direct sub-accounts of the president (super_admins, tresoriers, etc.)
+    const { data: odcavMembers } = await adminClient
+      .from("profiles")
+      .select("id")
+      .eq("created_by_admin", odcavPresidentId);
+
+    const memberIds = (odcavMembers || []).map((m: any) => m.id as string);
+    // creatorIds = president + all their direct sub-accounts
+    const creatorIds = [odcavPresidentId, ...memberIds];
+
     const { data: directUsers } = await adminClient
       .from("profiles")
       .select("*")
-      .eq("created_by_admin", profile.id)
+      .in("created_by_admin", creatorIds)
       .order("role", { ascending: true })
       .order("created_at", { ascending: false });
 
