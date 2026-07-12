@@ -32,8 +32,7 @@ export default async function UsersPage({
       .from("profiles")
       .select("*")
       .eq("created_by_admin", profile.id)
-      .is("zone_id", null)
-      .in("role", ["c3", "super_admin", "tresorier"])
+      .order("role", { ascending: true })
       .order("created_at", { ascending: false });
 
     return (
@@ -57,15 +56,15 @@ export default async function UsersPage({
             {!directUsers || directUsers.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
                 <Network className="h-12 w-12 mb-4" />
-                <p>Aucun compte direct</p>
-                <p className="text-sm mt-1">Créez des comptes C3 ou des comptes avec accès direct</p>
+                <p>Aucun compte créé</p>
+                <p className="text-sm mt-1">Les comptes que vous créez apparaîtront ici</p>
               </div>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Nom</TableHead>
-                    <TableHead className="hidden sm:table-cell">Ville</TableHead>
+                    <TableHead className="hidden sm:table-cell">Téléphone</TableHead>
                     <TableHead>Rôle</TableHead>
                     <TableHead>Statut</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
@@ -75,7 +74,7 @@ export default async function UsersPage({
                   {(directUsers as any[]).map((user) => (
                     <TableRow key={user.id}>
                       <TableCell className="font-medium">{user.full_name}</TableCell>
-                      <TableCell className="hidden sm:table-cell">{user.city || "—"}</TableCell>
+                      <TableCell className="hidden sm:table-cell">{user.phone || "—"}</TableCell>
                       <TableCell>
                         <Badge variant="secondary" className={ROLE_COLORS[user.role]}>
                           {ROLE_LABELS[user.role]}
