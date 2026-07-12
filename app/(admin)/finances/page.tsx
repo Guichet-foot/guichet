@@ -186,7 +186,7 @@ export default async function FinancesPage({
     .reduce((sum: number, t: any) => sum + t.price, 0) + bilRevenue;
 
   const odcavCommission = Math.round(totalRevenue * odcavRate);
-  const fraisPlateformePeriod = totalPrinted * 10;
+  const fraisPlateformePeriod = totalScanned * 10;
 
   // ── Expenses ─────────────────────────────────────────────────────
   const expenseFrom = dateStart.toISOString().split("T")[0];
@@ -365,7 +365,7 @@ export default async function FinancesPage({
               <div>
                 <p className="text-sm text-orange-700 font-medium">Frais billetterie</p>
                 <p className="text-xl font-bold text-orange-800">{formatFCFA(fraisPlateformePeriod)}</p>
-                <p className="text-xs text-orange-600 mt-0.5">{totalPrinted} billet{totalPrinted !== 1 ? "s" : ""} × 10 FCFA</p>
+                <p className="text-xs text-orange-600 mt-0.5">{totalScanned} billet{totalScanned !== 1 ? "s" : ""} validé{totalScanned !== 1 ? "s" : ""} × 10 FCFA</p>
               </div>
               <ReceiptText className="h-7 w-7 text-orange-400" />
             </div>

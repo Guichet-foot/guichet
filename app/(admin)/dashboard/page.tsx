@@ -318,7 +318,7 @@ export default async function DashboardPage({
     const teamsActive  = teamsInPeriod.size;
     const unsoldRate   = totalPrinted > 0 ? (totalUnsold / totalPrinted) * 100 : 0;
     const fraisODCAV   = Math.round(grossRevenue * 0.05);
-    const fraisBil     = totalPrinted * 10;
+    const fraisBil     = totalScanned * 10;
 
     // ── Render ───────────────────────────────────────────────────────────
     return (
@@ -430,7 +430,7 @@ export default async function DashboardPage({
               <div>
                 <p className="text-sm text-orange-700 font-medium">Frais billetterie</p>
                 <p className="text-2xl font-bold text-orange-800 tabular-nums">{formatFCFA(fraisBil)}</p>
-                <p className="text-xs text-orange-600">{totalPrinted.toLocaleString("fr-FR")} billets × 10 FCFA</p>
+                <p className="text-xs text-orange-600">{totalScanned.toLocaleString("fr-FR")} billets validés × 10 FCFA</p>
               </div>
             </CardContent>
           </Card>
@@ -551,7 +551,7 @@ export default async function DashboardPage({
     .filter((t: any) => t.counts_as_revenue && t.status === "scanne")
     .reduce((s: number, t: any) => s + (t.price || 0), 0) + bilRevenue;
   const fraisODCAV      = Math.round(grossRevenue * 0.05);
-  const fraisBilleterie = totalPrinted * 10;
+  const fraisBilleterie = totalScanned * 10;
 
   // Upcoming matches
   const now = new Date().toISOString();
@@ -686,7 +686,7 @@ export default async function DashboardPage({
             <div>
               <p className="text-sm text-orange-700">Frais billetterie</p>
               <p className="text-2xl font-bold text-orange-800 tabular-nums">{formatFCFA(fraisBilleterie)}</p>
-              <p className="text-xs text-orange-600 mt-0.5">{totalPrinted.toLocaleString("fr-FR")} billets × 10 FCFA</p>
+              <p className="text-xs text-orange-600 mt-0.5">{totalScanned.toLocaleString("fr-FR")} billets validés × 10 FCFA</p>
             </div>
             <ReceiptText className="h-8 w-8 text-orange-400/60" />
           </CardContent>
