@@ -199,7 +199,7 @@ export function TeamsReport({ zones, generatedAt, odcavName, totalTeams }: Props
 
         {/* Zones */}
         {zones.map((zone) => (
-          <View key={zone.zoneName} style={styles.zoneBlock} wrap={false}>
+          <View key={zone.zoneName} style={styles.zoneBlock}>
             <View style={styles.zoneHeader}>
               <Text style={styles.zoneTitle}>{zone.zoneName}</Text>
               <Text style={styles.zoneBadge}>{zone.teams.length} équipe{zone.teams.length !== 1 ? "s" : ""}</Text>
