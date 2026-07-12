@@ -90,11 +90,12 @@ export default function NewUserPage() {
   const availableRoles = (() => {
     if (isOdcavRole) {
       if (isDirectsMode) {
-        // Comptes directs: C3, direct super_admin sub-accounts, and tresorier
+        // Comptes directs: C3, direct super_admin sub-accounts, tresorier, portier global
         return [
           { value: "c3",         label: "Coordination C3" },
           { value: "super_admin",label: "Super Admin (accès direct)" },
           { value: "tresorier",  label: "Trésorier" },
+          { value: "portier",    label: "Portier (tous matchs)" },
         ];
       }
       // Zone-based creation (from ?zone=xxx or zone card): no C3, no super_admin
