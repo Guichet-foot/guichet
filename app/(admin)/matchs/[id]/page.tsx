@@ -22,7 +22,7 @@ export default async function MatchDetailPage({
 }) {
   const { id } = await params;
   const { zone } = await searchParams;
-  const profile = await requireRole(["super_admin", "admin_zone", "c3", "fondateur"]);
+  const profile = await requireRole(["super_admin", "admin_zone", "c3", "fondateur", "president_odcav"]);
 
   const adminClient = await createAdminClient();
 

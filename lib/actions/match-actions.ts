@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { requireRole } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import type { MatchStatus } from "@/lib/types";
 
@@ -133,7 +134,8 @@ export async function updateMatchStatus(
   status: MatchStatus,
   scores?: { homeScore: number; awayScore: number }
 ) {
-  const supabase = await createClient();
+  await requireRole(["fondateur", "super_admin", "admin_zone", "c3", "president_odcav"]);
+  const adminClient = await createAdminClient();
 
   const updateData: Record<string, unknown> = { status };
   if (status === "termine" || status === "annule") {
@@ -144,7 +146,7 @@ export async function updateMatchStatus(
     updateData.away_score = scores.awayScore;
   }
 
-  const { error } = await supabase
+  const { error } = await adminClient
     .from("matches")
     .update(updateData)
     .eq("id", matchId);
