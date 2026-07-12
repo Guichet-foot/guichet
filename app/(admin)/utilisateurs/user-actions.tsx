@@ -85,13 +85,16 @@ export function UserActions({
 
   // Roles available in the edit dialog
   const editableRoles = (() => {
+    if (currentUserRole === "president_odcav") {
+      return ["portier", "caissier", "admin_zone", "c3", "tresorier", "super_admin"];
+    }
     if (currentUserRole === "super_admin") {
-      return ["portier", "admin_zone", "super_admin"];
+      return ["portier", "caissier", "admin_zone", "c3", "tresorier", "super_admin"];
     }
     if (currentUserRole === "admin_zone" && currentUserIsPresident) {
-      return ["portier", "admin_zone"];
+      return ["portier", "caissier", "admin_zone"];
     }
-    return ["portier"];
+    return ["portier", "caissier"];
   })();
 
   async function handleUpdateInfo() {
@@ -344,10 +347,12 @@ export function UserActions({
               <Select value={role} onValueChange={(v) => setRole(v ?? role)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {editableRoles.includes("caissier")   && <SelectItem value="caissier">{ROLE_LABELS.caissier}</SelectItem>}
-                  {editableRoles.includes("portier")    && <SelectItem value="portier">{ROLE_LABELS.portier}</SelectItem>}
-                  {editableRoles.includes("admin_zone") && <SelectItem value="admin_zone">{ROLE_LABELS.admin_zone}</SelectItem>}
-                  {editableRoles.includes("super_admin")&& <SelectItem value="super_admin">{ROLE_LABELS.super_admin}</SelectItem>}
+                  {editableRoles.includes("caissier")    && <SelectItem value="caissier">{ROLE_LABELS.caissier}</SelectItem>}
+                  {editableRoles.includes("portier")     && <SelectItem value="portier">{ROLE_LABELS.portier}</SelectItem>}
+                  {editableRoles.includes("admin_zone")  && <SelectItem value="admin_zone">{ROLE_LABELS.admin_zone}</SelectItem>}
+                  {editableRoles.includes("c3")          && <SelectItem value="c3">{ROLE_LABELS.c3}</SelectItem>}
+                  {editableRoles.includes("tresorier")   && <SelectItem value="tresorier">{ROLE_LABELS.tresorier}</SelectItem>}
+                  {editableRoles.includes("super_admin") && <SelectItem value="super_admin">{ROLE_LABELS.super_admin}</SelectItem>}
                 </SelectContent>
               </Select>
             </div>
