@@ -47,12 +47,19 @@ export default async function UsersPage({
     // creatorIds = president + all their direct sub-accounts
     const creatorIds = [odcavPresidentId, ...memberIds];
 
-    const { data: directUsers } = await adminClient
+    let directQuery = adminClient
       .from("profiles")
       .select("*")
       .in("created_by_admin", creatorIds)
       .order("role", { ascending: true })
       .order("created_at", { ascending: false });
+
+    // super_admin must not see other super_admin peers (avoid conflicts between supervisors)
+    if (profile.role === "super_admin") {
+      directQuery = directQuery.neq("role", "super_admin");
+    }
+
+    const { data: directUsers } = await directQuery;
 
     return (
       <div className="space-y-6">
