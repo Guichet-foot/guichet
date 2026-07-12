@@ -37,18 +37,21 @@ export async function requireAuth(): Promise<Profile> {
 
 export async function requireRole(roles: UserRole[]): Promise<Profile> {
   const profile = await requireAuth();
-  // president_odcav and tresorier have the same access as super_admin everywhere
-  const effectiveRoles = roles.includes("super_admin")
-    ? ([
-        ...roles,
-        ...(!roles.includes("president_odcav") ? ["president_odcav"] : []),
-        ...(!roles.includes("tresorier") ? ["tresorier"] : []),
-      ] as UserRole[])
-    : roles;
+  // president_odcav and tresorier inherit super_admin access
+  // assistant_fondateur and billetterie_fondateur inherit fondateur access
+  let effectiveRoles = [...roles] as UserRole[];
+  if (roles.includes("super_admin")) {
+    if (!effectiveRoles.includes("president_odcav")) effectiveRoles.push("president_odcav");
+    if (!effectiveRoles.includes("tresorier")) effectiveRoles.push("tresorier");
+  }
+  if (roles.includes("fondateur")) {
+    if (!effectiveRoles.includes("assistant_fondateur")) effectiveRoles.push("assistant_fondateur");
+    if (!effectiveRoles.includes("billetterie_fondateur")) effectiveRoles.push("billetterie_fondateur");
+  }
   if (!effectiveRoles.includes(profile.role)) {
     if (profile.role === "caissier") redirect("/vente");
     if (profile.role === "portier") redirect("/scanner");
-    if (profile.role === "fondateur") redirect("/fondateur/dashboard");
+    if (profile.role === "fondateur" || profile.role === "assistant_fondateur" || profile.role === "billetterie_fondateur") redirect("/fondateur/dashboard");
     redirect("/dashboard");
   }
   return profile;

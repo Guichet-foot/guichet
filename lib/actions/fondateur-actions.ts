@@ -236,3 +236,104 @@ export async function fondateurResetPassword(userId: string) {
   if (error) return { error: error.message };
   return { password: newPassword };
 }
+
+// ── Fondateur sub-users (assistant_fondateur / billetterie_fondateur) ─────────
+
+function generatePassword(len = 8): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+  let p = "";
+  for (let i = 0; i < len; i++) p += chars.charAt(Math.floor(Math.random() * chars.length));
+  return p;
+}
+
+export async function createFondateurSubUser(formData: {
+  email: string;
+  fullName: string;
+  phone: string;
+  role: "assistant_fondateur" | "billetterie_fondateur";
+  permittedModules: string[];
+}) {
+  const supabase = await createClient();
+  const { data: { user: currentUser } } = await supabase.auth.getUser();
+  if (!currentUser) return { error: "Non authentifié" };
+
+  const { data: caller } = await supabase.from("profiles").select("role").eq("id", currentUser.id).single();
+  if (caller?.role !== "fondateur") return { error: "Non autorisé" };
+
+  const adminClient = await createAdminClient();
+  const tempPassword = generatePassword();
+
+  const { data: authUser, error: authError } = await adminClient.auth.admin.createUser({
+    email: formData.email,
+    password: tempPassword,
+    email_confirm: true,
+  });
+
+  if (authError || !authUser.user) return { error: authError?.message || "Erreur création compte" };
+
+  const { error: profileError } = await adminClient.from("profiles").insert({
+    id: authUser.user.id,
+    full_name: formData.fullName,
+    phone: formData.phone || null,
+    role: formData.role,
+    zone_id: null,
+    active: true,
+    created_by_admin: currentUser.id,
+    permitted_modules: formData.permittedModules,
+  });
+
+  if (profileError) {
+    await adminClient.auth.admin.deleteUser(authUser.user.id);
+    return { error: profileError.message };
+  }
+
+  revalidatePath("/fondateur/utilisateurs");
+  return { password: tempPassword };
+}
+
+export async function fondateurSubUserToggleActive(userId: string, active: boolean) {
+  const supabase = await createClient();
+  const { data: { user: currentUser } } = await supabase.auth.getUser();
+  if (!currentUser) return { error: "Non authentifié" };
+  const { data: caller } = await supabase.from("profiles").select("role").eq("id", currentUser.id).single();
+  if (caller?.role !== "fondateur") return { error: "Non autorisé" };
+
+  const adminClient = await createAdminClient();
+  const { error } = await adminClient.from("profiles").update({ active }).eq("id", userId);
+  if (error) return { error: error.message };
+  revalidatePath("/fondateur/utilisateurs");
+  return { success: true };
+}
+
+export async function fondateurSubUserDelete(userId: string) {
+  const supabase = await createClient();
+  const { data: { user: currentUser } } = await supabase.auth.getUser();
+  if (!currentUser) return { error: "Non authentifié" };
+  const { data: caller } = await supabase.from("profiles").select("role").eq("id", currentUser.id).single();
+  if (caller?.role !== "fondateur") return { error: "Non autorisé" };
+
+  const adminClient = await createAdminClient();
+  const { data: target } = await adminClient.from("profiles").select("role").eq("id", userId).single();
+  if (!target || (target.role !== "assistant_fondateur" && target.role !== "billetterie_fondateur")) {
+    return { error: "Utilisateur invalide" };
+  }
+
+  await adminClient.from("profiles").delete().eq("id", userId);
+  await adminClient.auth.admin.deleteUser(userId);
+  revalidatePath("/fondateur/utilisateurs");
+  return { success: true };
+}
+
+export async function fondateurSubUserResetPassword(userId: string) {
+  const supabase = await createClient();
+  const { data: { user: currentUser } } = await supabase.auth.getUser();
+  if (!currentUser) return { error: "Non authentifié" };
+  const { data: caller } = await supabase.from("profiles").select("role").eq("id", currentUser.id).single();
+  if (caller?.role !== "fondateur") return { error: "Non autorisé" };
+
+  const adminClient = await createAdminClient();
+  const newPassword = generatePassword();
+  const { error } = await adminClient.auth.admin.updateUserById(userId, { password: newPassword });
+  if (error) return { error: error.message };
+  return { password: newPassword };
+}

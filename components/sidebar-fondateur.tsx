@@ -4,25 +4,30 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { LayoutDashboard, Users, LogOut, Menu, X, Settings2, Trophy, IdCard, Shield, TicketCheck } from "lucide-react";
+import { LayoutDashboard, Users, LogOut, Menu, X, Settings2, Trophy, IdCard, Shield, TicketCheck, UserCog } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
+import { ROLE_LABELS } from "@/lib/constants";
 
 interface SidebarFondateurProps {
   userName: string;
+  userRole: string;
+  permittedModules: string[] | null;
 }
 
-const links = [
-  { href: "/fondateur/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/fondateur/super-admins", label: "Super Admins", icon: Users },
-  { href: "/fondateur/matchs", label: "Matchs", icon: Trophy },
-  { href: "/fondateur/cartes", label: "Cartes d'accès", icon: IdCard },
-  { href: "/fondateur/equipes", label: "Équipes", icon: Shield },
-  { href: "/fondateur/billeterie", label: "Billetterie", icon: TicketCheck },
-  { href: "/fondateur/parametres", label: "Paramètres", icon: Settings2 },
-];
+const ALL_LINKS = [
+  { key: "dashboard",    href: "/fondateur/dashboard",    label: "Dashboard",      icon: LayoutDashboard },
+  { key: "super-admins", href: "/fondateur/super-admins", label: "Super Admins",   icon: Users },
+  { key: "matchs",       href: "/fondateur/matchs",       label: "Matchs",         icon: Trophy },
+  { key: "cartes",       href: "/fondateur/cartes",       label: "Cartes d'accès", icon: IdCard },
+  { key: "equipes",      href: "/fondateur/equipes",      label: "Équipes",        icon: Shield },
+  { key: "billeterie",   href: "/fondateur/billeterie",   label: "Billetterie",    icon: TicketCheck },
+  { key: "parametres",   href: "/fondateur/parametres",   label: "Paramètres",     icon: Settings2 },
+  // Utilisateurs: visible only to the fondateur role itself
+  { key: "utilisateurs", href: "/fondateur/utilisateurs", label: "Utilisateurs",   icon: UserCog, fondateurOnly: true },
+] as const;
 
-export function SidebarFondateur({ userName }: SidebarFondateurProps) {
+export function SidebarFondateur({ userName, userRole, permittedModules }: SidebarFondateurProps) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
@@ -31,6 +36,26 @@ export function SidebarFondateur({ userName }: SidebarFondateurProps) {
     await supabase.auth.signOut();
     window.location.href = "/fondateur";
   }
+
+  const isFondateur = userRole === "fondateur";
+
+  // Filter visible links
+  const visibleLinks = ALL_LINKS.filter((link) => {
+    // "utilisateurs" is exclusive to the fondateur role
+    if ("fondateurOnly" in link && link.fondateurOnly && !isFondateur) return false;
+    // Dashboard is always visible
+    if (link.key === "dashboard") return true;
+    // Fondateur sees everything
+    if (isFondateur) return true;
+    // Sub-roles see only permitted modules
+    return permittedModules ? permittedModules.includes(link.key) : false;
+  });
+
+  const roleLabel = ROLE_LABELS[userRole] || userRole;
+  const roleBadgeColor =
+    userRole === "fondateur" ? "text-amber-400" :
+    userRole === "assistant_fondateur" ? "text-sky-400" :
+    "text-green-400";
 
   return (
     <>
@@ -51,7 +76,9 @@ export function SidebarFondateur({ userName }: SidebarFondateurProps) {
             <div className="flex items-center justify-between">
               <div>
                 <Image src="/logo-sidebar.png" alt="Guichet Foot" width={180} height={45} className="h-12 w-auto" priority />
-                <p className="text-xs text-amber-400 mt-1 font-semibold">Espace Fondateur</p>
+                <p className={`text-xs mt-1 font-semibold ${roleBadgeColor}`}>
+                  {isFondateur ? "Espace Fondateur" : `Espace Fondateur — ${roleLabel}`}
+                </p>
               </div>
               <button onClick={() => setOpen(false)} className="lg:hidden text-white/70 hover:text-white" aria-label="Fermer">
                 <X className="h-5 w-5" />
@@ -60,7 +87,7 @@ export function SidebarFondateur({ userName }: SidebarFondateurProps) {
           </div>
 
           <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-            {links.map((link) => {
+            {visibleLinks.map((link) => {
               const isActive = pathname.startsWith(link.href);
               return (
                 <Link
@@ -83,7 +110,7 @@ export function SidebarFondateur({ userName }: SidebarFondateurProps) {
           <div className="p-4 border-t border-white/10 shrink-0">
             <div className="mb-3">
               <p className="text-sm font-medium truncate">{userName}</p>
-              <p className="text-xs text-amber-400">Fondateur</p>
+              <p className={`text-xs ${roleBadgeColor}`}>{roleLabel}</p>
             </div>
             <Button variant="ghost" size="sm" onClick={handleLogout} className="w-full justify-start text-white/70 hover:text-white hover:bg-white/10">
               <LogOut className="h-4 w-4 mr-2" />

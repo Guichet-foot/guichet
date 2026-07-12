@@ -40,6 +40,8 @@ export const EXPENSE_CATEGORY_LABELS: Record<string, string> = {
 
 export const ROLE_LABELS: Record<string, string> = {
   fondateur: "Fondateur",
+  assistant_fondateur: "Assistant",
+  billetterie_fondateur: "Billetterie",
   president_odcav: "Président ODCAV",
   super_admin: "Super Admin",
   admin_zone: "Admin Zone",
@@ -51,6 +53,8 @@ export const ROLE_LABELS: Record<string, string> = {
 
 export const ROLE_COLORS: Record<string, string> = {
   fondateur: "bg-amber-100 text-amber-800",
+  assistant_fondateur: "bg-sky-100 text-sky-800",
+  billetterie_fondateur: "bg-green-100 text-green-800",
   president_odcav: "bg-amber-100 text-amber-800",
   super_admin: "bg-purple-100 text-purple-800",
   admin_zone: "bg-brand/10 text-brand",
@@ -59,6 +63,16 @@ export const ROLE_COLORS: Record<string, string> = {
   c3: "bg-teal-100 text-teal-800",
   tresorier: "bg-emerald-100 text-emerald-800",
 };
+
+// Modules disponibles pour les sous-comptes Fondateur
+export const FONDATEUR_MODULES = [
+  { key: "super-admins", label: "Super Admins" },
+  { key: "matchs",       label: "Matchs" },
+  { key: "cartes",       label: "Cartes d'accès" },
+  { key: "equipes",      label: "Équipes" },
+  { key: "billeterie",   label: "Billetterie" },
+  { key: "parametres",   label: "Paramètres" },
+];
 
 // Modules disponibles pour la sélection de permissions
 export const ADMIN_MODULES = [

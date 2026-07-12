@@ -1,4 +1,4 @@
-export type UserRole = "fondateur" | "president_odcav" | "super_admin" | "admin_zone" | "caissier" | "portier" | "c3" | "tresorier";
+export type UserRole = "fondateur" | "assistant_fondateur" | "billetterie_fondateur" | "president_odcav" | "super_admin" | "admin_zone" | "caissier" | "portier" | "c3" | "tresorier";
 
 export type MatchStatus = "programme" | "en_cours" | "termine" | "annule";
 
