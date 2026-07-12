@@ -46,35 +46,30 @@ export async function GET(request: Request) {
   const { data: zonesData } = await adminClient.from("zones").select("id, name").order("name");
   const allZones: { id: string; name: string }[] = zonesData || [];
 
-  // Build zone filter depending on role — mirrors the ODCAV isolation pattern in dashboard
+  // Build zone filter — mirrors getEffectiveZone logic exactly
+  // president_odcav / super_admin / tresorier: zones WHERE created_by = ownerId
+  // admin_zone: single zone
+  // c3: allowed_zones list
+  // fondateur / assistant / billetterie: all zones (null = no filter)
   let zoneIds: string[] | null = null;
   if (profile.role === "admin_zone" && profile.zone_id) {
     zoneIds = [profile.zone_id];
   } else if (profile.role === "c3" && profile.allowed_zones?.length) {
     zoneIds = profile.allowed_zones;
-  } else if (profile.role === "tresorier" && profile.created_by_admin) {
-    // tresorier: ownerId = president_odcav who created them
-    const { data: subAdmins } = await adminClient
-      .from("profiles")
-      .select("zone_id")
-      .eq("created_by_admin", profile.created_by_admin)
-      .not("zone_id", "is", null);
-    zoneIds = (subAdmins || []).map((p: any) => p.zone_id as string).filter(Boolean);
-  } else if (["super_admin", "president_odcav"].includes(profile.role)) {
-    // president_odcav: ownerId = their own ID (they ARE the ODCAV head)
-    // super_admin: ownerId = created_by_admin (the president_odcav who created them)
-    const ownerId =
-      profile.role === "super_admin" && profile.created_by_admin
+  } else if (["super_admin", "president_odcav", "tresorier"].includes(profile.role)) {
+    // Match getEffectiveZone: zonesOwnerId = created_by_admin for super_admin/tresorier,
+    // otherwise the profile's own id (president_odcav)
+    const zonesOwnerId =
+      (profile.role === "super_admin" || profile.role === "tresorier") && profile.created_by_admin
         ? profile.created_by_admin
         : user.id;
-    const { data: subAdmins } = await adminClient
-      .from("profiles")
-      .select("zone_id")
-      .eq("created_by_admin", ownerId)
-      .not("zone_id", "is", null);
-    zoneIds = (subAdmins || []).map((p: any) => p.zone_id as string).filter(Boolean);
+    const { data: zoneRows } = await adminClient
+      .from("zones")
+      .select("id")
+      .eq("created_by", zonesOwnerId);
+    zoneIds = (zoneRows || []).map((z: any) => z.id as string);
   }
-  // fondateur / assistant / billetterie: see all zones (zoneIds = null)
+  // fondateur / assistant_fondateur / billetterie_fondateur: see all zones (zoneIds = null)
 
   // If a specific zone was requested via ?zone=, restrict to it (only if allowed)
   if (zoneParam) {
