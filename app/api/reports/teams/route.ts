@@ -21,7 +21,10 @@ function parseColors(raw: string | null): { official: [string, string] | null; s
   }
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const zoneParam = searchParams.get("zone") || null;
+
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -43,14 +46,14 @@ export async function GET() {
   const { data: zonesData } = await adminClient.from("zones").select("id, name").order("name");
   const allZones: { id: string; name: string }[] = zonesData || [];
 
-  // Build zone filter depending on role
+  // Build zone filter depending on role — mirrors the ODCAV isolation pattern in dashboard
   let zoneIds: string[] | null = null;
   if (profile.role === "admin_zone" && profile.zone_id) {
     zoneIds = [profile.zone_id];
   } else if (profile.role === "c3" && profile.allowed_zones?.length) {
     zoneIds = profile.allowed_zones;
   } else if (profile.role === "tresorier" && profile.created_by_admin) {
-    // Get zones managed by this ODCAV
+    // tresorier: ownerId = president_odcav who created them
     const { data: subAdmins } = await adminClient
       .from("profiles")
       .select("zone_id")
@@ -58,8 +61,12 @@ export async function GET() {
       .not("zone_id", "is", null);
     zoneIds = (subAdmins || []).map((p: any) => p.zone_id as string).filter(Boolean);
   } else if (["super_admin", "president_odcav"].includes(profile.role)) {
-    // Get zones owned by this ODCAV
-    const ownerId = profile.created_by_admin || user.id;
+    // president_odcav: ownerId = their own ID (they ARE the ODCAV head)
+    // super_admin: ownerId = created_by_admin (the president_odcav who created them)
+    const ownerId =
+      profile.role === "super_admin" && profile.created_by_admin
+        ? profile.created_by_admin
+        : user.id;
     const { data: subAdmins } = await adminClient
       .from("profiles")
       .select("zone_id")
@@ -69,14 +76,32 @@ export async function GET() {
   }
   // fondateur / assistant / billetterie: see all zones (zoneIds = null)
 
+  // If a specific zone was requested via ?zone=, restrict to it (only if allowed)
+  if (zoneParam) {
+    if (zoneIds === null) {
+      zoneIds = [zoneParam];
+    } else if (zoneIds.includes(zoneParam)) {
+      zoneIds = [zoneParam];
+    }
+    // else: requested zone not in allowed list → keep existing zoneIds (ignore)
+  }
+
   const filteredZones = zoneIds
     ? allZones.filter((z) => zoneIds!.includes(z.id))
     : allZones;
 
-  // Fetch all teams
+  // Fetch teams restricted to allowed zone IDs
   let teamsQuery = adminClient.from("teams").select("*").order("name");
-  if (zoneIds?.length) {
+  if (zoneIds !== null && zoneIds.length > 0) {
     teamsQuery = teamsQuery.in("zone_id", zoneIds);
+  } else if (zoneIds !== null && zoneIds.length === 0) {
+    // No allowed zones → return empty PDF
+    const emptyBuf = await renderToBuffer(React.createElement(TeamsReport, {
+      zones: [], generatedAt: new Date().toLocaleDateString("fr-FR"), totalTeams: 0,
+    }) as any);
+    return new NextResponse(new Uint8Array(emptyBuf), {
+      headers: { "Content-Type": "application/pdf" },
+    });
   }
   const { data: teamsData } = await teamsQuery;
   const allTeams: any[] = teamsData || [];

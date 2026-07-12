@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Shield, FileDown } from "lucide-react";
 import { TeamFormDialog } from "./team-form-dialog";
 import { TeamActions } from "./team-actions-buttons";
-import { ZoneCardGrid } from "@/components/zone-card-grid";
+import { EquipesZoneGrid } from "./equipes-zone-grid";
 import { ZoneBackHeader } from "@/components/zone-back-header";
 import Link from "next/link";
 
@@ -46,7 +46,7 @@ export default async function EquipesPage({
     await getEffectiveZone(profile, params.zone);
 
   if (needsZoneSelection) {
-    return <ZoneCardGrid zones={ownedZones} title="Équipes" />;
+    return <EquipesZoneGrid zones={ownedZones} />;
   }
 
   const adminClient = await createAdminClient();
