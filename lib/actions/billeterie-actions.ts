@@ -312,6 +312,115 @@ export async function getBilleterieDetails(id: string): Promise<{
   };
 }
 
+// ── Invendus billetterie — liste avec comptage des non-scannés ────────────────
+export interface BilleterieInvendusItem {
+  id: string;
+  name: string;
+  matchIds: string[];
+  price: number;
+  totalTickets: number;
+  totalScanned: number;
+  unscannedCount: number;
+  matches: { id: string; home_team: string; away_team: string; match_date: string; status: string; match_type: string | null }[];
+}
+
+export async function getBilleterieInvendusList(): Promise<BilleterieInvendusItem[]> {
+  await requireRole(["fondateur"]);
+  const adminClient = await createAdminClient();
+
+  const { data: bilList } = await adminClient
+    .from("billeterie")
+    .select("id, name, match_ids, price")
+    .order("created_at", { ascending: false });
+
+  if (!bilList || bilList.length === 0) return [];
+
+  const bilIds = bilList.map((b: any) => b.id as string);
+
+  // All non-withdrawn tickets
+  const ticketRows = await fetchAll<any>((from, to) =>
+    adminClient.from("billeterie_tickets")
+      .select("id, billeterie_id")
+      .in("billeterie_id", bilIds)
+      .eq("withdrawn", false)
+      .range(from, to)
+  );
+
+  const ticketsByBil: Record<string, string[]> = {};
+  ticketRows.forEach((t: any) => {
+    if (!ticketsByBil[t.billeterie_id]) ticketsByBil[t.billeterie_id] = [];
+    ticketsByBil[t.billeterie_id].push(t.id as string);
+  });
+
+  // All scan records for these tickets
+  const allTicketIds = ticketRows.map((t: any) => t.id as string);
+  const scannedIds = new Set<string>();
+  if (allTicketIds.length > 0) {
+    const scanRows = await fetchAll<any>((from, to) =>
+      adminClient.from("billeterie_scans")
+        .select("ticket_id")
+        .in("ticket_id", allTicketIds)
+        .range(from, to)
+    );
+    scanRows.forEach((s: any) => scannedIds.add(s.ticket_id as string));
+  }
+
+  // Match info for display
+  const allMatchIds = [...new Set(bilList.flatMap((b: any) => (b.match_ids || []) as string[]))];
+  const { data: matchData } = allMatchIds.length > 0
+    ? await adminClient.from("matches")
+        .select("id, home_team, away_team, match_date, status, match_type")
+        .in("id", allMatchIds)
+    : { data: [] as any[] };
+  const matchMap = new Map((matchData || []).map((m: any) => [m.id as string, m]));
+
+  return bilList.map((b: any) => {
+    const tickets = ticketsByBil[b.id] || [];
+    const scanned = tickets.filter((id) => scannedIds.has(id)).length;
+    const matchIds = (b.match_ids || []) as string[];
+    return {
+      id: b.id as string,
+      name: b.name as string,
+      matchIds,
+      price: b.price as number,
+      totalTickets: tickets.length,
+      totalScanned: scanned,
+      unscannedCount: tickets.length - scanned,
+      matches: matchIds.map((id: string) => matchMap.get(id)).filter(Boolean) as any[],
+    };
+  });
+}
+
+// ── Ajouter des matchs à une billetterie (redistribution invendus) ─────────────
+export async function addMatchesToBilleterie(
+  billeterieId: string,
+  newMatchIds: string[]
+): Promise<{ error?: string }> {
+  await requireRole(["fondateur"]);
+  const adminClient = await createAdminClient();
+
+  const { data: bil } = await adminClient
+    .from("billeterie")
+    .select("match_ids")
+    .eq("id", billeterieId)
+    .single();
+
+  if (!bil) return { error: "Billetterie introuvable" };
+
+  const merged = [...new Set([...(bil.match_ids || []), ...newMatchIds])];
+
+  const { error } = await adminClient
+    .from("billeterie")
+    .update({ match_ids: merged })
+    .eq("id", billeterieId);
+
+  if (error) return { error: error.message };
+
+  revalidatePath("/fondateur/invendus");
+  revalidatePath(`/fondateur/billeterie/${billeterieId}`);
+  return {};
+}
+
 // ── Retrait de billets (fondateur uniquement) ─────────────────────────────────
 export async function withdrawBilleterieTickets(
   billeterieId: string,

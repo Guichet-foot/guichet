@@ -4,8 +4,10 @@ import {
   getFinishedInterMatches,
   getMatchUnsoldMap,
 } from "@/lib/actions/invendus-actions";
+import { getBilleterieInvendusList } from "@/lib/actions/billeterie-actions";
 import { InvendusList } from "@/app/(admin)/invendus/invendus-list";
-import { PackageX, MapPin, Users, Building2 } from "lucide-react";
+import { BilleterieInvendusList } from "./billeterie-invendus";
+import { PackageX, MapPin, Users, Building2, Ticket } from "lucide-react";
 import Link from "next/link";
 
 export const metadata = { title: "Invendus" };
@@ -25,7 +27,23 @@ export default async function FondateurInvendusPage({
       ? "communale"
       : params.tab === "departemental"
       ? "departemental"
+      : params.tab === "billeterie"
+      ? "billeterie"
       : "zonale";
+
+  if (activeTab === "billeterie") {
+    const bilItems = await getBilleterieInvendusList();
+    return (
+      <div className="max-w-3xl space-y-6">
+        <InvenduTabBar active="billeterie" />
+        <PageHeader
+          title="Invendus — Billetterie"
+          subtitle="Billets de passes multi-matchs non scannés"
+        />
+        <BilleterieInvendusList items={bilItems} />
+      </div>
+    );
+  }
 
   if (activeTab === "communale") {
     const matches = await getFinishedInterMatches("Match Communal");
@@ -91,12 +109,13 @@ function PageHeader({ title, subtitle }: { title: string; subtitle: string }) {
 function InvenduTabBar({
   active,
 }: {
-  active: "zonale" | "communale" | "departemental";
+  active: "zonale" | "communale" | "departemental" | "billeterie";
 }) {
   const tabs = [
     { key: "zonale", label: "Zonale", href: "/fondateur/invendus", icon: MapPin },
     { key: "communale", label: "Communale", href: "/fondateur/invendus?tab=communale", icon: Users },
     { key: "departemental", label: "Départemental", href: "/fondateur/invendus?tab=departemental", icon: Building2 },
+    { key: "billeterie", label: "Billetterie", href: "/fondateur/invendus?tab=billeterie", icon: Ticket },
   ] as const;
 
   return (
