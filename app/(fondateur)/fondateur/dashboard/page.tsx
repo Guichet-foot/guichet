@@ -1,12 +1,11 @@
 import { requireRole } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/server";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, MapPin, Wallet, Ticket, CalendarDays, Trophy } from "lucide-react";
+import { MapPin, Wallet, Ticket, CalendarDays, Trophy } from "lucide-react";
 import { formatFCFA } from "@/lib/format";
 import { RevenueLineChart } from "./revenue-line-chart";
 import { FraisPlateformeChart } from "./frais-plateforme-chart";
 import { FondateurFilters } from "./fondateur-filters";
-import Link from "next/link";
 
 export const metadata = { title: "Dashboard Fondateur" };
 
@@ -17,7 +16,7 @@ const DEMO_ACCOUNT_ID = "aa984bd3-7493-41d3-bad0-7a9c733ba51e";
 export default async function FondateurDashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ sa?: string; date?: string; chartFrom?: string; chartTo?: string }>;
+  searchParams: Promise<{ sa?: string; date?: string; year?: string; chartFrom?: string; chartTo?: string }>;
 }) {
   await requireRole(["fondateur"]);
   const params = await searchParams;
@@ -68,18 +67,29 @@ export default async function FondateurDashboardPage({
     return frais;
   }
 
-  // ── SA filter ─────────────────────────────────────────────────────────────
-  // Build zone→SA map
-  const zoneToSa = new Map<string, string>();
-  for (const z of allZones) zoneToSa.set(z.id, z.created_by);
+  // ── Demo zone IDs (computed early, used for billing exclusion + scan subtraction) ──
+  const demoZoneIds = allZones.filter((z) => z.created_by === DEMO_ACCOUNT_ID).map((z) => z.id);
+  const demoZoneIdsSet = new Set(demoZoneIds);
 
-  let visibleMatches = allMatches;
+  // ── Matches filter : demo exclusion → year → SA ───────────────────────────
+  // 1. Always strip demo account zones from billing
+  let visibleMatches = allMatches.filter((m: any) =>
+    !m.zone_id || !demoZoneIdsSet.has(m.zone_id as string)
+  );
+
+  // 2. Year filter
+  if (params.year) {
+    visibleMatches = visibleMatches.filter((m: any) =>
+      (m.match_date as string | null)?.startsWith(params.year!)
+    );
+  }
+
+  // 3. SA filter
   if (params.sa) {
     const saZoneIds = new Set(allZones.filter((z) => z.created_by === params.sa).map((z) => z.id));
-    visibleMatches = allMatches.filter((m: any) => {
-      if (m.zone_id) return saZoneIds.has(m.zone_id);
-      // ODCAV match: include if any participating zone belongs to this SA
-      return saZoneIds.has(m.home_team_zone) || saZoneIds.has(m.away_team_zone);
+    visibleMatches = visibleMatches.filter((m: any) => {
+      if (m.zone_id) return saZoneIds.has(m.zone_id as string);
+      return saZoneIds.has(m.home_team_zone as string) || saZoneIds.has(m.away_team_zone as string);
     });
   }
 
@@ -136,11 +146,6 @@ export default async function FondateurDashboardPage({
   }
 
   // Total revenus = billets scannés × 10 FCFA (tous comptes sauf démo)
-  // On soustrait les scans du compte démo pour ne pas les comptabiliser
-  const demoZoneIds = allZones
-    .filter((z) => z.created_by === DEMO_ACCOUNT_ID)
-    .map((z) => z.id);
-
   let demoRegScanned = 0;
   let demoBilScanned = 0;
   if (demoZoneIds.length > 0) {
@@ -216,30 +221,6 @@ export default async function FondateurDashboardPage({
 
   // ── Super admin list (for filter UI) ────────────────────────────────────
   const filterSAList = superAdmins.map((s) => ({ id: s.id, name: s.full_name }));
-
-  // ── SA performance stats ─────────────────────────────────────────────────
-  const saStats: { id: string; name: string; zones: number; matches: number; revenue: number }[] = [];
-  for (const sa of superAdmins) {
-    const saZoneIds = new Set(allZones.filter((z) => z.created_by === sa.id).map((z) => z.id));
-    const saMatches = allMatches.filter((m: any) => {
-      if (m.zone_id) return saZoneIds.has(m.zone_id);
-      return saZoneIds.has(m.home_team_zone) || saZoneIds.has(m.away_team_zone);
-    });
-    const saByDay = buildBillingByDay(saMatches);
-    let saRevenue = 0;
-    const seenPairs = new Set<string>();
-    for (const [dayStr, units] of saByDay) {
-      for (const unit of units) {
-        const key = `${unit}|${dayStr}`;
-        if (!seenPairs.has(key)) {
-          seenPairs.add(key);
-          saRevenue += getFraisForDate(dayStr);
-        }
-      }
-    }
-    saStats.push({ id: sa.id, name: sa.full_name, zones: saZoneIds.size, matches: saMatches.length, revenue: saRevenue });
-  }
-  saStats.sort((a, b) => b.revenue - a.revenue);
 
   const dateLabel = new Date(selectedDate + "T12:00:00").toLocaleDateString("fr-FR", { day: "2-digit", month: "short" });
   const monthLabel = `${monthNames[parseInt(selectedMonth.split("-")[1]) - 1]} ${selectedMonth.split("-")[0]}`;
@@ -362,36 +343,6 @@ export default async function FondateurDashboardPage({
         </CardContent>
       </Card>
 
-      {/* ── SA performances ── */}
-      {saStats.length > 0 && (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">Comptes ODCAV / Super Admins</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-1">
-              {saStats.map((sa) => (
-                <Link key={sa.id} href={`/fondateur/super-admins/${sa.id}`}>
-                  <div className="flex items-center justify-between py-3 border-b last:border-0 hover:bg-muted/30 rounded-lg px-2 -mx-2 transition-colors cursor-pointer">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
-                        <Users className="h-4 w-4 text-amber-600" />
-                      </div>
-                      <div>
-                        <p className="font-semibold text-sm">{sa.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {sa.zones} zone(s) · {sa.matches} match(s)
-                        </p>
-                      </div>
-                    </div>
-                    <p className="font-bold text-brand text-sm">{formatFCFA(sa.revenue)}</p>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 }
