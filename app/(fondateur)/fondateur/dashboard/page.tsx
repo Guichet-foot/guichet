@@ -31,11 +31,26 @@ export default async function FondateurDashboardPage({
     .from("zones")
     .select("*", { count: "exact", head: true });
 
-  // sold_at is NULL for bloc-printed tickets — use match_date instead to detect zone activity
+  // Count all billets across both tables (bloc-printed tickets have counts_as_revenue=false
+  // before being scanned, so we can't use that filter — count by status instead)
+  const [
+    { count: regularTicketsCount },
+    { count: bileterieTicketsCount },
+    { count: bilScansCount },
+  ] = await Promise.all([
+    supabase.from("tickets").select("*", { count: "exact", head: true }).neq("status", "annule"),
+    supabase.from("billeterie_tickets").select("*", { count: "exact", head: true }).eq("withdrawn", false),
+    supabase.from("billeterie_scans").select("*", { count: "exact", head: true }),
+  ]);
+  const totalBillets = (regularTicketsCount || 0) + (bileterieTicketsCount || 0);
+  const totalBilScans = bilScansCount || 0;
+
+  // For platform fee calculations, still use the tickets table with match_date
+  // (zone-based activity only — ODCAV matches have zone_id=null and don't generate fees)
   const { data: allTickets } = await supabase
     .from("tickets")
     .select("price, match:matches(zone_id, match_date)")
-    .eq("counts_as_revenue", true) as { data: any[] | null };
+    .neq("status", "annule") as { data: any[] | null };
 
   let filteredTickets = allTickets || [];
 
@@ -48,8 +63,6 @@ export default async function FondateurDashboardPage({
     const saZoneIds = new Set(saZones?.map((z: any) => z.id) || []);
     filteredTickets = filteredTickets.filter((t: any) => saZoneIds.has(t.match?.zone_id));
   }
-
-  const totalTicketsSold = filteredTickets.length;
 
   const { count: matchesCount } = await supabase
     .from("matches")
@@ -222,8 +235,9 @@ export default async function FondateurDashboardPage({
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-muted-foreground">Billets vendus</p>
-                <p className="text-2xl font-bold">{totalTicketsSold}</p>
+                <p className="text-xs text-muted-foreground">Billets émis</p>
+                <p className="text-2xl font-bold">{totalBillets}</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">{totalBilScans} scannés</p>
               </div>
               <Ticket className="h-7 w-7 text-brand/40" />
             </div>

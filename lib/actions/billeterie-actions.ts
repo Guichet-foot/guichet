@@ -294,10 +294,9 @@ export async function getBilleterieDetails(id: string): Promise<{
   });
   const batches = Object.values(batchMap).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-  // Scan count (only non-withdrawn tickets)
-  const activeTicketIds = allTicketRows.filter((t: any) => !t.withdrawn).map((t: any) => t.id as string);
-  const { count: scanCount } = activeTicketIds.length > 0
-    ? await adminClient.from("billeterie_scans").select("*", { count: "exact", head: true }).in("ticket_id", activeTicketIds)
+  // Scan count by match_id (avoids huge .in(ticket_id,[...3000 ids]) query that breaks PostgREST URL limits)
+  const { count: scanCount } = matchIds.length > 0
+    ? await adminClient.from("billeterie_scans").select("*", { count: "exact", head: true }).in("match_id", matchIds)
     : { count: 0 };
 
   return {
