@@ -175,7 +175,7 @@ export function renderTicketBlock(
 </div>
 <div class="sep"></div>
 ${teamsHtml}
-<div class="c info">${ticket.match.venue}<br>${matchDateFmt}</div>
+<div class="c info">${ticket.match.venue}</div>
 ${matchTypeHtml}
 <div class="sep"></div>
 <div class="c cat-prix">${ticket.category.name} &mdash; ${priceFmt}&nbsp;FCFA</div>

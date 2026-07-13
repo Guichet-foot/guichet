@@ -32,10 +32,9 @@ function renderBilleterieTicket(
 
   const matchLines = matches
     .map((m) => {
-      const dateFmt = format(new Date(m.match_date), "dd/MM/yy · HH'h'mm", { locale: fr });
       const home = m.home_team_zone ? `${trunc(m.home_team, 12)} (${fmtZone(m.home_team_zone)})` : trunc(m.home_team, 14);
       const away = m.away_team_zone ? `${trunc(m.away_team, 12)} (${fmtZone(m.away_team_zone)})` : trunc(m.away_team, 14);
-      return `${home} vs ${away}<br><span style="font-style:italic">${dateFmt}</span>`;
+      return `${home} vs ${away}`;
     })
     .join("<br>");
 
