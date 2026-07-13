@@ -338,6 +338,82 @@ export async function fondateurSubUserResetPassword(userId: string) {
   return { password: newPassword };
 }
 
+// ── Maintenance : détection et correction des scans billetterie en double ─────
+export async function detectDuplicateBilleterieScans(): Promise<{
+  error?: string;
+  duplicateTickets?: number;
+  extraScans?: number;
+}> {
+  const supabase = await createClient();
+  const { data: { user: currentUser } } = await supabase.auth.getUser();
+  if (!currentUser) return { error: "Non authentifié" };
+  const { data: caller } = await supabase.from("profiles").select("role").eq("id", currentUser.id).single();
+  if (caller?.role !== "fondateur") return { error: "Non autorisé" };
+
+  const adminClient = await createAdminClient();
+  const { data: allScans } = await adminClient
+    .from("billeterie_scans")
+    .select("id, ticket_id, scanned_at")
+    .order("scanned_at", { ascending: true });
+
+  if (!allScans) return { duplicateTickets: 0, extraScans: 0 };
+
+  const byTicket: Record<string, string[]> = {};
+  for (const scan of allScans as { id: string; ticket_id: string; scanned_at: string }[]) {
+    if (!byTicket[scan.ticket_id]) byTicket[scan.ticket_id] = [];
+    byTicket[scan.ticket_id].push(scan.id);
+  }
+
+  let duplicateTickets = 0;
+  let extraScans = 0;
+  for (const scans of Object.values(byTicket)) {
+    if (scans.length > 1) { duplicateTickets++; extraScans += scans.length - 1; }
+  }
+
+  return { duplicateTickets, extraScans };
+}
+
+export async function fixDuplicateBilleterieScans(): Promise<{
+  error?: string;
+  fixed?: number;
+}> {
+  const supabase = await createClient();
+  const { data: { user: currentUser } } = await supabase.auth.getUser();
+  if (!currentUser) return { error: "Non authentifié" };
+  const { data: caller } = await supabase.from("profiles").select("role").eq("id", currentUser.id).single();
+  if (caller?.role !== "fondateur") return { error: "Non autorisé" };
+
+  const adminClient = await createAdminClient();
+  const { data: allScans } = await adminClient
+    .from("billeterie_scans")
+    .select("id, ticket_id, scanned_at")
+    .order("scanned_at", { ascending: true }); // earliest first
+
+  if (!allScans) return { fixed: 0 };
+
+  // Group by ticket_id (already sorted by scanned_at asc → first entry = earliest scan)
+  const firstScanId: Record<string, string> = {};
+  const idsToDelete: string[] = [];
+  for (const scan of allScans as { id: string; ticket_id: string }[]) {
+    if (!firstScanId[scan.ticket_id]) {
+      firstScanId[scan.ticket_id] = scan.id; // keep this one
+    } else {
+      idsToDelete.push(scan.id); // delete all duplicates
+    }
+  }
+
+  if (idsToDelete.length === 0) return { fixed: 0 };
+
+  const { error } = await adminClient
+    .from("billeterie_scans")
+    .delete()
+    .in("id", idsToDelete);
+
+  if (error) return { error: error.message };
+  revalidatePath("/fondateur/parametres");
+  return { fixed: idsToDelete.length };
+}
+
 // ── fondateurUpdateSuperAdminModules ──────────────────────────────
 export async function fondateurUpdateSuperAdminModules(userId: string, modules: string[]) {
   const supabase = await createClient();
