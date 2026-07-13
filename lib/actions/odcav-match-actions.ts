@@ -77,11 +77,11 @@ export async function getOdcavTeamsWithZones(): Promise<{
     const { data } = await adminClient.from("zones").select("id, name").order("name");
     zones = (data || []) as { id: string; name: string }[];
   } else {
-    const ownerId =
-      (ctx.profile.role === "super_admin" || ctx.profile.role === "tresorier")
-        ? (ctx.profile.created_by_admin ?? ctx.profile.id)
-        : ctx.profile.id;
-    const { data } = await adminClient.from("zones").select("id, name").eq("created_by", ownerId).order("name");
+    // Include both the account's own ID and its parent to catch zones created under either ID
+    const ownerIds = [...new Set(
+      [ctx.profile.id, ctx.profile.created_by_admin].filter(Boolean) as string[]
+    )];
+    const { data } = await adminClient.from("zones").select("id, name").in("created_by", ownerIds).order("name");
     zones = (data || []) as { id: string; name: string }[];
   }
 

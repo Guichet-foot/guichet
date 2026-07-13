@@ -7,15 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import { ArrowLeft, Loader2, Plus, Trash2 } from "lucide-react";
+import { TeamSelect } from "./team-select";
 import { toast } from "sonner";
 import Link from "next/link";
 import { formatFCFA } from "@/lib/format";
@@ -28,6 +22,7 @@ interface TeamOption {
   zone_id: string;
   zone_name: string;
 }
+
 
 interface Props {
   matchType: "Match Communal" | "Match Départemental";
@@ -116,21 +111,15 @@ export function NouveauInterMatchForm({ matchType, backHref, title }: Props) {
             {/* Équipe domicile */}
             <div className="space-y-2">
               <Label>Équipe domicile</Label>
-              <Select value={homeTeamId} onValueChange={(v) => setHomeTeamId(v ?? "")} required>
-                <SelectTrigger>
-                  <SelectValue placeholder={teams.length === 0 ? "Chargement…" : "Choisir l'équipe domicile"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {teams.map((t) => (
-                    <SelectItem key={t.id} value={t.id}>
-                      {t.zone_name ? `${t.name} (${t.zone_name})` : t.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <TeamSelect
+                teams={teams}
+                value={homeTeamId}
+                onChange={setHomeTeamId}
+                placeholder={teams.length === 0 ? "Chargement…" : "Choisir l'équipe domicile"}
+              />
               {homeTeam && (
                 <p className="text-xs text-muted-foreground">
-                  Zone : {homeTeam.zone_name} — sur le billet : <strong>{homeTeam.name} ({homeTeam.zone_name})</strong>
+                  Sur le billet : <strong>{homeTeam.name} ({homeTeam.zone_name})</strong>
                 </p>
               )}
             </div>
@@ -138,23 +127,16 @@ export function NouveauInterMatchForm({ matchType, backHref, title }: Props) {
             {/* Équipe visiteur */}
             <div className="space-y-2">
               <Label>Équipe visiteur</Label>
-              <Select value={awayTeamId} onValueChange={(v) => setAwayTeamId(v ?? "")} required>
-                <SelectTrigger>
-                  <SelectValue placeholder={teams.length === 0 ? "Chargement…" : "Choisir l'équipe visiteur"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {teams
-                    .filter((t) => t.id !== homeTeamId)
-                    .map((t) => (
-                      <SelectItem key={t.id} value={t.id}>
-                        {t.zone_name ? `${t.name} (${t.zone_name})` : t.name}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
+              <TeamSelect
+                teams={teams}
+                value={awayTeamId}
+                onChange={setAwayTeamId}
+                placeholder={teams.length === 0 ? "Chargement…" : "Choisir l'équipe visiteur"}
+                excludeId={homeTeamId}
+              />
               {awayTeam && (
                 <p className="text-xs text-muted-foreground">
-                  Zone : {awayTeam.zone_name} — sur le billet : <strong>{awayTeam.name} ({awayTeam.zone_name})</strong>
+                  Sur le billet : <strong>{awayTeam.name} ({awayTeam.zone_name})</strong>
                 </p>
               )}
             </div>
