@@ -36,3 +36,47 @@ export async function createExpense(formData: {
   revalidatePath("/finances");
   return { success: true };
 }
+
+export async function updateExpense(
+  id: string,
+  formData: {
+    matchId?: string | null;
+    label: string;
+    category: string;
+    amount: number;
+    expenseDate: string;
+    notes?: string;
+  }
+) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Non authentifié" };
+
+  const { error } = await supabase
+    .from("expenses")
+    .update({
+      match_id: formData.matchId || null,
+      label: formData.label,
+      category: formData.category,
+      amount: formData.amount,
+      expense_date: formData.expenseDate,
+      notes: formData.notes || null,
+    })
+    .eq("id", id);
+
+  if (error) return { error: error.message };
+  revalidatePath("/finances");
+  return { success: true };
+}
+
+export async function deleteExpense(id: string) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Non authentifié" };
+
+  const { error } = await supabase.from("expenses").delete().eq("id", id);
+
+  if (error) return { error: error.message };
+  revalidatePath("/finances");
+  return { success: true };
+}

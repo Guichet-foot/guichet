@@ -15,6 +15,7 @@ import { ZoneBackHeader } from "@/components/zone-back-header";
 import { FinancesFilters } from "./finances-filters";
 import { FinancesOdcavTabs } from "./finances-odcav-tabs";
 import { fetchAll } from "@/lib/supabase/paginate";
+import { ExpenseRowActions } from "./expense-row-actions";
 
 export const metadata = { title: "Finances" };
 
@@ -439,12 +440,13 @@ export default async function FinancesPage({
                 <TableHead className="hidden sm:table-cell">Catégorie</TableHead>
                 <TableHead className="hidden md:table-cell">Match</TableHead>
                 <TableHead className="text-right">Montant</TableHead>
+                <TableHead className="w-20 print:hidden" />
               </TableRow>
             </TableHeader>
             <TableBody>
               {!expenses || expenses.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
                     Aucune dépense sur cette période
                   </TableCell>
                 </TableRow>
@@ -460,6 +462,20 @@ export default async function FinancesPage({
                       {expense.match ? `${expense.match.home_team} vs ${expense.match.away_team}` : "Global zone"}
                     </TableCell>
                     <TableCell className="text-right font-bold text-danger">-{formatFCFA(expense.amount)}</TableCell>
+                    <TableCell className="print:hidden">
+                      <ExpenseRowActions
+                        expense={{
+                          id: expense.id,
+                          label: expense.label,
+                          category: expense.category,
+                          amount: expense.amount,
+                          expense_date: expense.expense_date,
+                          match_id: expense.match_id,
+                          notes: expense.notes,
+                        }}
+                        matches={filterMatches}
+                      />
+                    </TableCell>
                   </TableRow>
                 ))
               )}
