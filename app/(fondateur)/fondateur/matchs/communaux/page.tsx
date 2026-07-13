@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Trophy, MapPin, Users, Building2 } from "lucide-react";
+import { Plus, Trophy, MapPin, Users, Building2, Ticket } from "lucide-react";
 import { MATCH_STATUS_LABELS, MATCH_STATUS_COLORS } from "@/lib/constants";
 import { formatDateShort, fmtZone } from "@/lib/format";
 import { PrintBlocsButton } from "@/app/(admin)/matchs/print-blocs-button";
@@ -76,15 +76,25 @@ export default async function FondateurMatchsCommunauxPage() {
                   const awayDisplay = match.away_team_zone
                     ? `${match.away_team} (${fmtZone(match.away_team_zone)})`
                     : match.away_team;
+                  const isC3Match = !!match.c3_account_id;
                   return (
                     <TableRow key={match.id}>
                       <TableCell className="font-medium">
-                        <span>{homeDisplay}</span>
-                        <span className="text-muted-foreground mx-1 text-xs">vs</span>
-                        <span>{awayDisplay}</span>
+                        <div className="space-y-0.5">
+                          <div>
+                            <span>{homeDisplay}</span>
+                            <span className="text-muted-foreground mx-1 text-xs">vs</span>
+                            <span>{awayDisplay}</span>
+                          </div>
+                          {isC3Match && match.c3_name && (
+                            <span className="inline-block text-xs bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 rounded px-1.5 py-0.5">
+                              C3 : {match.c3_name}
+                            </span>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
-                        {odcavMap.get(match.created_by) ?? "—"}
+                        {isC3Match ? (match.c3_name ?? "—") : (odcavMap.get(match.created_by) ?? "—")}
                       </TableCell>
                       <TableCell className="hidden md:table-cell text-sm">
                         {formatDateShort(match.match_date)}
@@ -96,7 +106,14 @@ export default async function FondateurMatchsCommunauxPage() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center gap-1 justify-end">
-                          {match.status !== "termine" && match.status !== "annule" && (
+                          {isC3Match ? (
+                            <Link href="/fondateur/billeterie">
+                              <Button variant="outline" size="sm" className="text-blue-700 border-blue-300 hover:bg-blue-50" title="Voir billetterie C3">
+                                <Ticket className="h-3 w-3 mr-1" />
+                                Billetterie
+                              </Button>
+                            </Link>
+                          ) : match.status !== "termine" && match.status !== "annule" && (
                             <PrintBlocsButton
                               matchId={match.id}
                               matchName={`${match.home_team} vs ${match.away_team}`}

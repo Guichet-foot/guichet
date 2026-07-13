@@ -154,42 +154,90 @@ export async function createOdcavInterMatch(formData: {
   return { success: true, matchId: match.id };
 }
 
-// List communal or departmental matches for the current ODCAV admin / fondateur
+// List communal or departmental matches for the current ODCAV admin / fondateur.
+// C3 matches (c3_account_id IS NOT NULL) are treated as communal regardless of match_type.
 export async function getOdcavInterMatches(matchType: "Match Communal" | "Match Départemental"): Promise<any[]> {
   const ctx = await getOdcavUser();
   if (!ctx) return [];
   const adminClient = await createAdminClient();
 
+  let results: any[] = [];
+
   if (ctx.profile.role === "fondateur") {
-    const { data } = await adminClient
+    const { data: odcavData } = await adminClient
       .from("matches")
       .select("*")
       .eq("match_type", matchType)
       .eq("is_direct", true)
       .order("match_date", { ascending: false });
-    return (data || []) as any[];
+    results = [...(odcavData || [])];
+
+    if (matchType === "Match Communal") {
+      const { data: c3Profiles } = await adminClient
+        .from("profiles")
+        .select("id, full_name")
+        .eq("role", "c3");
+      const c3NameMap = new Map((c3Profiles || []).map((p: any) => [p.id as string, (p.full_name as string) ?? "C3"]));
+
+      const { data: c3Data } = await adminClient
+        .from("matches")
+        .select("*")
+        .not("c3_account_id", "is", null)
+        .order("match_date", { ascending: false });
+      results = [...results, ...(c3Data || []).map((m: any) => ({
+        ...m,
+        c3_name: c3NameMap.get(m.c3_account_id as string) ?? "C3",
+      }))];
+    }
+  } else {
+    // super_admin/tresorier are sub-accounts — inherit parent's identity.
+    const ownerId =
+      (ctx.profile.role === "super_admin" || ctx.profile.role === "tresorier")
+        ? (ctx.profile.created_by_admin ?? ctx.profile.id)
+        : ctx.profile.id;
+
+    const { data: subAdmins } = await adminClient
+      .from("profiles")
+      .select("id")
+      .eq("created_by_admin", ownerId);
+    const creatorIds = [ownerId, ...(subAdmins || []).map((p: any) => p.id as string)];
+
+    const { data: odcavData } = await adminClient
+      .from("matches")
+      .select("*")
+      .eq("match_type", matchType)
+      .eq("is_direct", true)
+      .in("created_by", creatorIds)
+      .order("match_date", { ascending: false });
+    results = [...(odcavData || [])];
+
+    if (matchType === "Match Communal") {
+      const { data: c3Accounts } = await adminClient
+        .from("profiles")
+        .select("id, full_name")
+        .eq("role", "c3")
+        .eq("created_by_admin", ownerId);
+
+      if (c3Accounts && c3Accounts.length > 0) {
+        const c3Ids = c3Accounts.map((p: any) => p.id as string);
+        const c3NameMap = new Map(c3Accounts.map((p: any) => [p.id as string, (p.full_name as string) ?? "C3"]));
+
+        const { data: c3Data } = await adminClient
+          .from("matches")
+          .select("*")
+          .in("c3_account_id", c3Ids)
+          .order("match_date", { ascending: false });
+        results = [...results, ...(c3Data || []).map((m: any) => ({
+          ...m,
+          c3_name: c3NameMap.get(m.c3_account_id as string) ?? "C3",
+        }))];
+      }
+    }
   }
 
-  // super_admin/tresorier are sub-accounts — inherit parent's identity.
-  // president_odcav IS the top-level ODCAV account — always use their own ID.
-  const ownerId =
-    (ctx.profile.role === "super_admin" || ctx.profile.role === "tresorier")
-      ? (ctx.profile.created_by_admin ?? ctx.profile.id)
-      : ctx.profile.id;
-
-  const { data: subAdmins } = await adminClient
-    .from("profiles")
-    .select("id")
-    .eq("created_by_admin", ownerId);
-  const creatorIds = [ownerId, ...(subAdmins || []).map((p: any) => p.id as string)];
-
-  const { data } = await adminClient
-    .from("matches")
-    .select("*")
-    .eq("match_type", matchType)
-    .eq("is_direct", true)
-    .in("created_by", creatorIds)
-    .order("match_date", { ascending: false });
-
-  return (data || []) as any[];
+  // Deduplicate and sort by match_date desc
+  const seen = new Set<string>();
+  return results
+    .filter((m) => { const k = m.id as string; if (seen.has(k)) return false; seen.add(k); return true; })
+    .sort((a, b) => new Date(b.match_date as string).getTime() - new Date(a.match_date as string).getTime());
 }
