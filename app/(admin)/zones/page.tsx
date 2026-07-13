@@ -12,6 +12,7 @@ import {
 import { MapPin } from "lucide-react";
 import { formatDate } from "@/lib/format";
 import { CreateZoneForm } from "./create-zone-form";
+import { ZoneRowActions } from "./zone-row-actions";
 
 export const metadata = { title: "Zones" };
 
@@ -34,6 +35,7 @@ export default async function ZonesPage() {
     .order("name");
 
   const canCreateZone = profile.role !== "tresorier";
+  const canEditZone = profile.role !== "tresorier";
 
   return (
     <div className="space-y-6">
@@ -61,6 +63,7 @@ export default async function ZonesPage() {
                   <TableHead>Nom</TableHead>
                   <TableHead>Région</TableHead>
                   <TableHead>Créée le</TableHead>
+                  {canEditZone && <TableHead className="w-20" />}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -69,6 +72,11 @@ export default async function ZonesPage() {
                     <TableCell className="font-medium">{zone.name}</TableCell>
                     <TableCell>{zone.region || "—"}</TableCell>
                     <TableCell>{formatDate(zone.created_at)}</TableCell>
+                    {canEditZone && (
+                      <TableCell>
+                        <ZoneRowActions zone={{ id: zone.id, name: zone.name, region: zone.region ?? null }} />
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>
