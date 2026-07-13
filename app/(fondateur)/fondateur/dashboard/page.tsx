@@ -31,15 +31,16 @@ export default async function FondateurDashboardPage({
     .from("zones")
     .select("*", { count: "exact", head: true });
 
+  // sold_at is NULL for bloc-printed tickets — use match_date instead to detect zone activity
   const { data: allTickets } = await supabase
     .from("tickets")
-    .select("price, sold_at, match:matches(zone_id)")
+    .select("price, match:matches(zone_id, match_date)")
     .eq("counts_as_revenue", true) as { data: any[] | null };
 
   let filteredTickets = allTickets || [];
 
   if (params.year) {
-    filteredTickets = filteredTickets.filter((t: any) => t.sold_at?.startsWith(params.year));
+    filteredTickets = filteredTickets.filter((t: any) => t.match?.match_date?.startsWith(params.year));
   }
 
   if (params.sa) {
@@ -86,22 +87,22 @@ export default async function FondateurDashboardPage({
   }
 
   // Revenus journaliers = zones actives ce jour-là × frais en vigueur ce jour-là
+  // Utilise match_date (pas sold_at qui est null pour les billets bloc)
   const dailyActiveZones = new Set(
     saFilteredTickets
-      .filter((t: any) => t.sold_at?.startsWith(selectedDate))
-      .map((t: any) => t.match?.zone_id)
-      .filter(Boolean)
+      .filter((t: any) => t.match?.match_date?.startsWith(selectedDate) && t.match?.zone_id)
+      .map((t: any) => t.match.zone_id)
   );
   const revenusJournaliers = dailyActiveZones.size * fraisPlateforme;
 
-  // Revenus mensuel = somme par (zone, jour) × frais en vigueur ce jour-là
+  // Revenus mensuel = somme par (zone, jour de match) × frais en vigueur ce jour-là
   const selectedMonth = selectedDate.substring(0, 7);
   let revenusMensuel = 0;
   {
     const seenPairs = new Set<string>();
     for (const t of saFilteredTickets) {
-      if (!t.sold_at?.startsWith(selectedMonth) || !t.match?.zone_id) continue;
-      const dayStr = t.sold_at.split("T")[0];
+      if (!t.match?.match_date?.startsWith(selectedMonth) || !t.match?.zone_id) continue;
+      const dayStr = t.match.match_date.split("T")[0];
       const key = `${t.match.zone_id}|${dayStr}`;
       if (!seenPairs.has(key)) {
         seenPairs.add(key);
@@ -120,8 +121,8 @@ export default async function FondateurDashboardPage({
     const monthLabel = `${monthNames[d.getMonth()]} ${d.getFullYear().toString().slice(2)}`;
     const activePairsByDay = new Map<string, Set<string>>();
     for (const t of saFilteredTickets) {
-      if (!t.sold_at?.startsWith(monthKey) || !t.match?.zone_id) continue;
-      const dayStr = t.sold_at.split("T")[0];
+      if (!t.match?.match_date?.startsWith(monthKey) || !t.match?.zone_id) continue;
+      const dayStr = t.match.match_date.split("T")[0];
       if (!activePairsByDay.has(dayStr)) activePairsByDay.set(dayStr, new Set());
       activePairsByDay.get(dayStr)!.add(t.match.zone_id);
     }
@@ -150,7 +151,7 @@ export default async function FondateurDashboardPage({
     const label = chartCursor.toLocaleDateString("fr-FR", { day: "2-digit", month: "short" });
     const activeZones = new Set(
       saFilteredTickets
-        .filter((t: any) => t.sold_at?.startsWith(dayStr) && t.match?.zone_id)
+        .filter((t: any) => t.match?.match_date?.startsWith(dayStr) && t.match?.zone_id)
         .map((t: any) => t.match.zone_id)
     );
     dailyPlatformData.push({ date: dayStr, label, revenue: activeZones.size * getFraisForDate(dayStr) });
