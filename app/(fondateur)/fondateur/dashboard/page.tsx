@@ -45,12 +45,27 @@ export default async function FondateurDashboardPage({
   const totalBillets = (regularTicketsCount || 0) + (bileterieTicketsCount || 0);
   const totalBilScans = bilScansCount || 0;
 
-  // For platform fee calculations, still use the tickets table with match_date
-  // (zone-based activity only — ODCAV matches have zone_id=null and don't generate fees)
-  const { data: allTickets } = await supabase
-    .from("tickets")
-    .select("price, match:matches(zone_id, match_date)")
-    .neq("status", "annule") as { data: any[] | null };
+  // For platform fee calculations: use tickets (zone matches) + ODCAV matches (cross-zone)
+  // ODCAV matches have zone_id=null but store home_team_zone + away_team_zone as zone UUIDs
+  const [
+    ticketsResult,
+    odcavMatchResult,
+  ] = await Promise.all([
+    supabase
+      .from("tickets")
+      .select("price, match:matches(zone_id, match_date)")
+      .neq("status", "annule"),
+    supabase
+      .from("matches")
+      .select("match_date, home_team_zone, away_team_zone")
+      .is("zone_id", null)
+      .not("home_team_zone", "is", null),
+  ]);
+  const allTickets = (ticketsResult.data || []) as any[];
+  const rawOdcavMatchData = (odcavMatchResult.data || []) as any[];
+
+  let allOdcavMatches: { match_date: string; home_team_zone: string | null; away_team_zone: string | null }[] =
+    (rawOdcavMatchData || []) as any[];
 
   let filteredTickets = allTickets || [];
 
@@ -62,6 +77,10 @@ export default async function FondateurDashboardPage({
     const { data: saZones } = await supabase.from("zones").select("id").eq("created_by", params.sa);
     const saZoneIds = new Set(saZones?.map((z: any) => z.id) || []);
     filteredTickets = filteredTickets.filter((t: any) => saZoneIds.has(t.match?.zone_id));
+    // For ODCAV matches, include if at least one zone belongs to this SA
+    allOdcavMatches = allOdcavMatches.filter(
+      (m) => saZoneIds.has(m.home_team_zone) || saZoneIds.has(m.away_team_zone)
+    );
   }
 
   const { count: matchesCount } = await supabase
@@ -99,13 +118,23 @@ export default async function FondateurDashboardPage({
     saFilteredTickets = saFilteredTickets.filter((t: any) => saZoneIds.has(t.match?.zone_id));
   }
 
+  // Helper: returns all zone UUIDs active on a given day (ticket-based + ODCAV matches)
+  function getActiveZonesForDay(dayStr: string, ticketRows: any[], odcavMatches: typeof allOdcavMatches): Set<string> {
+    const zones = new Set<string>();
+    for (const t of ticketRows) {
+      if (t.match?.match_date?.startsWith(dayStr) && t.match?.zone_id) zones.add(t.match.zone_id);
+    }
+    for (const m of odcavMatches) {
+      if (m.match_date?.startsWith(dayStr)) {
+        if (m.home_team_zone) zones.add(m.home_team_zone);
+        if (m.away_team_zone) zones.add(m.away_team_zone);
+      }
+    }
+    return zones;
+  }
+
   // Revenus journaliers = zones actives ce jour-là × frais en vigueur ce jour-là
-  // Utilise match_date (pas sold_at qui est null pour les billets bloc)
-  const dailyActiveZones = new Set(
-    saFilteredTickets
-      .filter((t: any) => t.match?.match_date?.startsWith(selectedDate) && t.match?.zone_id)
-      .map((t: any) => t.match.zone_id)
-  );
+  const dailyActiveZones = getActiveZonesForDay(selectedDate, saFilteredTickets, allOdcavMatches);
   const revenusJournaliers = dailyActiveZones.size * fraisPlateforme;
 
   // Revenus mensuel = somme par (zone, jour de match) × frais en vigueur ce jour-là
@@ -113,13 +142,21 @@ export default async function FondateurDashboardPage({
   let revenusMensuel = 0;
   {
     const seenPairs = new Set<string>();
+    // Zone-based tickets
     for (const t of saFilteredTickets) {
       if (!t.match?.match_date?.startsWith(selectedMonth) || !t.match?.zone_id) continue;
       const dayStr = t.match.match_date.split("T")[0];
       const key = `${t.match.zone_id}|${dayStr}`;
-      if (!seenPairs.has(key)) {
-        seenPairs.add(key);
-        revenusMensuel += getFraisForDate(dayStr);
+      if (!seenPairs.has(key)) { seenPairs.add(key); revenusMensuel += getFraisForDate(dayStr); }
+    }
+    // ODCAV matches: each zone (home + away) counts separately per day
+    for (const m of allOdcavMatches) {
+      if (!m.match_date?.startsWith(selectedMonth)) continue;
+      const dayStr = m.match_date.split("T")[0];
+      for (const zoneId of [m.home_team_zone, m.away_team_zone]) {
+        if (!zoneId) continue;
+        const key = `${zoneId}|${dayStr}`;
+        if (!seenPairs.has(key)) { seenPairs.add(key); revenusMensuel += getFraisForDate(dayStr); }
       }
     }
   }
@@ -133,11 +170,20 @@ export default async function FondateurDashboardPage({
     const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
     const monthLabel = `${monthNames[d.getMonth()]} ${d.getFullYear().toString().slice(2)}`;
     const activePairsByDay = new Map<string, Set<string>>();
+    // Zone-based tickets
     for (const t of saFilteredTickets) {
       if (!t.match?.match_date?.startsWith(monthKey) || !t.match?.zone_id) continue;
       const dayStr = t.match.match_date.split("T")[0];
       if (!activePairsByDay.has(dayStr)) activePairsByDay.set(dayStr, new Set());
       activePairsByDay.get(dayStr)!.add(t.match.zone_id);
+    }
+    // ODCAV matches
+    for (const m of allOdcavMatches) {
+      if (!m.match_date?.startsWith(monthKey)) continue;
+      const dayStr = m.match_date.split("T")[0];
+      if (!activePairsByDay.has(dayStr)) activePairsByDay.set(dayStr, new Set());
+      if (m.home_team_zone) activePairsByDay.get(dayStr)!.add(m.home_team_zone);
+      if (m.away_team_zone) activePairsByDay.get(dayStr)!.add(m.away_team_zone);
     }
     let monthRevenue = 0;
     for (const [dayStr, zones] of activePairsByDay) {
@@ -162,11 +208,7 @@ export default async function FondateurDashboardPage({
   while (chartCursor <= chartEnd) {
     const dayStr = chartCursor.toISOString().split("T")[0];
     const label = chartCursor.toLocaleDateString("fr-FR", { day: "2-digit", month: "short" });
-    const activeZones = new Set(
-      saFilteredTickets
-        .filter((t: any) => t.match?.match_date?.startsWith(dayStr) && t.match?.zone_id)
-        .map((t: any) => t.match.zone_id)
-    );
+    const activeZones = getActiveZonesForDay(dayStr, saFilteredTickets, allOdcavMatches);
     dailyPlatformData.push({ date: dayStr, label, revenue: activeZones.size * getFraisForDate(dayStr) });
     chartCursor.setDate(chartCursor.getDate() + 1);
   }
