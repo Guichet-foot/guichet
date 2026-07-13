@@ -318,6 +318,7 @@ export interface BilleterieInvendusItem {
   name: string;
   matchIds: string[];
   price: number;
+  createdAt: string;
   totalTickets: number;
   totalScanned: number;
   unscannedCount: number;
@@ -325,13 +326,25 @@ export interface BilleterieInvendusItem {
 }
 
 export async function getBilleterieInvendusList(): Promise<BilleterieInvendusItem[]> {
-  await requireRole(["fondateur"]);
+  const profile = await requireRole(["fondateur", "super_admin", "president_odcav", "tresorier", "admin_zone", "c3"]);
+  const supabase = await createClient();
   const adminClient = await createAdminClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
 
-  const { data: bilList } = await adminClient
+  let query = adminClient
     .from("billeterie")
-    .select("id, name, match_ids, price")
+    .select("id, name, match_ids, price, created_at")
     .order("created_at", { ascending: false });
+
+  if (profile.role !== "fondateur") {
+    const ownerId = ((profile as any).created_by_admin ?? user.id) as string;
+    const { data: subAdmins } = await adminClient.from("profiles").select("id").eq("created_by_admin", ownerId);
+    const creatorIds = [ownerId, ...((subAdmins || []) as any[]).map((p: any) => p.id as string)];
+    query = query.in("created_by", creatorIds);
+  }
+
+  const { data: bilList } = await query;
 
   if (!bilList || bilList.length === 0) return [];
 
@@ -383,10 +396,14 @@ export async function getBilleterieInvendusList(): Promise<BilleterieInvendusIte
       name: b.name as string,
       matchIds,
       price: b.price as number,
+      createdAt: b.created_at as string,
       totalTickets: tickets.length,
       totalScanned: scanned,
       unscannedCount: tickets.length - scanned,
-      matches: matchIds.map((id: string) => matchMap.get(id)).filter(Boolean) as any[],
+      matches: matchIds
+        .map((id: string) => matchMap.get(id))
+        .filter(Boolean)
+        .sort((a: any, b: any) => new Date(a.match_date).getTime() - new Date(b.match_date).getTime()) as any[],
     };
   });
 }
@@ -396,7 +413,7 @@ export async function addMatchesToBilleterie(
   billeterieId: string,
   newMatchIds: string[]
 ): Promise<{ error?: string }> {
-  await requireRole(["fondateur"]);
+  await requireRole(["fondateur", "super_admin", "president_odcav", "tresorier"]);
   const adminClient = await createAdminClient();
 
   const { data: bil } = await adminClient
@@ -416,8 +433,58 @@ export async function addMatchesToBilleterie(
 
   if (error) return { error: error.message };
 
+  revalidatePath("/invendus");
   revalidatePath("/fondateur/invendus");
+  revalidatePath(`/billeterie/${billeterieId}`);
   revalidatePath(`/fondateur/billeterie/${billeterieId}`);
+  return {};
+}
+
+// ── Modifier un pass billetterie ───────────────────────────────────────────────
+export async function updateBilleterie(
+  id: string,
+  formData: { name: string; price: number }
+): Promise<{ error?: string }> {
+  await requireRole(["fondateur", "super_admin", "president_odcav", "tresorier"]);
+  const adminClient = await createAdminClient();
+
+  const { error } = await adminClient
+    .from("billeterie")
+    .update({ name: formData.name.trim(), price: formData.price })
+    .eq("id", id);
+
+  if (error) return { error: error.message };
+
+  revalidatePath("/billeterie");
+  revalidatePath("/fondateur/billeterie");
+  revalidatePath(`/billeterie/${id}`);
+  revalidatePath(`/fondateur/billeterie/${id}`);
+  return {};
+}
+
+// ── Supprimer un pass billetterie ──────────────────────────────────────────────
+export async function deleteBilleterie(id: string): Promise<{ error?: string }> {
+  await requireRole(["fondateur", "super_admin", "president_odcav", "tresorier"]);
+  const adminClient = await createAdminClient();
+
+  const { data: tickets } = await adminClient
+    .from("billeterie_tickets")
+    .select("id")
+    .eq("billeterie_id", id);
+
+  const ticketIds = (tickets || []).map((t: any) => t.id as string);
+  if (ticketIds.length > 0) {
+    await adminClient.from("billeterie_scans").delete().in("ticket_id", ticketIds);
+  }
+  await adminClient.from("billeterie_tickets").delete().eq("billeterie_id", id);
+
+  const { error } = await adminClient.from("billeterie").delete().eq("id", id);
+  if (error) return { error: error.message };
+
+  revalidatePath("/billeterie");
+  revalidatePath("/fondateur/billeterie");
+  revalidatePath("/invendus");
+  revalidatePath("/fondateur/invendus");
   return {};
 }
 

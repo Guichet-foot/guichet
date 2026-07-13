@@ -27,6 +27,7 @@ import {
   Loader2,
   Search,
   CalendarDays,
+  Shield,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
@@ -65,10 +66,12 @@ export function BilleterieInvendusList({ items }: Props) {
               <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                 <div className="flex-1 min-w-0">
                   <p className="font-bold text-base leading-snug">{bil.name}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {formatFCFA(bil.price)} · {bil.matchIds.length} match{bil.matchIds.length !== 1 ? "s" : ""}
-                  </p>
-                  <div className="flex flex-wrap gap-x-4 gap-y-0.5 mt-1.5 text-xs text-muted-foreground">
+                  <div className="flex flex-wrap gap-x-4 gap-y-0.5 mt-1 text-xs text-muted-foreground">
+                    <span className="flex items-center gap-1">
+                      <CalendarDays className="h-3 w-3" />
+                      {bil.createdAt ? formatDateShort(bil.createdAt) : "—"}
+                    </span>
+                    <span>{formatFCFA(bil.price)}</span>
                     <span className="flex items-center gap-1">
                       <Ticket className="h-3 w-3" />
                       {bil.totalTickets} billet{bil.totalTickets !== 1 ? "s" : ""}
@@ -78,6 +81,26 @@ export function BilleterieInvendusList({ items }: Props) {
                       {bil.totalScanned} scanné{bil.totalScanned !== 1 ? "s" : ""}
                     </span>
                   </div>
+                  {bil.matches.length > 0 && (
+                    <div className="mt-2 space-y-0.5">
+                      {bil.matches.map((m) => (
+                        <div key={m.id} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <Shield className="h-3 w-3 shrink-0 text-brand/60" />
+                          <span className="font-medium text-foreground/80">
+                            {m.home_team} vs {m.away_team}
+                          </span>
+                          <span className="text-muted-foreground">·</span>
+                          <span>{formatDateShort(m.match_date)}</span>
+                          {m.match_type && (
+                            <>
+                              <span className="text-muted-foreground">·</span>
+                              <span className="truncate">{m.match_type}</span>
+                            </>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
