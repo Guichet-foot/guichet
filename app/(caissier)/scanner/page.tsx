@@ -12,6 +12,8 @@ import {
   AlertTriangle,
   XCircle,
   User,
+  Flashlight,
+  FlashlightOff,
 } from "lucide-react";
 import { formatDateTime } from "@/lib/format";
 import type { ScanResult, AccessCard } from "@/lib/types";
@@ -36,9 +38,12 @@ function ScannerContent() {
   const [scanning, setScanning] = useState(true);
   const [stats, setStats] = useState({ validated: 0, total: 0 });
   const [cameraError, setCameraError] = useState<string | null>(null);
+  const [torchSupported, setTorchSupported] = useState(false);
+  const [torchOn, setTorchOn] = useState(false);
   const scannerRef = useRef<HTMLDivElement>(null);
   /* eslint-disable @typescript-eslint/no-explicit-any */
   const html5QrCodeRef = useRef<any>(null);
+  const streamTrackRef = useRef<MediaStreamTrack | null>(null);
 
   const resumeScanning = useCallback(() => {
     setScanResult(null);
@@ -46,12 +51,22 @@ function ScannerContent() {
     setScanning(true);
   }, []);
 
-  // Fermer l'overlay carte et relancer le scanner
   async function closeCardOverlay() {
     try {
       if (html5QrCodeRef.current) await html5QrCodeRef.current.resume();
     } catch { }
     resumeScanning();
+  }
+
+  async function toggleTorch(on: boolean) {
+    const track = streamTrackRef.current;
+    if (!track) return;
+    try {
+      await (track as any).applyConstraints({ advanced: [{ torch: on }] });
+      setTorchOn(on);
+    } catch {
+      // torch not supported or denied on this device
+    }
   }
 
   useEffect(() => {
@@ -62,7 +77,6 @@ function ScannerContent() {
         const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import("html5-qrcode");
         if (!scannerRef.current) return;
 
-        // Restrict to QR_CODE only — avoids decoding barcodes/DataMatrix on every frame
         const html5QrCode = new Html5Qrcode("qr-reader", {
           formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
           verbose: false,
@@ -88,7 +102,6 @@ function ScannerContent() {
                 if (card) {
                   setCardResult(card);
                   vibrate([100, 50, 100]);
-                  // Pas de fermeture automatique — le portier clique sur "Validé"
                 } else {
                   setScanResult({ status: "invalid", message: "Carte inconnue dans le système." });
                   vibrate([100, 50, 100, 50, 100]);
@@ -116,13 +129,13 @@ function ScannerContent() {
                 if (result.status === "valid") {
                   setStats((prev) => ({ ...prev, validated: prev.validated + 1 }));
                   vibrate([100]);
-                  dismissDelay = 1200; // entrée validée — message court, retour rapide
+                  dismissDelay = 1200;
                 } else if (result.status === "already_scanned") {
                   vibrate([100, 50, 100]);
                   dismissDelay = 1800;
                 } else {
                   vibrate([100, 50, 100, 50, 100]);
-                  dismissDelay = 2500; // message d'erreur à lire
+                  dismissDelay = 2500;
                 }
               } catch {
                 setScanResult({ status: "invalid", message: "Erreur réseau. Vérifiez votre connexion." });
@@ -136,13 +149,33 @@ function ScannerContent() {
           },
           () => {}
         );
+
+        // Récupère le track vidéo pour le contrôle de la torche
+        // (léger délai pour que la caméra soit prête)
+        setTimeout(() => {
+          const videoEl = document.querySelector("#qr-reader video") as HTMLVideoElement | null;
+          const stream = videoEl?.srcObject as MediaStream | null;
+          const track = stream?.getVideoTracks()[0] ?? null;
+          if (track) {
+            streamTrackRef.current = track;
+            const capabilities = (track as any).getCapabilities?.() as any;
+            if (capabilities?.torch) setTorchSupported(true);
+          }
+        }, 800);
+
       } catch {
         setCameraError("Impossible d'accéder à la caméra. Autorisez l'accès dans les paramètres.");
       }
     }
 
     initScanner();
-    return () => { if (scanner) scanner.clear().catch(() => {}); };
+    return () => {
+      // Éteint la torche avant de stopper la caméra
+      if (streamTrackRef.current) {
+        try { (streamTrackRef.current as any).applyConstraints({ advanced: [{ torch: false }] }); } catch { }
+      }
+      if (scanner) scanner.clear().catch(() => {});
+    };
   }, []);
 
   function vibrate(pattern: number[]) {
@@ -178,6 +211,51 @@ function ScannerContent() {
         </div>
       )}
 
+      {/* ── Torche ── */}
+      {!cameraError && torchSupported && (
+        <label
+          className={`flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-colors select-none ${
+            torchOn
+              ? "bg-amber-50 border-amber-400 dark:bg-amber-950/40 dark:border-amber-500"
+              : "bg-muted/40 border-border"
+          }`}
+        >
+          <input
+            type="checkbox"
+            checked={torchOn}
+            onChange={(e) => toggleTorch(e.target.checked)}
+            className="sr-only"
+          />
+          {/* Case à cocher visuelle */}
+          <div
+            className={`w-6 h-6 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${
+              torchOn
+                ? "bg-amber-500 border-amber-500"
+                : "border-muted-foreground bg-background"
+            }`}
+          >
+            {torchOn && (
+              <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            )}
+          </div>
+          {torchOn ? (
+            <Flashlight className="h-6 w-6 text-amber-500 shrink-0" />
+          ) : (
+            <FlashlightOff className="h-6 w-6 text-muted-foreground shrink-0" />
+          )}
+          <div>
+            <p className={`font-bold text-base ${torchOn ? "text-amber-700 dark:text-amber-400" : "text-foreground"}`}>
+              Torche {torchOn ? "allumée" : "éteinte"}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {torchOn ? "Appuyez pour éteindre la lampe" : "Appuyez pour allumer la lampe"}
+            </p>
+          </div>
+        </label>
+      )}
+
       {/* ── Overlay billet ── */}
       {scanResult && (
         <div
@@ -198,7 +276,6 @@ function ScannerContent() {
               {scanResult.status === "already_scanned" && "DÉJÀ UTILISÉ"}
               {scanResult.status === "invalid" && "BILLET INVALIDE"}
             </p>
-            {/* Only show detail on error/warning — keep the valid screen minimal for speed */}
             {scanResult.status === "already_scanned" && scanResult.scannedAt && (
               <p className="text-lg">à {formatDateTime(scanResult.scannedAt)}</p>
             )}
@@ -213,14 +290,12 @@ function ScannerContent() {
       {cardResult && (
         <div className="fixed inset-0 z-50 flex flex-col bg-green-950">
 
-          {/* Bandeau titre */}
           <div className="bg-green-800 px-4 py-3 text-center shrink-0">
             <p className="text-green-200 text-xs font-bold uppercase tracking-widest">
               ✓ Carte membre vérifiée
             </p>
           </div>
 
-          {/* Photo — très grande, prend la majorité de l'espace */}
           <div className="flex-1 flex items-center justify-center p-6">
             <div
               className="rounded-full overflow-hidden bg-green-800 border-4 border-green-400 shadow-2xl"
@@ -241,9 +316,7 @@ function ScannerContent() {
             </div>
           </div>
 
-          {/* Infos + bouton Validé */}
           <div className="bg-green-900 px-5 pt-4 pb-8 shrink-0 space-y-3">
-            {/* Nom */}
             <div className="text-center">
               <p className="text-white text-2xl font-black leading-tight">
                 {cardResult.full_name}
@@ -257,7 +330,6 @@ function ScannerContent() {
               </p>
             </div>
 
-            {/* Bouton Validé */}
             <Button
               onClick={closeCardOverlay}
               className="w-full h-14 text-xl font-black rounded-2xl bg-green-500 hover:bg-green-400 active:bg-green-600 text-white shadow-lg border-0"
