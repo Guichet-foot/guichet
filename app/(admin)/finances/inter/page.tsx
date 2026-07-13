@@ -33,8 +33,9 @@ export default async function FinancesInterPage({
   // super_admin / tresorier → inherit parent's identity via created_by_admin
   // president_odcav → use their own ID
   let creatorIds: string[] | null = null; // null = no filter (fondateur)
+  let ownerId: string = profile.id;
   if (profile.role !== "fondateur") {
-    const ownerId =
+    ownerId =
       (profile.role === "super_admin" || profile.role === "tresorier") && profile.created_by_admin
         ? profile.created_by_admin
         : profile.id;
@@ -43,6 +44,16 @@ export default async function FinancesInterPage({
       .select("id")
       .eq("created_by_admin", ownerId);
     creatorIds = [ownerId, ...((subAdmins || []) as any[]).map((p: any) => p.id as string)];
+  }
+
+  // C3 accounts belonging to this ODCAV (used only for the Communal tab)
+  let c3AccountIds: string[] = [];
+  if (typeParam === "communal") {
+    const c3Query = adminSupabase.from("profiles").select("id").eq("role", "c3");
+    const { data: c3Accounts } = profile.role === "fondateur"
+      ? await c3Query
+      : await c3Query.eq("created_by_admin", ownerId);
+    c3AccountIds = ((c3Accounts || []) as any[]).map((p: any) => p.id as string);
   }
 
   const today = new Date().toISOString().split("T")[0];
@@ -90,26 +101,45 @@ export default async function FinancesInterPage({
     .single();
   const odcavRate = platformData?.odcav_rate ?? 0.05;
 
-  // ── Matches in period (inter-zone scoped, ODCAV-isolated) ────────
-  let matchesPeriodQuery: any = adminSupabase
+  // ── Matches in period ────────────────────────────────────────────
+  // 1. ODCAV inter-matches (communal or departmental)
+  let odcavMatchQuery: any = adminSupabase
     .from("matches")
     .select("id, home_team, away_team, match_date")
     .eq("match_type", matchType)
     .is("zone_id", null);
-
-  // Restrict to this ODCAV's matches (fondateur sees all)
-  if (creatorIds) matchesPeriodQuery = matchesPeriodQuery.in("created_by", creatorIds);
-
+  if (creatorIds) odcavMatchQuery = odcavMatchQuery.in("created_by", creatorIds);
   if (filterMatchId) {
-    matchesPeriodQuery = matchesPeriodQuery.eq("id", filterMatchId);
+    odcavMatchQuery = odcavMatchQuery.eq("id", filterMatchId);
   } else {
-    matchesPeriodQuery = matchesPeriodQuery
+    odcavMatchQuery = odcavMatchQuery
       .gte("match_date", dateStart.toISOString())
       .lte("match_date", dateEnd.toISOString());
   }
+  const { data: odcavMatchesData } = await odcavMatchQuery;
+  const matchesInPeriod: any[] = [...(odcavMatchesData || [])];
 
-  const { data: matchesInPeriod } = await matchesPeriodQuery;
-  const matchIdsInPeriod = (matchesInPeriod || []).map((m: any) => m.id as string);
+  // 2. C3 matches (treated as communal — no match_type, identified by c3_account_id)
+  if (typeParam === "communal" && c3AccountIds.length > 0) {
+    let c3MatchQuery: any = adminSupabase
+      .from("matches")
+      .select("id, home_team, away_team, match_date")
+      .in("c3_account_id", c3AccountIds);
+    if (filterMatchId) {
+      c3MatchQuery = c3MatchQuery.eq("id", filterMatchId);
+    } else {
+      c3MatchQuery = c3MatchQuery
+        .gte("match_date", dateStart.toISOString())
+        .lte("match_date", dateEnd.toISOString());
+    }
+    const { data: c3Matches } = await c3MatchQuery;
+    const existingIds = new Set(matchesInPeriod.map((m: any) => m.id as string));
+    for (const m of (c3Matches || []) as any[]) {
+      if (!existingIds.has(m.id as string)) matchesInPeriod.push(m);
+    }
+  }
+
+  const matchIdsInPeriod = matchesInPeriod.map((m: any) => m.id as string);
 
   // ── Regular tickets for those matches ───────────────────────────
   let periodTickets: any[] = [];
@@ -139,20 +169,23 @@ export default async function FinancesInterPage({
     bilsInPeriod.forEach((b: any) => { bilPriceMap[b.id] = b.price || 0; });
 
     if (bilIds.length > 0) {
-      const bilTickets = await fetchAll<any>((from, to) =>
-        adminSupabase.from("billeterie_tickets").select("id, billeterie_id").in("billeterie_id", bilIds).neq("status", "annule").eq("withdrawn", false).range(from, to)
-      );
-      bilPrinted = bilTickets.length;
-
+      const [bilActiveTickets, bilAllTickets, scanData] = await Promise.all([
+        fetchAll<any>((from, to) =>
+          adminSupabase.from("billeterie_tickets").select("id, billeterie_id").in("billeterie_id", bilIds).neq("status", "annule").eq("withdrawn", false).range(from, to)
+        ),
+        fetchAll<any>((from, to) =>
+          adminSupabase.from("billeterie_tickets").select("id, billeterie_id").in("billeterie_id", bilIds).range(from, to)
+        ),
+        fetchAll<any>((from, to) =>
+          adminSupabase.from("billeterie_scans").select("ticket_id").in("match_id", matchIdsInPeriod).range(from, to)
+        ),
+      ]);
+      bilPrinted = bilActiveTickets.length;
       const bilTicketIdMap: Record<string, string> = {};
-      bilTickets.forEach((t: any) => { bilTicketIdMap[t.id] = t.billeterie_id; });
-
-      const scanData = await fetchAll<any>((from, to) =>
-        adminSupabase.from("billeterie_scans").select("ticket_id").in("match_id", matchIdsInPeriod).range(from, to)
-      );
+      bilAllTickets.forEach((t: any) => { bilTicketIdMap[t.id as string] = t.billeterie_id as string; });
       bilScanned = scanData.length;
       bilRevenue = scanData.reduce((s: number, scan: any) => {
-        const bilId = bilTicketIdMap[scan.ticket_id];
+        const bilId = bilTicketIdMap[scan.ticket_id as string];
         return s + (bilId ? (bilPriceMap[bilId] || 0) : 0);
       }, 0);
     }
@@ -193,7 +226,7 @@ export default async function FinancesInterPage({
 
   const balance = totalRevenue - totalExpenses - odcavCommission - fraisPlateformePeriod;
 
-  // ── Match list for filter dropdown (same ODCAV isolation) ────────
+  // ── Match list for filter dropdown ────────────────────────────────
   let matchesListQuery: any = adminSupabase
     .from("matches")
     .select("id, home_team, away_team")
@@ -202,7 +235,20 @@ export default async function FinancesInterPage({
     .order("match_date", { ascending: false });
   if (creatorIds) matchesListQuery = matchesListQuery.in("created_by", creatorIds);
   const { data: matchesList } = await matchesListQuery;
-  const filterMatches = (matchesList || []).map((m: any) => ({
+
+  let allMatchesList = [...((matchesList || []) as any[])];
+  if (typeParam === "communal" && c3AccountIds.length > 0) {
+    const { data: c3MatchesList } = await adminSupabase
+      .from("matches")
+      .select("id, home_team, away_team")
+      .in("c3_account_id", c3AccountIds)
+      .order("match_date", { ascending: false });
+    const existingIds = new Set(allMatchesList.map((m: any) => m.id as string));
+    for (const m of (c3MatchesList || []) as any[]) {
+      if (!existingIds.has(m.id as string)) allMatchesList.push(m);
+    }
+  }
+  const filterMatches = allMatchesList.map((m: any) => ({
     id: m.id,
     label: `${m.home_team} vs ${m.away_team}`,
   }));

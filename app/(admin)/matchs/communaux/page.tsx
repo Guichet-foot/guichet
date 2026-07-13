@@ -102,10 +102,10 @@ export default async function MatchsCommunauxPage() {
                       <TableCell className="text-right">
                         <div className="flex items-center gap-1 justify-end">
                           {isC3Match ? (
-                            <Link href="/billeterie">
-                              <Button variant="outline" size="sm" className="text-blue-700 border-blue-300 hover:bg-blue-50" title="Voir billetterie C3">
+                            <Link href={`/finances/inter?type=communal&match=${match.id}`}>
+                              <Button variant="outline" size="sm" className="text-blue-700 border-blue-300 hover:bg-blue-50" title="Voir finances C3">
                                 <Ticket className="h-3 w-3 mr-1" />
-                                Billetterie
+                                Finances
                               </Button>
                             </Link>
                           ) : profile.role === "fondateur" && match.status !== "termine" && match.status !== "annule" && (
