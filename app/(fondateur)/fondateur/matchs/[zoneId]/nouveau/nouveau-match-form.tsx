@@ -15,12 +15,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
-import { Check, Loader2, Plus, Ticket, Trash2 } from "lucide-react";
+import { Check, Loader2, Ticket } from "lucide-react";
 import { toast } from "sonner";
 import { formatFCFA } from "@/lib/format";
 
 interface Template { id: string; name: string; price: number; color: string; }
-interface InlineCat { name: string; price: string; }
 
 interface NouveauMatchFormProps {
   zoneId: string;
@@ -38,7 +37,6 @@ export function NouveauMatchForm({ zoneId, zoneName, teams, templates }: Nouveau
   const [matchDate, setMatchDate] = useState("");
   const [notes, setNotes] = useState("");
   const [selectedTemplates, setSelectedTemplates] = useState<Set<string>>(new Set());
-  const [inlineCats, setInlineCats] = useState<InlineCat[]>([]);
 
   function toggleTemplate(id: string) {
     setSelectedTemplates((prev) => {
@@ -48,28 +46,10 @@ export function NouveauMatchForm({ zoneId, zoneName, teams, templates }: Nouveau
     });
   }
 
-  function addInlineCat() {
-    setInlineCats((prev) => [...prev, { name: "", price: "" }]);
-  }
-
-  function updateInlineCat(i: number, field: keyof InlineCat, value: string) {
-    setInlineCats((prev) => prev.map((c, idx) => idx === i ? { ...c, [field]: value } : c));
-  }
-
-  function removeInlineCat(i: number) {
-    setInlineCats((prev) => prev.filter((_, idx) => idx !== i));
-  }
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!homeTeam || !awayTeam) { toast.error("Sélectionnez les deux équipes"); return; }
     if (homeTeam === awayTeam) { toast.error("Les deux équipes doivent être différentes"); return; }
-
-    const validInline = inlineCats.filter((c) => c.name.trim() && c.price);
-    if (inlineCats.some((c) => !c.name.trim() || !c.price)) {
-      toast.error("Remplissez le nom et le prix de chaque catégorie ajoutée");
-      return;
-    }
 
     setLoading(true);
     const result = await createMatchAsFondateur({
@@ -80,7 +60,7 @@ export function NouveauMatchForm({ zoneId, zoneName, teams, templates }: Nouveau
       matchDate: new Date(matchDate).toISOString(),
       notes,
       selectedTemplateIds: Array.from(selectedTemplates),
-      inlineCategories: validInline.map((c) => ({ name: c.name.trim(), price: parseInt(c.price) })),
+      inlineCategories: [],
     });
 
     setLoading(false);
@@ -88,8 +68,6 @@ export function NouveauMatchForm({ zoneId, zoneName, teams, templates }: Nouveau
     toast.success("Match créé");
     router.push(`/fondateur/matchs/${zoneId}`);
   }
-
-  const totalCats = selectedTemplates.size + inlineCats.filter((c) => c.name && c.price).length;
 
   return (
     <Card>
@@ -185,56 +163,8 @@ export function NouveauMatchForm({ zoneId, zoneName, teams, templates }: Nouveau
             </div>
           )}
 
-          {/* Catégories créées directement */}
-          <div className="space-y-3 pt-2 border-t border-border">
-            <div className="flex items-center gap-2">
-              <Ticket className="h-4 w-4 text-brand" />
-              <Label className="text-sm font-semibold">Nouvelles catégories de billets</Label>
-            </div>
-            {inlineCats.length > 0 && (
-              <div className="space-y-2">
-                {inlineCats.map((cat, i) => (
-                  <div key={i} className="flex items-center gap-2">
-                    <Input
-                      value={cat.name}
-                      onChange={(e) => updateInlineCat(i, "name", e.target.value)}
-                      placeholder="Tribune, Pelouse, VIP..."
-                      className="flex-1"
-                    />
-                    <Input
-                      type="number"
-                      value={cat.price}
-                      onChange={(e) => updateInlineCat(i, "price", e.target.value)}
-                      placeholder="Prix FCFA"
-                      min="0"
-                      step="100"
-                      className="w-32"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => removeInlineCat(i)}
-                      className="text-danger hover:text-danger/80 p-1 shrink-0"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-            <Button type="button" variant="outline" size="sm" onClick={addInlineCat} className="w-full border-dashed">
-              <Plus className="h-4 w-4 mr-2" />
-              Ajouter une catégorie
-            </Button>
-          </div>
-
           <Button type="submit" className="w-full bg-brand hover:bg-brand/90" disabled={loading}>
-            {loading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : totalCats > 0 ? (
-              `Créer le match avec ${totalCats} catégorie(s)`
-            ) : (
-              "Créer le match"
-            )}
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Créer le match"}
           </Button>
         </form>
       </CardContent>

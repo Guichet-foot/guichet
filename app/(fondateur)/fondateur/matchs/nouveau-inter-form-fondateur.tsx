@@ -19,10 +19,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
-import { ArrowLeft, Loader2, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
-import { formatFCFA } from "@/lib/format";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -48,7 +47,6 @@ export function NouveauInterMatchFondateurForm({ matchType, backHref, title }: P
   const [venue, setVenue] = useState("");
   const [matchDate, setMatchDate] = useState("");
   const [notes, setNotes] = useState("");
-  const [inlineCats, setInlineCats] = useState<{ name: string; price: string }[]>([{ name: "", price: "" }]);
 
   useEffect(() => {
     getFondateurOdcavAccounts().then(setOdcavs);
@@ -65,12 +63,6 @@ export function NouveauInterMatchFondateurForm({ matchType, backHref, title }: P
     });
   }, [selectedOdcavId]);
 
-  function addCat() { setInlineCats((p) => [...p, { name: "", price: "" }]); }
-  function removeCat(i: number) { setInlineCats((p) => p.filter((_, idx) => idx !== i)); }
-  function updateCat(i: number, field: "name" | "price", value: string) {
-    setInlineCats((p) => p.map((c, idx) => (idx === i ? { ...c, [field]: value } : c)));
-  }
-
   const homeTeam = teams.find((t) => t.id === homeTeamId);
   const awayTeam = teams.find((t) => t.id === awayTeamId);
 
@@ -79,14 +71,6 @@ export function NouveauInterMatchFondateurForm({ matchType, backHref, title }: P
     if (!selectedOdcavId) { toast.error("Sélectionnez l'ODCAV organisateur"); return; }
     if (!homeTeamId || !awayTeamId) { toast.error("Sélectionnez les deux équipes"); return; }
     if (homeTeamId === awayTeamId) { toast.error("Les deux équipes doivent être différentes"); return; }
-
-    const validCats = inlineCats.filter((c) => c.name.trim() && c.price);
-    if (validCats.length === 0) { toast.error("Ajoutez au moins une catégorie de billet"); return; }
-
-    const inlineCategories = validCats.map((c) => ({
-      name: c.name.trim(),
-      price: Math.round(parseFloat(c.price)),
-    }));
 
     setLoading(true);
     const result = await createOdcavInterMatch({
@@ -98,7 +82,6 @@ export function NouveauInterMatchFondateurForm({ matchType, backHref, title }: P
       venue,
       matchDate: new Date(matchDate).toISOString(),
       notes,
-      inlineCategories,
       odcavId: selectedOdcavId,
     });
     setLoading(false);
@@ -210,48 +193,6 @@ export function NouveauInterMatchFondateurForm({ matchType, backHref, title }: P
             <div className="space-y-2">
               <Label htmlFor="notes">Notes (optionnel)</Label>
               <Textarea id="notes" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Informations complémentaires…" />
-            </div>
-
-            {/* Catégories de billets */}
-            <div className="space-y-3 border-t pt-4">
-              <div className="flex items-center justify-between">
-                <Label className="text-sm font-semibold">Catégories de billets</Label>
-                <Button type="button" variant="outline" size="sm" onClick={addCat}>
-                  <Plus className="h-3.5 w-3.5 mr-1" />Ajouter
-                </Button>
-              </div>
-              {inlineCats.map((cat, i) => (
-                <div key={i} className="flex gap-2 items-start">
-                  <div className="flex-1 space-y-1">
-                    <Input
-                      placeholder="Nom (ex: Tribune)"
-                      value={cat.name}
-                      onChange={(e) => updateCat(i, "name", e.target.value)}
-                    />
-                  </div>
-                  <div className="w-28 space-y-1">
-                    <Input
-                      type="number"
-                      placeholder="Prix"
-                      min="0"
-                      value={cat.price}
-                      onChange={(e) => updateCat(i, "price", e.target.value)}
-                    />
-                  </div>
-                  {inlineCats.length > 1 && (
-                    <Button type="button" variant="ghost" size="sm" onClick={() => removeCat(i)} className="h-10 w-10 p-0 text-destructive hover:text-destructive">
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  )}
-                </div>
-              ))}
-              {inlineCats.filter((c) => c.name && c.price).length > 0 && (
-                <div className="text-xs text-muted-foreground space-y-0.5 pt-1">
-                  {inlineCats.filter((c) => c.name && c.price).map((c, i) => (
-                    <p key={i}>{c.name} — {formatFCFA(parseFloat(c.price) || 0)}</p>
-                  ))}
-                </div>
-              )}
             </div>
 
             <Button type="submit" className="w-full bg-brand hover:bg-brand/90" disabled={loading}>
