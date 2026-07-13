@@ -65,65 +65,74 @@ export function BilleterieInvendusList({ items }: Props) {
             <CardContent className="pt-4 pb-4">
               <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                 <div className="flex-1 min-w-0">
-                  <p className="font-bold text-base leading-snug">{bil.name}</p>
-                  <div className="flex flex-wrap gap-x-4 gap-y-0.5 mt-1 text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1">
-                      <CalendarDays className="h-3 w-3" />
-                      {bil.createdAt ? formatDateShort(bil.createdAt) : "—"}
-                    </span>
-                    <span>{formatFCFA(bil.price)}</span>
-                    <span className="flex items-center gap-1">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="font-bold text-base leading-snug">{bil.name}</p>
+                    {bil.unscannedCount > 0 ? (
+                      <Badge variant="outline" className="shrink-0 border-amber-400 text-amber-700 gap-1 text-xs">
+                        <PackageX className="h-3 w-3" />
+                        {bil.unscannedCount} invendu{bil.unscannedCount !== 1 ? "s" : ""}
+                      </Badge>
+                    ) : (
+                      <Badge className="shrink-0 bg-green-600 text-white text-xs">
+                        Tout scanné
+                      </Badge>
+                    )}
+                  </div>
+
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {bil.createdAt ? formatDateShort(bil.createdAt) : "—"} · {formatFCFA(bil.price)}
+                  </p>
+
+                  <div className="flex flex-wrap gap-x-4 gap-y-0.5 mt-1.5 text-xs">
+                    <span className="flex items-center gap-1 text-muted-foreground">
                       <Ticket className="h-3 w-3" />
                       {bil.totalTickets} billet{bil.totalTickets !== 1 ? "s" : ""}
                     </span>
-                    <span className="flex items-center gap-1">
-                      <ScanLine className="h-3 w-3 text-green-600" />
+                    <span className="flex items-center gap-1 text-green-700 font-medium">
+                      <ScanLine className="h-3 w-3" />
                       {bil.totalScanned} scanné{bil.totalScanned !== 1 ? "s" : ""}
                     </span>
+                    {bil.unscannedCount > 0 && (
+                      <span className="flex items-center gap-1 text-amber-700 font-medium">
+                        <PackageX className="h-3 w-3" />
+                        {bil.unscannedCount} invendu{bil.unscannedCount !== 1 ? "s" : ""}
+                      </span>
+                    )}
                   </div>
+
                   {bil.matches.length > 0 && (
-                    <div className="mt-2 space-y-0.5">
-                      {bil.matches.map((m) => (
-                        <div key={m.id} className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                          <Shield className="h-3 w-3 shrink-0 text-brand/60" />
-                          <span className="font-medium text-foreground/80">
-                            {m.home_team} vs {m.away_team}
-                          </span>
-                          <span className="text-muted-foreground">·</span>
-                          <span>{formatDateShort(m.match_date)}</span>
-                          {m.match_type && (
-                            <>
-                              <span className="text-muted-foreground">·</span>
-                              <span className="truncate">{m.match_type}</span>
-                            </>
-                          )}
-                        </div>
-                      ))}
+                    <div className="mt-2 pt-2 border-t border-border/50">
+                      {bil.matches[0]?.match_date && (
+                        <p className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
+                          <CalendarDays className="h-3 w-3" />
+                          {formatDateShort(bil.matches[0].match_date)}
+                        </p>
+                      )}
+                      <div className="space-y-0.5">
+                        {bil.matches.map((m) => (
+                          <div key={m.id} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                            <Shield className="h-3 w-3 shrink-0 text-brand/60" />
+                            <span className="font-medium text-foreground/80">
+                              {m.home_team} vs {m.away_team}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0">
-                  {bil.unscannedCount > 0 ? (
-                    <>
-                      <Badge variant="outline" className="border-amber-400 text-amber-700 gap-1 text-xs">
-                        <PackageX className="h-3 w-3" />
-                        {bil.unscannedCount} invendu{bil.unscannedCount !== 1 ? "s" : ""}
-                      </Badge>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="gap-1 text-xs h-8 border-brand text-brand hover:bg-brand/5"
-                        onClick={() => setAssignModal(bil)}
-                      >
-                        <ArrowRightLeft className="h-3.5 w-3.5" />
-                        Attribuer à des matchs
-                      </Button>
-                    </>
-                  ) : (
-                    <Badge className="bg-green-600 text-white text-xs">
-                      Tout scanné
-                    </Badge>
+                <div className="flex items-end shrink-0 self-end pb-0.5">
+                  {bil.unscannedCount > 0 && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-1 text-xs h-8 border-brand text-brand hover:bg-brand/5"
+                      onClick={() => setAssignModal(bil)}
+                    >
+                      <ArrowRightLeft className="h-3.5 w-3.5" />
+                      Attribuer
+                    </Button>
                   )}
                 </div>
               </div>
