@@ -22,10 +22,10 @@ export default async function ZonesPage() {
   const adminClient = await createAdminClient();
 
   // Determine the ODCAV owner ID to filter zones:
-  // - president_odcav is the top-level account → use their own ID
-  // - super_admin / tresorier are sub-accounts → inherit from their parent (created_by_admin)
+  // - super_admin / president_odcav are top-level ODCAV accounts → use their own ID
+  // - tresorier is a sub-account created under a super_admin → inherit created_by_admin
   const ownerId =
-    (profile.role === "super_admin" || profile.role === "tresorier") && (profile as any).created_by_admin
+    profile.role === "tresorier" && (profile as any).created_by_admin
       ? (profile as any).created_by_admin as string
       : profile.id;
 
