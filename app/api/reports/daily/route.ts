@@ -33,23 +33,23 @@ export async function POST(request: Request) {
   const effectiveC3Id: string | null =
     profile.role === "c3" ? (c3AccountId || user.id) : null;
 
-  // Récupérer les paramètres plateforme effectifs à cette date
+  // Paramètres plateforme effectifs à cette date
   const adminSupabase = await createAdminClient();
   const { data: platformData } = await adminSupabase
     .from("platform_settings")
-    .select("frais_plateforme, odcav_rate")
+    .select("fee_per_block, odcav_rate")
     .lte("effective_date", date)
     .order("effective_date", { ascending: false })
     .limit(1)
     .single();
 
-  const fraisPlateforme = platformData?.frais_plateforme ?? 5000;
+  const fraisPlateforme = platformData?.fee_per_block ?? 5000;
   const odcavRate = platformData?.odcav_rate ?? 0.05;
 
-  // Tickets du jour
+  // Tickets du jour (avec infos match y compris heure)
   const { data: tickets } = await supabase
     .from("tickets")
-    .select("price, match_id, match:matches(home_team, away_team, zone_id, c3_account_id)")
+    .select("price, match_id, match:matches(home_team, away_team, zone_id, c3_account_id, match_date, match_time)")
     .gte("sold_at", `${date}T00:00:00`)
     .lte("sold_at", `${date}T23:59:59`)
     .eq("counts_as_revenue", true) as { data: any[] | null };
@@ -62,14 +62,22 @@ export async function POST(request: Request) {
 
   const totalRevenue = filteredTickets?.reduce((s: number, t: any) => s + t.price, 0) || 0;
 
-  // Recettes par match
-  const revenueMap: Record<string, { teams: string; sold: number; revenue: number }> = {};
+  // Recettes par match (avec heure)
+  const revenueMap: Record<string, {
+    homeTeam: string; awayTeam: string;
+    matchDate?: string; matchTime?: string;
+    sold: number; revenue: number;
+  }> = {};
   filteredTickets?.forEach((t: any) => {
     if (!t.match) return;
     if (!revenueMap[t.match_id]) {
       revenueMap[t.match_id] = {
-        teams: `${t.match.home_team} vs ${t.match.away_team}`,
-        sold: 0, revenue: 0,
+        homeTeam: t.match.home_team,
+        awayTeam: t.match.away_team,
+        matchDate: t.match.match_date || undefined,
+        matchTime: t.match.match_time || undefined,
+        sold: 0,
+        revenue: 0,
       };
     }
     revenueMap[t.match_id].sold++;
@@ -99,9 +107,7 @@ export async function POST(request: Request) {
     if (zone) zoneName = zone.name;
   }
 
-  // Infos ODCAV pour le PDF
-  // For super_admin: their own settings row (id = user.id)
-  // For admin_zone: their super_admin's settings row (zone.created_by)
+  // Infos ODCAV
   let odcavSettingsId = user.id;
   if (profile.role === "admin_zone" && profile.zone_id) {
     const { data: zoneOwner } = await adminSupabase
@@ -129,7 +135,7 @@ export async function POST(request: Request) {
 
   const reportData = {
     zoneName,
-    date: format(new Date(date), "EEEE d MMMM yyyy", { locale: fr }),
+    date: format(new Date(date), "d MMMM yyyy", { locale: fr }),
     generatedAt: format(new Date(), "dd/MM/yyyy HH:mm", { locale: fr }),
     totalRevenue,
     totalExpenses,
@@ -141,6 +147,7 @@ export async function POST(request: Request) {
     odcavInfo,
     expenses: (expenses || []).map((e: any) => ({
       label: e.label,
+      categoryKey: e.category as string,
       category: EXPENSE_CATEGORY_LABELS[e.category as string] || e.category,
       amount: e.amount,
     })),
@@ -153,7 +160,7 @@ export async function POST(request: Request) {
   return new NextResponse(new Uint8Array(buffer), {
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `attachment; filename=bilan-journalier-${date}.pdf`,
+      "Content-Disposition": `attachment; filename=fiche-recettes-${date}.pdf`,
     },
   });
 }

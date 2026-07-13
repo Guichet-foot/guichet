@@ -6,49 +6,101 @@ function fmtAmt(amount: number) {
   return amount.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ") + " FCFA";
 }
 
-const styles = StyleSheet.create({
-  page: { padding: 35, fontSize: 10, fontFamily: "Helvetica" },
-  header: {
-    flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start",
-    marginBottom: 22, paddingBottom: 15, borderBottomWidth: 2, borderBottomColor: "#0D5C3F",
-  },
-  title: { fontSize: 20, fontFamily: "Helvetica-Bold", color: "#0D5C3F" },
-  subtitle: { fontSize: 12, fontFamily: "Helvetica-Bold", marginTop: 3 },
-  meta: { fontSize: 8, color: "#6B7280", marginTop: 2 },
+function fmtTime(t: string | undefined | null): string {
+  if (!t) return "";
+  // HH:MM:SS or HH:MM → "18h00"
+  const parts = t.split(":");
+  if (parts.length >= 2) return `${parts[0]}h${parts[1]}`;
+  return t;
+}
+
+// Mapping catégorie → commission (style fiche de recettes)
+const COMMISSION_GROUPS: { letter: string; label: string; categories: string[] }[] = [
+  { letter: "A", label: "SPORTIVE", categories: ["arbitrage"] },
+  { letter: "B", label: "ORGANISATION", categories: ["securite", "organisation", "location"] },
+  { letter: "C", label: "MÉDICALE", categories: ["sante"] },
+  { letter: "D", label: "FINANCES", categories: ["materiel", "communication"] },
+  { letter: "E", label: "AUTRES", categories: ["transport", "restauration", "prime", "autre"] },
+];
+
+const s = StyleSheet.create({
+  page: { padding: 30, fontSize: 9, fontFamily: "Helvetica" },
+
+  // Header
+  headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 },
+  titleBlock: { flex: 1 },
+  mainTitle: { fontSize: 18, fontFamily: "Helvetica-Bold", textAlign: "center", marginBottom: 2 },
   odcavBlock: { alignItems: "flex-end" },
-  odcavLogo: { width: 40, height: 40, objectFit: "contain", marginBottom: 4 },
-  odcavName: { fontSize: 9, fontFamily: "Helvetica-Bold", color: "#1D4ED8", textAlign: "right" },
+  odcavLogo: { width: 36, height: 36, objectFit: "contain", marginBottom: 3 },
+  odcavName: { fontSize: 8, fontFamily: "Helvetica-Bold", color: "#1D4ED8", textAlign: "right" },
   odcavMeta: { fontSize: 7, color: "#6B7280", textAlign: "right", marginTop: 1 },
-  sectionTitle: {
-    fontSize: 11, fontFamily: "Helvetica-Bold", color: "#0D5C3F",
-    marginBottom: 6, marginTop: 16,
-  },
-  tableHeader: {
-    flexDirection: "row", paddingVertical: 5, paddingHorizontal: 8,
-    backgroundColor: "#F0EDE8", borderBottomWidth: 2, borderBottomColor: "#0D5C3F",
-  },
-  row: {
-    flexDirection: "row", paddingVertical: 5, paddingHorizontal: 8,
-    borderBottomWidth: 1, borderBottomColor: "#E5E2DD",
-  },
-  summaryRow: {
+
+  // Location / date info
+  infoLine: { fontSize: 9, textAlign: "right", marginBottom: 2 },
+
+  // Phase label
+  phaseLabel: { fontSize: 9, fontFamily: "Helvetica-Bold", marginTop: 10, marginBottom: 2 },
+  venueLabel: { fontSize: 9, fontFamily: "Helvetica-Bold", marginBottom: 8 },
+
+  // Matches table
+  matchTable: { borderWidth: 1, borderColor: "#000", marginBottom: 14 },
+  matchHeaderRow: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: "#000", backgroundColor: "#F3F4F6" },
+  matchRow: { flexDirection: "row", borderBottomWidth: 0.5, borderBottomColor: "#9CA3AF" },
+  matchDateCell: { width: 70, padding: 5, borderRightWidth: 1, borderRightColor: "#000", fontFamily: "Helvetica-Bold", fontSize: 9 },
+  matchTimeCell: { width: 45, padding: 5, borderRightWidth: 1, borderRightColor: "#9CA3AF", fontSize: 9, textAlign: "center" },
+  matchTeamCell: { flex: 1, padding: 5, borderRightWidth: 1, borderRightColor: "#9CA3AF", fontSize: 9 },
+  matchTeamLastCell: { flex: 1, padding: 5, fontSize: 9 },
+  matchRevCell: { width: 80, padding: 5, fontSize: 9, textAlign: "right", fontFamily: "Helvetica-Bold" },
+
+  // "RECETTES DE LA JOURNÉE" banner
+  recettesBanner: {
     flexDirection: "row", justifyContent: "space-between", alignItems: "center",
-    paddingVertical: 8, paddingHorizontal: 12,
-    borderBottomWidth: 1, borderBottomColor: "#E5E2DD",
+    backgroundColor: "#DC2626", padding: "6 10", marginBottom: 10,
   },
-  summaryLabel: { fontSize: 9, color: "#374151" },
-  summaryValue: { fontSize: 10, fontFamily: "Helvetica-Bold" },
-  totalRow: {
-    flexDirection: "row", justifyContent: "space-between", alignItems: "center",
-    paddingVertical: 10, paddingHorizontal: 12,
-    backgroundColor: "#0D5C3F", borderRadius: 4, marginTop: 6,
-  },
-  totalLabel: { fontSize: 11, fontFamily: "Helvetica-Bold", color: "#FFFFFF" },
-  totalValue: { fontSize: 13, fontFamily: "Helvetica-Bold", color: "#FFFFFF" },
+  recettesLabel: { fontSize: 11, fontFamily: "Helvetica-Bold", color: "#FFFFFF", fontStyle: "italic" },
+  recettesValue: { fontSize: 12, fontFamily: "Helvetica-Bold", color: "#FFFFFF" },
+
+  // Commission section
+  commissionSection: { marginBottom: 8 },
+  commissionHeaderRow: { flexDirection: "row", borderWidth: 1, borderColor: "#000", backgroundColor: "#F3F4F6" },
+  commissionLetter: { width: 22, padding: 4, borderRightWidth: 1, borderRightColor: "#000", fontFamily: "Helvetica-Bold", fontSize: 9, textAlign: "center" },
+  commissionLabel: { flex: 1, padding: 4, fontFamily: "Helvetica-Bold", fontSize: 9, color: "#DC2626" },
+
+  // Expense rows
+  expRow: { flexDirection: "row", borderLeftWidth: 1, borderRightWidth: 1, borderBottomWidth: 0.5, borderColor: "#9CA3AF" },
+  expNumCell: { width: 22, padding: "3 4", borderRightWidth: 0.5, borderRightColor: "#9CA3AF", textAlign: "center", fontSize: 8 },
+  expLabelCell: { flex: 1, padding: "3 6", borderRightWidth: 0.5, borderRightColor: "#9CA3AF", fontSize: 8 },
+  expAmountCell: { width: 90, padding: "3 6", textAlign: "right", fontSize: 8 },
+
+  // Sous-total row
+  sousTotal: { flexDirection: "row", justifyContent: "space-between", borderWidth: 1, borderColor: "#000", padding: "4 8", backgroundColor: "#F9FAFB", marginTop: -0.5 },
+  sousTotalLabel: { fontSize: 8, fontFamily: "Helvetica-Bold", fontStyle: "italic" },
+  sousTotalValue: { fontSize: 8, fontFamily: "Helvetica-Bold", fontStyle: "italic" },
+
+  // Total dépenses
+  totalDepenses: { flexDirection: "row", justifyContent: "space-between", borderWidth: 1.5, borderColor: "#000", padding: "6 10", marginTop: 4, marginBottom: 10 },
+  totalDepensesLabel: { fontSize: 10, fontFamily: "Helvetica-Bold" },
+  totalDepensesValue: { fontSize: 10, fontFamily: "Helvetica-Bold" },
+
+  // Recettes nettes
+  recettesNettes: { flexDirection: "row", justifyContent: "space-between", backgroundColor: "#DC2626", padding: "6 10", marginBottom: 6 },
+  recettesNettesLabel: { fontSize: 10, fontFamily: "Helvetica-Bold", color: "#FFF" },
+  recettesNettesValue: { fontSize: 10, fontFamily: "Helvetica-Bold", color: "#FFF" },
+
+  // Distribution rows
+  distRow: { flexDirection: "row", justifyContent: "space-between", padding: "4 10", borderBottomWidth: 0.5, borderBottomColor: "#D1D5DB" },
+  distLabel: { fontSize: 9, fontFamily: "Helvetica-Bold", fontStyle: "italic" },
+  distValue: { fontSize: 9, fontFamily: "Helvetica-Bold", fontStyle: "italic" },
+
+  // Frais plateforme row
+  fraisRow: { flexDirection: "row", justifyContent: "space-between", padding: "4 10", backgroundColor: "#FFF7ED", borderWidth: 0.5, borderColor: "#FED7AA", marginTop: 6 },
+  fraisLabel: { fontSize: 8, color: "#C2410C" },
+  fraisValue: { fontSize: 8, color: "#C2410C", fontFamily: "Helvetica-Bold" },
+
   footer: {
-    position: "absolute", bottom: 20, left: 35, right: 35,
-    textAlign: "center", fontSize: 7, color: "#6B7280",
-    borderTopWidth: 1, borderTopColor: "#E5E2DD", paddingTop: 6,
+    position: "absolute", bottom: 18, left: 30, right: 30,
+    textAlign: "center", fontSize: 6.5, color: "#9CA3AF",
+    borderTopWidth: 0.5, borderTopColor: "#D1D5DB", paddingTop: 5,
   },
 });
 
@@ -62,8 +114,15 @@ export interface DailyReportData {
   odcavRate: number;
   fraisPlateforme: number;
   netZone: number;
-  revenueByMatch: { teams: string; sold: number; revenue: number }[];
-  expenses: { label: string; category: string; amount: number }[];
+  revenueByMatch: {
+    homeTeam: string;
+    awayTeam: string;
+    matchDate?: string;
+    matchTime?: string;
+    sold: number;
+    revenue: number;
+  }[];
+  expenses: { label: string; categoryKey: string; category: string; amount: number }[];
   odcavInfo?: OdcavInfo;
 }
 
@@ -71,123 +130,158 @@ export function DailyReport({ data }: { data: DailyReportData }) {
   const odcav = data.odcavInfo;
   const hasOdcav = odcav && (odcav.nom || odcav.adresse || odcav.president);
 
+  const recettesNettes = Math.max(0, data.totalRevenue - data.totalExpenses);
+  const odcavPart = Math.round(recettesNettes * data.odcavRate);
+  const zonePart = Math.max(0, recettesNettes - odcavPart);
+
+  // Group expenses by commission
+  const groups = COMMISSION_GROUPS.map((g) => {
+    const items = data.expenses.filter((e) => g.categories.includes(e.categoryKey));
+    const total = items.reduce((sum, e) => sum + e.amount, 0);
+    return { ...g, items, total };
+  }).filter((g) => g.items.length > 0);
+
   return (
     <Document>
-      <Page size="A4" style={styles.page}>
-        {/* En-tête */}
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.title}>GUICHET FOOT</Text>
-            <Text style={styles.subtitle}>{data.zoneName}</Text>
-            <Text style={{ fontSize: 13, fontFamily: "Helvetica-Bold", marginTop: 8 }}>BILAN JOURNALIER</Text>
-            <Text style={styles.meta}>Date : {data.date}</Text>
-            <Text style={styles.meta}>Généré le {data.generatedAt}</Text>
-          </View>
+      <Page size="A4" style={s.page}>
 
+        {/* En-tête */}
+        <View style={s.headerRow}>
+          <View style={s.titleBlock}>
+            <Text style={s.mainTitle}>FICHE DE RECETTES</Text>
+          </View>
           {hasOdcav && (
-            <View style={styles.odcavBlock}>
-              {odcav.logoUrl ? (
-                <Image src={odcav.logoUrl} style={styles.odcavLogo} />
-              ) : null}
-              {odcav.nom ? (
-                <Text style={styles.odcavName}>{odcav.nom}</Text>
-              ) : null}
-              {odcav.adresse ? (
-                <Text style={styles.odcavMeta}>{odcav.adresse}</Text>
-              ) : null}
-              {odcav.president ? (
-                <Text style={styles.odcavMeta}>Président : {odcav.president}</Text>
-              ) : null}
-              {odcav.telephone ? (
-                <Text style={styles.odcavMeta}>Tél : {odcav.telephone}</Text>
-              ) : null}
-              {odcav.email ? (
-                <Text style={styles.odcavMeta}>{odcav.email}</Text>
-              ) : null}
+            <View style={s.odcavBlock}>
+              {odcav.logoUrl && <Image src={odcav.logoUrl} style={s.odcavLogo} />}
+              {odcav.nom && <Text style={s.odcavName}>{odcav.nom}</Text>}
+              {odcav.adresse && <Text style={s.odcavMeta}>{odcav.adresse}</Text>}
+              {odcav.president && <Text style={s.odcavMeta}>Président : {odcav.president}</Text>}
+              {odcav.telephone && <Text style={s.odcavMeta}>Tél : {odcav.telephone}</Text>}
             </View>
           )}
         </View>
 
-        {/* Récapitulatif */}
-        <Text style={styles.sectionTitle}>Récapitulatif financier du jour</Text>
-        <View style={{ borderWidth: 1, borderColor: "#E5E2DD", borderRadius: 4, overflow: "hidden" }}>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Recettes brutes de billetterie</Text>
-            <Text style={[styles.summaryValue, { color: "#0D5C3F" }]}>{fmtAmt(data.totalRevenue)}</Text>
-          </View>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Dépenses du jour</Text>
-            <Text style={[styles.summaryValue, { color: "#DC2626" }]}>- {fmtAmt(data.totalExpenses)}</Text>
-          </View>
-          <View style={[styles.summaryRow, { backgroundColor: "#EFF6FF" }]}>
-            <View>
-              <Text style={[styles.summaryLabel, { color: "#1D4ED8", fontFamily: "Helvetica-Bold" }]}>
-                Commission ODCAV ({(data.odcavRate * 100).toFixed(0)}% des recettes)
-              </Text>
-              <Text style={{ fontSize: 7, color: "#6B7280" }}>
-                {odcav?.nom ? `À reverser à : ${odcav.nom}` : "À reverser à l'ODCAV"}
-              </Text>
-            </View>
-            <Text style={[styles.summaryValue, { color: "#1D4ED8" }]}>- {fmtAmt(data.odcavCommission)}</Text>
-          </View>
-          <View style={[styles.summaryRow, { backgroundColor: "#FFF7ED" }]}>
-            <View>
-              <Text style={[styles.summaryLabel, { color: "#C2410C", fontFamily: "Helvetica-Bold" }]}>
-                Frais de plateforme Guichet Foot
-              </Text>
-              <Text style={{ fontSize: 7, color: "#6B7280" }}>Frais d&apos;utilisation journalier</Text>
-            </View>
-            <Text style={[styles.summaryValue, { color: "#C2410C" }]}>- {fmtAmt(data.fraisPlateforme)}</Text>
-          </View>
-        </View>
+        {/* Lieu + date */}
+        <Text style={s.infoLine}>{data.zoneName}, le {data.date}</Text>
+        <Text style={{ fontSize: 7, color: "#6B7280", textAlign: "right", marginBottom: 10 }}>
+          Généré le {data.generatedAt}
+        </Text>
 
-        <View style={styles.totalRow}>
-          <Text style={styles.totalLabel}>Net à reverser à la zone</Text>
-          <Text style={styles.totalValue}>{fmtAmt(Math.max(0, data.netZone))}</Text>
-        </View>
-
-        {/* Détail recettes par match */}
+        {/* Matchs du jour */}
         {data.revenueByMatch.length > 0 && (
+          <View style={s.matchTable}>
+            {data.revenueByMatch.map((m, i) => {
+              const isFirst = i === 0;
+              const dateStr = m.matchDate
+                ? new Date(m.matchDate).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" })
+                : data.date;
+              return (
+                <View key={i} style={[s.matchRow, isFirst ? { borderTopWidth: 0 } : {}]}>
+                  <View style={s.matchDateCell}>
+                    <Text style={{ fontFamily: "Helvetica-Bold", fontSize: 9 }}>{dateStr}</Text>
+                  </View>
+                  <View style={s.matchTimeCell}>
+                    <Text>{fmtTime(m.matchTime)}</Text>
+                  </View>
+                  <View style={s.matchTeamCell}>
+                    <Text style={{ fontFamily: "Helvetica-Bold" }}>{m.homeTeam}</Text>
+                  </View>
+                  <View style={s.matchTeamLastCell}>
+                    <Text style={{ fontFamily: "Helvetica-Bold" }}>{m.awayTeam}</Text>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        )}
+
+        {/* Bannière RECETTES DE LA JOURNÉE */}
+        <View style={s.recettesBanner}>
+          <Text style={s.recettesLabel}>RECETTES DE LA JOURNÉE</Text>
+          <Text style={s.recettesValue}>{fmtAmt(data.totalRevenue)}</Text>
+        </View>
+
+        {/* Tableau des dépenses par commission */}
+        {groups.length > 0 ? (
           <>
-            <Text style={styles.sectionTitle}>Détail recettes par match</Text>
-            <View style={styles.tableHeader}>
-              <Text style={{ flex: 4, fontSize: 8, fontFamily: "Helvetica-Bold" }}>Match</Text>
-              <Text style={{ flex: 1, fontSize: 8, fontFamily: "Helvetica-Bold", textAlign: "right" }}>Billets</Text>
-              <Text style={{ flex: 2, fontSize: 8, fontFamily: "Helvetica-Bold", textAlign: "right" }}>Recettes</Text>
+            {/* En-tête du tableau global */}
+            <View style={{ flexDirection: "row", borderWidth: 1, borderColor: "#000", backgroundColor: "#E5E7EB", marginBottom: 2 }}>
+              <Text style={{ width: 22, padding: 4, borderRightWidth: 1, borderRightColor: "#000", fontFamily: "Helvetica-Bold", fontSize: 8, textAlign: "center" }}>N°</Text>
+              <Text style={{ width: 22, padding: 4, borderRightWidth: 1, borderRightColor: "#000", fontFamily: "Helvetica-Bold", fontSize: 8, textAlign: "center" }}>R</Text>
+              <Text style={{ flex: 1, padding: 4, borderRightWidth: 1, borderRightColor: "#000", fontFamily: "Helvetica-Bold", fontSize: 8 }}>DÉSIGNATIONS</Text>
+              <Text style={{ width: 90, padding: 4, fontFamily: "Helvetica-Bold", fontSize: 8, textAlign: "right" }}>MONTANT</Text>
             </View>
-            {data.revenueByMatch.map((item, i) => (
-              <View key={i} style={styles.row}>
-                <Text style={{ flex: 4, fontSize: 9 }}>{item.teams}</Text>
-                <Text style={{ flex: 1, fontSize: 9, textAlign: "right" }}>{item.sold}</Text>
-                <Text style={{ flex: 2, fontSize: 9, textAlign: "right", fontFamily: "Helvetica-Bold" }}>
-                  {fmtAmt(item.revenue)}
-                </Text>
+
+            {groups.map((group) => (
+              <View key={group.letter} style={s.commissionSection}>
+                {/* En-tête commission */}
+                <View style={s.commissionHeaderRow}>
+                  <Text style={s.commissionLetter}>{group.letter}</Text>
+                  <Text style={s.commissionLabel}>{group.label}</Text>
+                  <Text style={{ width: 90, padding: 4, fontSize: 9 }} />
+                </View>
+
+                {/* Lignes de dépenses */}
+                {group.items.map((item, idx) => (
+                  <View key={idx} style={s.expRow}>
+                    <Text style={s.expNumCell}>{idx + 1}</Text>
+                    <Text style={s.expLabelCell}>{item.label}</Text>
+                    <Text style={s.expAmountCell}>{fmtAmt(item.amount)}</Text>
+                  </View>
+                ))}
+
+                {/* Sous-total */}
+                <View style={s.sousTotal}>
+                  <Text style={s.sousTotalLabel}>SOUS TOTAL COMMISSION {group.label}</Text>
+                  <Text style={s.sousTotalValue}>{fmtAmt(group.total)}</Text>
+                </View>
               </View>
             ))}
           </>
+        ) : (
+          <View style={{ padding: "8 10", borderWidth: 0.5, borderColor: "#D1D5DB", marginBottom: 8 }}>
+            <Text style={{ fontSize: 8, color: "#6B7280", textAlign: "center" }}>Aucune dépense enregistrée ce jour</Text>
+          </View>
         )}
 
-        {/* Dépenses */}
-        {data.expenses.length > 0 && (
-          <>
-            <Text style={styles.sectionTitle}>Dépenses du jour</Text>
-            <View style={styles.tableHeader}>
-              <Text style={{ flex: 3, fontSize: 8, fontFamily: "Helvetica-Bold" }}>Libellé</Text>
-              <Text style={{ flex: 2, fontSize: 8, fontFamily: "Helvetica-Bold" }}>Catégorie</Text>
-              <Text style={{ flex: 2, fontSize: 8, fontFamily: "Helvetica-Bold", textAlign: "right" }}>Montant</Text>
-            </View>
-            {data.expenses.map((item, i) => (
-              <View key={i} style={styles.row}>
-                <Text style={{ flex: 3, fontSize: 9 }}>{item.label}</Text>
-                <Text style={{ flex: 2, fontSize: 9 }}>{item.category}</Text>
-                <Text style={{ flex: 2, fontSize: 9, textAlign: "right" }}>{fmtAmt(item.amount)}</Text>
-              </View>
-            ))}
-          </>
-        )}
+        {/* Total des dépenses */}
+        <View style={s.totalDepenses}>
+          <Text style={s.totalDepensesLabel}>TOTAL DES DÉPENSES</Text>
+          <Text style={s.totalDepensesValue}>{fmtAmt(data.totalExpenses)}</Text>
+        </View>
 
-        <Text style={styles.footer}>
-          Document généré automatiquement par Guichet Foot · Commission ODCAV ({(data.odcavRate * 100).toFixed(0)}%) prélevée sur les recettes brutes de billetterie
+        {/* Recettes nettes */}
+        <View style={s.recettesNettes}>
+          <Text style={s.recettesNettesLabel}>RECETTES NETTES</Text>
+          <Text style={s.recettesNettesValue}>{fmtAmt(recettesNettes)}</Text>
+        </View>
+
+        {/* Distribution */}
+        <View style={{ borderWidth: 0.5, borderColor: "#D1D5DB", marginBottom: 6 }}>
+          <View style={s.distRow}>
+            <Text style={[s.distLabel, { color: "#1D4ED8" }]}>
+              ODCAV {(data.odcavRate * 100).toFixed(0)}%
+              {odcav?.nom ? `  (${odcav.nom})` : ""}
+            </Text>
+            <Text style={[s.distValue, { color: "#1D4ED8" }]}>{fmtAmt(odcavPart)}</Text>
+          </View>
+          <View style={[s.distRow, { borderBottomWidth: 0 }]}>
+            <Text style={[s.distLabel, { color: "#0D5C3F" }]}>
+              ZONE / ASC {(100 - data.odcavRate * 100).toFixed(0)}%
+              {"  (" + data.zoneName + ")"}
+            </Text>
+            <Text style={[s.distValue, { color: "#0D5C3F" }]}>{fmtAmt(zonePart)}</Text>
+          </View>
+        </View>
+
+        {/* Frais plateforme (ligne séparée) */}
+        <View style={s.fraisRow}>
+          <Text style={s.fraisLabel}>Frais de plateforme Guichet Foot (déduits des recettes brutes)</Text>
+          <Text style={s.fraisValue}>- {fmtAmt(data.fraisPlateforme)}</Text>
+        </View>
+
+        <Text style={s.footer}>
+          Document généré automatiquement par Guichet Foot · {data.date} · Commission ODCAV ({(data.odcavRate * 100).toFixed(0)}%) calculée sur les recettes nettes
         </Text>
       </Page>
     </Document>
