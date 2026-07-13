@@ -47,7 +47,13 @@ export async function getAllMatchesForBilleterie(): Promise<MatchOption[]> {
 
   const fields = "id, home_team, away_team, venue, match_date, match_type, status, home_team_zone, away_team_zone";
 
-  if (profile.role === "fondateur") {
+  // Fondateur, super_admin, president_odcav, tresorier → voient tous les matchs programmés
+  if (
+    profile.role === "fondateur" ||
+    profile.role === "super_admin" ||
+    profile.role === "president_odcav" ||
+    profile.role === "tresorier"
+  ) {
     const { data } = await adminClient
       .from("matches")
       .select(fields)
@@ -56,34 +62,21 @@ export async function getAllMatchesForBilleterie(): Promise<MatchOption[]> {
     return (data || []) as MatchOption[];
   }
 
-  const ownerId = (profile.created_by_admin ?? user.id) as string;
+  // Admin zone → uniquement les matchs de leur zone
+  if (profile.role === "admin_zone") {
+    const { data: prof } = await supabase.from("profiles").select("zone_id").eq("id", user.id).single();
+    if (!prof?.zone_id) return [];
+    const { data } = await adminClient.from("matches").select(fields).eq("zone_id", prof.zone_id as string).eq("status", "programme").order("match_date", { ascending: false });
+    return (data || []) as MatchOption[];
+  }
 
-  // Zones owned by this ODCAV
-  const { data: zones } = await adminClient
-    .from("zones")
-    .select("id")
-    .eq("created_by", ownerId);
-  const zoneIds = (zones || []).map((z: any) => z.id as string);
+  // C3 → uniquement leurs matchs
+  if (profile.role === "c3") {
+    const { data } = await adminClient.from("matches").select(fields).eq("c3_account_id", user.id).eq("status", "programme").order("match_date", { ascending: false });
+    return (data || []) as MatchOption[];
+  }
 
-  // Sub-admins of this ODCAV
-  const { data: subAdmins } = await adminClient
-    .from("profiles")
-    .select("id")
-    .eq("created_by_admin", ownerId);
-  const creatorIds = [ownerId, ...(subAdmins || []).map((p: any) => p.id as string)];
-
-  const [zoneRes, directRes] = await Promise.all([
-    zoneIds.length > 0
-      ? adminClient.from("matches").select(fields).in("zone_id", zoneIds).eq("status", "programme").order("match_date", { ascending: false })
-      : Promise.resolve({ data: [] as any[] }),
-    adminClient.from("matches").select(fields).in("created_by", creatorIds).eq("status", "programme").order("match_date", { ascending: false }),
-  ]);
-
-  const all = [...(zoneRes.data || []), ...(directRes.data || [])];
-  const seen = new Set<string>();
-  return all
-    .filter((m: any) => { if (seen.has(m.id)) return false; seen.add(m.id); return true; })
-    .sort((a: any, b: any) => new Date(b.match_date).getTime() - new Date(a.match_date).getTime()) as MatchOption[];
+  return [];
 }
 
 // ── Créer un billetterie + générer les billets ─────────────────────────────────
@@ -332,16 +325,30 @@ export async function getBilleterieInvendusList(): Promise<BilleterieInvendusIte
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
 
+  // Fondateur, super_admin, president_odcav, tresorier → voient TOUT sans filtre.
+  // Admin zone → uniquement les billeteries contenant des matchs de leur zone.
+  // C3 → uniquement les billeteries contenant des matchs C3 qui les concernent.
+  let matchIdFilter: string[] | null = null;
+
+  if (profile.role === "admin_zone") {
+    const { data: prof } = await supabase.from("profiles").select("zone_id").eq("id", user.id).single();
+    if (!prof?.zone_id) return [];
+    const { data: zoneMatches } = await adminClient.from("matches").select("id").eq("zone_id", prof.zone_id as string);
+    matchIdFilter = (zoneMatches || []).map((m: any) => m.id as string);
+    if (matchIdFilter.length === 0) return [];
+  } else if (profile.role === "c3") {
+    const { data: c3Matches } = await adminClient.from("matches").select("id").eq("c3_account_id", user.id);
+    matchIdFilter = (c3Matches || []).map((m: any) => m.id as string);
+    if (matchIdFilter.length === 0) return [];
+  }
+
   let query = adminClient
     .from("billeterie")
     .select("id, name, match_ids, price, created_at")
     .order("created_at", { ascending: false });
 
-  if (profile.role !== "fondateur") {
-    const ownerId = ((profile as any).created_by_admin ?? user.id) as string;
-    const { data: subAdmins } = await adminClient.from("profiles").select("id").eq("created_by_admin", ownerId);
-    const creatorIds = [ownerId, ...((subAdmins || []) as any[]).map((p: any) => p.id as string)];
-    query = query.in("created_by", creatorIds);
+  if (matchIdFilter !== null) {
+    query = query.overlaps("match_ids", matchIdFilter);
   }
 
   const { data: bilList } = await query;

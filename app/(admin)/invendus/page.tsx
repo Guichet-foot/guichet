@@ -6,8 +6,13 @@ import { PackageX } from "lucide-react";
 export const metadata = { title: "Invendus" };
 
 export default async function InvendusPage() {
-  await requireRole(["super_admin", "admin_zone", "c3", "president_odcav", "tresorier"]);
+  const profile = await requireRole(["super_admin", "admin_zone", "c3", "president_odcav", "tresorier"]);
   const items = await getBilleterieInvendusList();
+
+  const canAssign =
+    profile.role === "super_admin" ||
+    profile.role === "president_odcav" ||
+    profile.role === "tresorier";
 
   return (
     <div className="max-w-3xl space-y-6">
@@ -22,7 +27,7 @@ export default async function InvendusPage() {
           </p>
         </div>
       </div>
-      <BilleterieInvendusList items={items} />
+      <BilleterieInvendusList items={items} canAssign={canAssign} />
     </div>
   );
 }

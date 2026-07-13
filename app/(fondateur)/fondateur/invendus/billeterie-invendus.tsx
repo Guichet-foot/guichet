@@ -37,9 +37,10 @@ import { formatFCFA, formatDateShort } from "@/lib/format";
 
 interface Props {
   items: BilleterieInvendusItem[];
+  canAssign?: boolean;
 }
 
-export function BilleterieInvendusList({ items }: Props) {
+export function BilleterieInvendusList({ items, canAssign = true }: Props) {
   const router = useRouter();
   const [assignModal, setAssignModal] = useState<BilleterieInvendusItem | null>(null);
 
@@ -122,8 +123,8 @@ export function BilleterieInvendusList({ items }: Props) {
                   )}
                 </div>
 
-                <div className="flex items-end shrink-0 self-end pb-0.5">
-                  {bil.unscannedCount > 0 && (
+                {canAssign && bil.unscannedCount > 0 && (
+                  <div className="flex items-end shrink-0 self-end pb-0.5">
                     <Button
                       size="sm"
                       variant="outline"
@@ -133,8 +134,8 @@ export function BilleterieInvendusList({ items }: Props) {
                       <ArrowRightLeft className="h-3.5 w-3.5" />
                       Attribuer
                     </Button>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
