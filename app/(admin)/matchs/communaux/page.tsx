@@ -39,6 +39,12 @@ export default async function MatchsCommunauxPage() {
             openAction={openOdcavScanSession}
             closeAction={closeOdcavScanSession}
           />
+          <Link href="/finances/inter?type=communal">
+            <Button variant="outline" className="text-blue-700 border-blue-300 hover:bg-blue-50">
+              <Ticket className="h-4 w-4 mr-2" />
+              Finances Communal
+            </Button>
+          </Link>
           <Link href="/matchs/communaux/nouveau">
             <Button className="bg-brand hover:bg-brand/90">
               <Plus className="h-4 w-4 mr-2" />
@@ -101,14 +107,7 @@ export default async function MatchsCommunauxPage() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center gap-1 justify-end">
-                          {isC3Match ? (
-                            <Link href={`/finances/inter?type=communal&match=${match.id}`}>
-                              <Button variant="outline" size="sm" className="text-blue-700 border-blue-300 hover:bg-blue-50" title="Voir finances C3">
-                                <Ticket className="h-3 w-3 mr-1" />
-                                Finances
-                              </Button>
-                            </Link>
-                          ) : profile.role === "fondateur" && match.status !== "termine" && match.status !== "annule" && (
+                          {!isC3Match && profile.role === "fondateur" && match.status !== "termine" && match.status !== "annule" && (
                             <PrintBlocsButton
                               matchId={match.id}
                               matchName={`${match.home_team} vs ${match.away_team}`}

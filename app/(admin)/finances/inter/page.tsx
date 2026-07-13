@@ -60,6 +60,18 @@ export default async function FinancesInterPage({
   const period = (params.period as Period) || "jour";
   const filterMatchId = params.match || null;
 
+  // If filtering by a C3 match, scans can't be split per-match (shared billeterie)
+  // Expand scan scope to ALL match_ids from the billeterie that covers the selected match
+  let isC3MatchFilter = false;
+  if (filterMatchId && typeParam === "communal") {
+    const { data: fm } = await adminSupabase
+      .from("matches")
+      .select("c3_account_id")
+      .eq("id", filterMatchId)
+      .maybeSingle();
+    isC3MatchFilter = !!fm?.c3_account_id;
+  }
+
   let dateStart: Date;
   let dateEnd: Date;
   let periodLabel: string;
@@ -89,7 +101,9 @@ export default async function FinancesInterPage({
     periodLabel = "Mois en cours";
   }
 
-  if (filterMatchId) periodLabel = "Match sélectionné";
+  if (filterMatchId) {
+    periodLabel = isC3MatchFilter ? "Billetterie C3 — tous les matchs partagés" : "Match sélectionné";
+  }
 
   // ── Platform settings ────────────────────────────────────────────
   const { data: platformData } = await adminSupabase
@@ -168,6 +182,26 @@ export default async function FinancesInterPage({
     const bilPriceMap: Record<string, number> = {};
     bilsInPeriod.forEach((b: any) => { bilPriceMap[b.id] = b.price || 0; });
 
+    // For C3 shared billeterie: scans are attributed to whichever match was en_cours —
+    // expand scan scope to ALL match_ids across the shared billeterie(s)
+    let scanMatchIds = matchIdsInPeriod;
+    if (isC3MatchFilter && bilsInPeriod.length > 0) {
+      const expanded = new Set<string>(matchIdsInPeriod);
+      for (const b of bilsInPeriod) {
+        for (const mid of (b.match_ids as string[] || [])) expanded.add(mid);
+      }
+      scanMatchIds = [...expanded];
+      // Also display all the shared-billeterie matches, not just the one selected
+      const extraIds = scanMatchIds.filter(id => !matchIdSet.has(id));
+      if (extraIds.length > 0) {
+        const { data: extraMatchData } = await adminSupabase
+          .from("matches").select("id, home_team, away_team, match_date").in("id", extraIds);
+        for (const m of (extraMatchData || []) as any[]) {
+          matchesInPeriod.push(m);
+        }
+      }
+    }
+
     if (bilIds.length > 0) {
       const [bilActiveTickets, bilAllTickets, scanData] = await Promise.all([
         fetchAll<any>((from, to) =>
@@ -177,7 +211,7 @@ export default async function FinancesInterPage({
           adminSupabase.from("billeterie_tickets").select("id, billeterie_id").in("billeterie_id", bilIds).range(from, to)
         ),
         fetchAll<any>((from, to) =>
-          adminSupabase.from("billeterie_scans").select("ticket_id").in("match_id", matchIdsInPeriod).range(from, to)
+          adminSupabase.from("billeterie_scans").select("ticket_id").in("match_id", scanMatchIds).range(from, to)
         ),
       ]);
       bilPrinted = bilActiveTickets.length;
