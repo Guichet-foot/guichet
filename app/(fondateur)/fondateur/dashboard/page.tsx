@@ -12,6 +12,8 @@ export const metadata = { title: "Dashboard Fondateur" };
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+const DEMO_ACCOUNT_ID = "aa984bd3-7493-41d3-bad0-7a9c733ba51e";
+
 export default async function FondateurDashboardPage({
   searchParams,
 }: {
@@ -31,6 +33,7 @@ export default async function FondateurDashboardPage({
     superAdminsRes,
     zonesRes,
     regularTicketsRes,
+    regularScannedRes,
     bileterieTicketsRes,
     bilScansRes,
     matchesRes,
@@ -39,24 +42,27 @@ export default async function FondateurDashboardPage({
     supabase.from("profiles").select("id, full_name").in("role", ["super_admin", "president_odcav"]),
     supabase.from("zones").select("id, name, created_by"),
     supabase.from("tickets").select("*", { count: "exact", head: true }).neq("status", "annule"),
+    supabase.from("tickets").select("id", { count: "exact", head: true }).eq("status", "scanne").eq("counts_as_revenue", true),
     supabase.from("billeterie_tickets").select("*", { count: "exact", head: true }).eq("withdrawn", false),
     supabase.from("billeterie_scans").select("*", { count: "exact", head: true }),
     supabase.from("matches").select("id, match_date, zone_id, home_team_zone, away_team_zone, status, match_type, created_by"),
-    supabase.from("platform_settings").select("frais_plateforme, effective_date").order("effective_date", { ascending: true }),
+    supabase.from("platform_settings").select("fee_per_block, effective_date").order("effective_date", { ascending: true }),
   ]);
 
-  const superAdmins = (superAdminsRes.data || []) as { id: string; full_name: string }[];
+  const allSuperAdmins = (superAdminsRes.data || []) as { id: string; full_name: string }[];
+  // Exclure le compte démo des calculs et de l'affichage
+  const superAdmins = allSuperAdmins.filter((sa) => sa.id !== DEMO_ACCOUNT_ID);
   const allZones = (zonesRes.data || []) as { id: string; name: string; created_by: string }[];
   const totalBillets = (regularTicketsRes.count || 0) + (bileterieTicketsRes.count || 0);
   const totalBilScans = bilScansRes.count || 0;
   const allMatches = (matchesRes.data || []).filter((m: any) => m.status !== "annule") as any[];
-  const platformHistory = (platformSettingsRes.data || []) as { frais_plateforme: number; effective_date: string }[];
+  const platformHistory = (platformSettingsRes.data || []) as { fee_per_block: number; effective_date: string }[];
 
   // ── Platform fee helper ───────────────────────────────────────────────────
   function getFraisForDate(dateStr: string): number {
-    let frais = 5000; // default fallback
+    let frais = 1000; // default fallback (fee_per_block)
     for (const row of platformHistory) {
-      if (row.effective_date <= dateStr) frais = row.frais_plateforme;
+      if (row.effective_date <= dateStr) frais = row.fee_per_block ?? 1000;
       else break;
     }
     return frais;
@@ -129,20 +135,36 @@ export default async function FondateurDashboardPage({
     }
   }
 
-  // Total revenus (all-time)
-  let revenusTotal = 0;
-  {
-    const seenPairs = new Set<string>();
-    for (const [dayStr, units] of billingByDay) {
-      for (const unit of units) {
-        const key = `${unit}|${dayStr}`;
-        if (!seenPairs.has(key)) {
-          seenPairs.add(key);
-          revenusTotal += getFraisForDate(dayStr);
-        }
-      }
+  // Total revenus = billets scannés × 10 FCFA (tous comptes sauf démo)
+  // On soustrait les scans du compte démo pour ne pas les comptabiliser
+  const demoZoneIds = allZones
+    .filter((z) => z.created_by === DEMO_ACCOUNT_ID)
+    .map((z) => z.id);
+
+  let demoRegScanned = 0;
+  let demoBilScanned = 0;
+  if (demoZoneIds.length > 0) {
+    const { data: demoMatchData } = await supabase
+      .from("matches")
+      .select("id")
+      .in("zone_id", demoZoneIds);
+    const demoMatchIds = (demoMatchData || []).map((m: any) => m.id as string);
+    if (demoMatchIds.length > 0) {
+      const [dReg, dBil] = await Promise.all([
+        supabase.from("tickets").select("id", { count: "exact", head: true })
+          .eq("status", "scanne").eq("counts_as_revenue", true)
+          .in("match_id", demoMatchIds),
+        supabase.from("billeterie_scans").select("id", { count: "exact", head: true })
+          .in("match_id", demoMatchIds),
+      ]);
+      demoRegScanned = dReg.count || 0;
+      demoBilScanned = dBil.count || 0;
     }
   }
+
+  const totalAllScanned = (regularScannedRes.count || 0) + totalBilScans;
+  const totalNonDemoScanned = Math.max(0, totalAllScanned - demoRegScanned - demoBilScanned);
+  const revenusTotal = totalNonDemoScanned * 10; // 10 FCFA par billet scanné
 
   // Total matches count (visible scope)
   const matchesCount = allMatches.length;
@@ -266,7 +288,7 @@ export default async function FondateurDashboardPage({
               <div>
                 <p className="text-xs text-green-700 font-medium">Revenus totaux</p>
                 <p className="text-2xl font-bold text-green-800">{formatFCFA(revenusTotal)}</p>
-                <p className="text-[11px] text-green-600 mt-0.5">Cumul frais plateforme</p>
+                <p className="text-[11px] text-green-600 mt-0.5">{totalNonDemoScanned.toLocaleString("fr-FR")} billets scannés × 10 FCFA</p>
               </div>
               <Trophy className="h-8 w-8 text-green-300" />
             </div>
