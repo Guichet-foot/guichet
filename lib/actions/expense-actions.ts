@@ -3,7 +3,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 export async function createExpense(formData: {
-  zoneId: string;
+  zoneId?: string | null;
+  c3AccountId?: string | null;
   matchId: string | null;
   label: string;
   category: string;
@@ -19,7 +20,8 @@ export async function createExpense(formData: {
   if (!user) return { error: "Non authentifié" };
 
   const { error } = await supabase.from("expenses").insert({
-    zone_id: formData.zoneId,
+    zone_id: formData.zoneId || null,
+    c3_account_id: formData.c3AccountId || null,
     match_id: formData.matchId || null,
     label: formData.label,
     category: formData.category,

@@ -30,7 +30,9 @@ interface MatchOption {
 export default function NewExpensePage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [zoneId, setZoneId] = useState("");
+  const [zoneId, setZoneId] = useState<string | null>(null);
+  const [c3AccountId, setC3AccountId] = useState<string | null>(null);
+  const [isC3, setIsC3] = useState(false);
   const [matches, setMatches] = useState<MatchOption[]>([]);
 
   const [matchId, setMatchId] = useState<string>("none");
@@ -46,9 +48,7 @@ export default function NewExpensePage() {
   useEffect(() => {
     async function init() {
       const supabase = createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
       const urlParams = new URLSearchParams(window.location.search);
@@ -56,22 +56,36 @@ export default function NewExpensePage() {
 
       const { data: profile } = await supabase
         .from("profiles")
-        .select("zone_id")
+        .select("zone_id, role")
         .eq("id", user.id)
         .single();
 
-      const effectiveZone = zoneParam || profile?.zone_id;
-
-      if (effectiveZone) {
-        setZoneId(effectiveZone);
+      if (profile?.role === "c3") {
+        // Compte C3 : les dépenses sont liées à c3_account_id, pas à zone_id
+        setIsC3(true);
+        setC3AccountId(user.id);
 
         const { data: matchList } = await supabase
           .from("matches")
           .select("id, home_team, away_team")
-          .eq("zone_id", effectiveZone)
+          .eq("c3_account_id", user.id)
           .order("match_date", { ascending: false });
 
         if (matchList) setMatches(matchList);
+      } else {
+        // admin_zone / super_admin : dépenses liées à zone_id
+        const effectiveZone = zoneParam || profile?.zone_id || null;
+        setZoneId(effectiveZone);
+
+        if (effectiveZone) {
+          const { data: matchList } = await supabase
+            .from("matches")
+            .select("id, home_team, away_team")
+            .eq("zone_id", effectiveZone)
+            .order("match_date", { ascending: false });
+
+          if (matchList) setMatches(matchList);
+        }
       }
     }
     init();
@@ -89,11 +103,18 @@ export default function NewExpensePage() {
       return;
     }
 
+    if (!isC3 && !zoneId) {
+      toast.error("Zone introuvable");
+      setLoading(false);
+      return;
+    }
+
     const result = await createExpense({
-      zoneId,
+      zoneId: isC3 ? null : zoneId,
+      c3AccountId: isC3 ? c3AccountId : null,
       matchId: matchId === "none" ? null : matchId,
       label,
-      category: finalCategory as string,
+      category: finalCategory,
       amount: parseInt(amount),
       expenseDate,
       notes,
@@ -124,14 +145,17 @@ export default function NewExpensePage() {
       <Card>
         <CardContent className="pt-6">
           <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Champ match adapté selon le rôle */}
             <div className="space-y-2">
-              <Label>Match (optionnel)</Label>
+              <Label>{isC3 ? "Match communal (optionnel)" : "Match (optionnel)"}</Label>
               <Select value={matchId} onValueChange={(v) => setMatchId(v ?? "none")}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Dépense globale zone" />
+                  <SelectValue placeholder={isC3 ? "Toutes les rencontres" : "Dépense globale zone"} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">Global zone</SelectItem>
+                  <SelectItem value="none">
+                    {isC3 ? "Toutes les rencontres" : "Global zone"}
+                  </SelectItem>
                   {matches.map((m) => (
                     <SelectItem key={m.id} value={m.id}>
                       {m.home_team} vs {m.away_team}
