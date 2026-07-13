@@ -340,25 +340,29 @@ export async function reassignTicketsToMatch(
   return { count: ids.length };
 }
 
-// Matchs communaux/départementaux terminés — pour les onglets invendus ODCAV
+// Matchs communaux/départementaux terminés — pour les onglets invendus ODCAV + fondateur
 export async function getFinishedInterMatches(matchType: "Match Communal" | "Match Départemental"): Promise<any[]> {
-  const profile = await requireRole(["super_admin", "president_odcav", "tresorier"]);
+  const profile = await requireRole(["super_admin", "president_odcav", "tresorier", "fondateur"]);
   const adminClient = await createAdminClient();
-  // Use profile.id as root identity; tresorier inherits from their parent
-  const ownerId = (profile.role === "tresorier" && profile.created_by_admin)
-    ? profile.created_by_admin as string : profile.id;
 
-  const { data: subAdmins } = await adminClient.from("profiles").select("id").eq("created_by_admin", ownerId);
-  const creatorIds = [ownerId, ...((subAdmins || []) as any[]).map((p: any) => p.id as string)];
-
-  const { data } = await adminClient
+  let query = adminClient
     .from("matches")
     .select("id, home_team, away_team, home_team_zone, away_team_zone, match_date, venue, match_type")
     .eq("status", "termine")
     .eq("match_type", matchType)
     .eq("is_direct", true)
-    .in("created_by", creatorIds)
     .order("match_date", { ascending: false });
+
+  // Fondateur sees all inter matches — no creator filter
+  if (profile.role !== "fondateur") {
+    const ownerId = (profile.role === "tresorier" && profile.created_by_admin)
+      ? profile.created_by_admin as string : profile.id;
+    const { data: subAdmins } = await adminClient.from("profiles").select("id").eq("created_by_admin", ownerId);
+    const creatorIds = [ownerId, ...((subAdmins || []) as any[]).map((p: any) => p.id as string)];
+    query = query.in("created_by", creatorIds);
+  }
+
+  const { data } = await query;
 
   // Adapt to InvendusList shape (zone = null for inter-matches)
   return (data || []).map((m: any) => ({
