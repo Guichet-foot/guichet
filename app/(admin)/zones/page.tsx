@@ -21,18 +21,16 @@ export default async function ZonesPage() {
   const profile = await requireRole(["super_admin", "president_odcav", "tresorier"]);
   const adminClient = await createAdminClient();
 
-  // Determine the ODCAV owner ID to filter zones:
-  // - super_admin / president_odcav are top-level ODCAV accounts → use their own ID
-  // - tresorier is a sub-account created under a super_admin → inherit created_by_admin
-  const ownerId =
-    profile.role === "tresorier" && (profile as any).created_by_admin
-      ? (profile as any).created_by_admin as string
-      : profile.id;
+  // Include both the account's own ID and its parent (created_by_admin) to handle
+  // zones created before the current hierarchy: some were stored with created_by = parent.id
+  const ownerIds = [...new Set(
+    [profile.id, (profile as any).created_by_admin].filter(Boolean) as string[]
+  )];
 
   const { data: zones } = await adminClient
     .from("zones")
     .select("*")
-    .eq("created_by", ownerId)
+    .in("created_by", ownerIds)
     .order("name");
 
   const canCreateZone = profile.role !== "tresorier";

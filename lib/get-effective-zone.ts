@@ -41,17 +41,16 @@ export async function getEffectiveZone(
   const adminClient = await createAdminClient();
   const supabase = await createClient();
 
-  // Fondateur sees ALL zones; super_admin/president_odcav see only their own zones.
-  // Trésorier is a sub-account → inherits zones from whoever created them (created_by_admin).
+  // Include both the account's own ID and its parent (created_by_admin) to handle
+  // zones created before the current hierarchy: some were stored with created_by = parent.id
   const isOdcavRole = profile.role === "super_admin" || profile.role === "president_odcav";
-  const zonesOwnerId =
-    profile.role === "tresorier" && profile.created_by_admin
-      ? profile.created_by_admin
-      : profile.id;
+  const ownerIds = [...new Set(
+    [profile.id, profile.created_by_admin].filter(Boolean) as string[]
+  )];
   const zonesQuery = profile.role === "fondateur"
     ? supabase.from("zones").select("*").order("name")
     : isOdcavRole || profile.role === "tresorier"
-    ? adminClient.from("zones").select("*").eq("created_by", zonesOwnerId).order("name")
+    ? adminClient.from("zones").select("*").in("created_by", ownerIds).order("name")
     : supabase.from("zones").select("*").eq("created_by", profile.id).order("name");
 
   const { data: zones } = await zonesQuery;
