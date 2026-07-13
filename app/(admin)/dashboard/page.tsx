@@ -189,22 +189,28 @@ export default async function DashboardPage({
       const bilPriceMap: Record<string, number> = {};
       bilsInPeriod.forEach((b: any) => { bilPriceMap[b.id] = b.price || 0; });
       if (bilIds.length > 0) {
-        const [bilTickets, scanData] = await Promise.all([
+        // Fetch active tickets (for printed count) and ALL tickets (for revenue lookup)
+        const [bilActiveTickets, bilAllTickets, scanData] = await Promise.all([
           fetchAll<any>((from, to) =>
             adminClient.from("billeterie_tickets").select("id, billeterie_id")
               .in("billeterie_id", bilIds).eq("withdrawn", false).range(from, to)
+          ),
+          fetchAll<any>((from, to) =>
+            adminClient.from("billeterie_tickets").select("id, billeterie_id")
+              .in("billeterie_id", bilIds).range(from, to)
           ),
           fetchAll<any>((from, to) =>
             adminClient.from("billeterie_scans").select("ticket_id, match_id")
               .in("match_id", matchIds).range(from, to)
           ),
         ]);
-        bilPrinted = bilTickets.length;
+        bilPrinted = bilActiveTickets.length;
+        // Build map from ALL tickets so a withdrawn/annulé ticket still generates revenue if scanned
         const bilTicketIdMap: Record<string, string> = {};
-        bilTickets.forEach((t: any) => { bilTicketIdMap[t.id] = t.billeterie_id; });
+        bilAllTickets.forEach((t: any) => { bilTicketIdMap[t.id as string] = t.billeterie_id as string; });
         bilScanned = scanData.length;
         bilRevenue = scanData.reduce((s: number, sc: any) => {
-          const bId = bilTicketIdMap[sc.ticket_id];
+          const bId = bilTicketIdMap[sc.ticket_id as string];
           return s + (bId ? bilPriceMap[bId] || 0 : 0);
         }, 0);
       }
@@ -316,6 +322,7 @@ export default async function DashboardPage({
     // ── Render ───────────────────────────────────────────────────────────
     return (
       <div className="space-y-5 sm:space-y-6">
+        <AutoRefresh intervalMs={15_000} />
         {/* Header */}
         {selectedZone && <ZoneBackHeader zoneName={selectedZone.name} />}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -515,20 +522,28 @@ export default async function DashboardPage({
     const bilPriceMap: Record<string, number> = {};
     bilsInPeriod.forEach((b: any) => { bilPriceMap[b.id] = b.price || 0; });
     if (bilIds.length > 0) {
-      const bilTickets = await fetchAll<any>((from, to) =>
-        adminClient.from("billeterie_tickets").select("id, billeterie_id")
-          .in("billeterie_id", bilIds).neq("status", "annule").eq("withdrawn", false).range(from, to)
-      );
-      bilPrinted = bilTickets.length;
+      // Fetch active tickets (for printed count) and ALL tickets (for revenue lookup)
+      const [bilActiveTickets, bilAllTickets, scanData] = await Promise.all([
+        fetchAll<any>((from, to) =>
+          adminClient.from("billeterie_tickets").select("id, billeterie_id")
+            .in("billeterie_id", bilIds).neq("status", "annule").eq("withdrawn", false).range(from, to)
+        ),
+        fetchAll<any>((from, to) =>
+          adminClient.from("billeterie_tickets").select("id, billeterie_id")
+            .in("billeterie_id", bilIds).range(from, to)
+        ),
+        fetchAll<any>((from, to) =>
+          adminClient.from("billeterie_scans").select("ticket_id")
+            .in("match_id", matchIdsInPeriod).range(from, to)
+        ),
+      ]);
+      bilPrinted = bilActiveTickets.length;
+      // Use ALL tickets for revenue map so withdrawn/annulé tickets still count if scanned
       const bilTicketIdMap: Record<string, string> = {};
-      bilTickets.forEach((t: any) => { bilTicketIdMap[t.id] = t.billeterie_id; });
-      const scanData = await fetchAll<any>((from, to) =>
-        adminClient.from("billeterie_scans").select("ticket_id")
-          .in("match_id", matchIdsInPeriod).range(from, to)
-      );
+      bilAllTickets.forEach((t: any) => { bilTicketIdMap[t.id as string] = t.billeterie_id as string; });
       bilScanned = scanData.length;
       bilRevenue = scanData.reduce((s: number, sc: any) => {
-        const bId = bilTicketIdMap[sc.ticket_id];
+        const bId = bilTicketIdMap[sc.ticket_id as string];
         return s + (bId ? bilPriceMap[bId] || 0 : 0);
       }, 0);
     }
@@ -643,8 +658,7 @@ export default async function DashboardPage({
 
   return (
     <div className="space-y-5 sm:space-y-6">
-      {/* Auto-refresh every 30s so scan counts update in real-time */}
-      <AutoRefresh intervalMs={30_000} />
+      <AutoRefresh intervalMs={15_000} />
       {selectedZone && <ZoneBackHeader zoneName={selectedZone.name} />}
       <div>
         <h1 className="text-xl sm:text-2xl font-bold font-heading">Tableau de bord</h1>
