@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,6 +28,7 @@ export function InterFilters({
   matches = [],
 }: InterFiltersProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const todayStr = new Date().toISOString().split("T")[0];
   const [period, setPeriod] = useState<Period>(currentPeriod ?? "24h");
   const [date, setDate] = useState(currentDate || todayStr);
@@ -48,7 +49,7 @@ export function InterFilters({
         if (t) params.set("to", t);
       }
     }
-    return `/finances/inter?${params.toString()}`;
+    return `${pathname}?${params.toString()}`;
   }
 
   function handlePeriodChange(p: Period) {

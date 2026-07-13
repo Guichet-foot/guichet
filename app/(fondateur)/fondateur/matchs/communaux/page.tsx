@@ -43,7 +43,7 @@ export default async function FondateurMatchsCommunauxPage() {
           <p className="text-muted-foreground">{matches.length} match(s)</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link href="/finances/inter?type=communal">
+          <Link href="/fondateur/finances/inter?type=communal">
             <Button variant="outline" className="text-blue-700 border-blue-300 hover:bg-blue-50">
               <Ticket className="h-4 w-4 mr-2" />
               Finances Communal
