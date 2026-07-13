@@ -25,11 +25,12 @@ export async function getOdcavSettings(): Promise<OdcavSettings> {
   const { data: { user } } = await supabase.auth.getUser();
 
   const adminClient = await createAdminClient();
-  // Sub-admins (super_admin/tresorier created by a president) share the parent's settings row
+  // Sub-admins (super_admin/tresorier created by a president) share the parent's settings row.
+  // C3 accounts have their own settings row — never inherit from creator.
   let rowId = user?.id ?? "global";
   if (user) {
-    const { data: prof } = await adminClient.from("profiles").select("created_by_admin").eq("id", user.id).maybeSingle();
-    if (prof?.created_by_admin) rowId = prof.created_by_admin;
+    const { data: prof } = await adminClient.from("profiles").select("role, created_by_admin").eq("id", user.id).maybeSingle();
+    if (prof?.created_by_admin && prof.role !== "c3") rowId = prof.created_by_admin;
   }
   const { data } = await adminClient
     .from("odcav_settings")
