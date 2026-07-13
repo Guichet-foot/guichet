@@ -23,7 +23,7 @@ export default async function ParametresC3Page() {
         </div>
       </div>
 
-      <OdcavSettingsForm initialData={settings} showLogo={false} />
+      <OdcavSettingsForm initialData={settings} showLogo={false} entityLabel="ASC" />
     </div>
   );
 }

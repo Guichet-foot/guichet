@@ -14,9 +14,10 @@ import { toast } from "sonner";
 interface OdcavSettingsFormProps {
   initialData: OdcavSettings;
   showLogo?: boolean;
+  entityLabel?: string; // "ODCAV" by default, use "ASC" for C3 pages
 }
 
-export function OdcavSettingsForm({ initialData, showLogo = true }: OdcavSettingsFormProps) {
+export function OdcavSettingsForm({ initialData, showLogo = true, entityLabel = "ODCAV" }: OdcavSettingsFormProps) {
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [logoUrl, setLogoUrl] = useState(initialData.logoUrl);
@@ -114,7 +115,7 @@ export function OdcavSettingsForm({ initialData, showLogo = true }: OdcavSetting
     if (result.error) {
       toast.error(result.error);
     } else {
-      toast.success("Paramètres ODCAV enregistrés");
+      toast.success(`Paramètres ${entityLabel} enregistrés`);
     }
     setLoading(false);
   }
@@ -124,15 +125,15 @@ export function OdcavSettingsForm({ initialData, showLogo = true }: OdcavSetting
       {/* Identité */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Identité de l&apos;ODCAV</CardTitle>
+          <CardTitle className="text-lg">Identité de l&apos;{entityLabel}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label>Nom de l&apos;ODCAV</Label>
+            <Label>Nom de l&apos;{entityLabel}</Label>
             <Input
               value={nom}
               onChange={(e) => setNom(e.target.value)}
-              placeholder="ODCAV de Thiès"
+              placeholder={entityLabel === "ODCAV" ? "ODCAV de Thiès" : "Nom de votre ASC"}
             />
           </div>
 
@@ -152,7 +153,7 @@ export function OdcavSettingsForm({ initialData, showLogo = true }: OdcavSetting
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={logoUrl}
-                  alt="Logo ODCAV"
+                  alt={`Logo ${entityLabel}`}
                   className="h-16 w-auto object-contain rounded"
                   onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
                 />
@@ -305,7 +306,7 @@ export function OdcavSettingsForm({ initialData, showLogo = true }: OdcavSetting
         ) : (
           <>
             <Save className="h-5 w-5 mr-2" />
-            Enregistrer les paramètres ODCAV
+            Enregistrer les paramètres {entityLabel}
           </>
         )}
       </Button>
