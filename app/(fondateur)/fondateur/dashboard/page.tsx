@@ -1,7 +1,7 @@
 import { requireRole } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/server";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, MapPin, Wallet, Ticket, CalendarDays } from "lucide-react";
+import { Users, MapPin, Wallet, Ticket, CalendarDays, Trophy } from "lucide-react";
 import { formatFCFA } from "@/lib/format";
 import { RevenueLineChart } from "./revenue-line-chart";
 import { FraisPlateformeChart } from "./frais-plateforme-chart";
@@ -15,92 +15,46 @@ export const metadata = { title: "Dashboard Fondateur" };
 export default async function FondateurDashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ year?: string; sa?: string; date?: string; chartFrom?: string; chartTo?: string }>;
+  searchParams: Promise<{ sa?: string; date?: string; chartFrom?: string; chartTo?: string }>;
 }) {
-  const profile = await requireRole(["fondateur"]);
+  await requireRole(["fondateur"]);
   const params = await searchParams;
   const supabase = await createAdminClient();
-
-  const { data: superAdmins } = await supabase
-    .from("profiles")
-    .select("id, full_name")
-    .eq("role", "super_admin")
-    .eq("created_by_admin", profile.id);
-
-  const { count: zonesCount } = await supabase
-    .from("zones")
-    .select("*", { count: "exact", head: true });
-
-  // Count all billets across both tables (bloc-printed tickets have counts_as_revenue=false
-  // before being scanned, so we can't use that filter — count by status instead)
-  const [
-    { count: regularTicketsCount },
-    { count: bileterieTicketsCount },
-    { count: bilScansCount },
-  ] = await Promise.all([
-    supabase.from("tickets").select("*", { count: "exact", head: true }).neq("status", "annule"),
-    supabase.from("billeterie_tickets").select("*", { count: "exact", head: true }).eq("withdrawn", false),
-    supabase.from("billeterie_scans").select("*", { count: "exact", head: true }),
-  ]);
-  const totalBillets = (regularTicketsCount || 0) + (bileterieTicketsCount || 0);
-  const totalBilScans = bilScansCount || 0;
-
-  // For platform fee calculations: use tickets (zone matches) + ODCAV matches (cross-zone)
-  // ODCAV matches have zone_id=null but store home_team_zone + away_team_zone as zone UUIDs
-  const [
-    ticketsResult,
-    odcavMatchResult,
-  ] = await Promise.all([
-    supabase
-      .from("tickets")
-      .select("price, match:matches(zone_id, match_date)")
-      .neq("status", "annule"),
-    supabase
-      .from("matches")
-      .select("match_date, home_team_zone, away_team_zone")
-      .is("zone_id", null)
-      .not("home_team_zone", "is", null),
-  ]);
-  const allTickets = (ticketsResult.data || []) as any[];
-  const rawOdcavMatchData = (odcavMatchResult.data || []) as any[];
-
-  let allOdcavMatches: { match_date: string; home_team_zone: string | null; away_team_zone: string | null }[] =
-    (rawOdcavMatchData || []) as any[];
-
-  let filteredTickets = allTickets || [];
-
-  if (params.year) {
-    filteredTickets = filteredTickets.filter((t: any) => t.match?.match_date?.startsWith(params.year));
-  }
-
-  if (params.sa) {
-    const { data: saZones } = await supabase.from("zones").select("id").eq("created_by", params.sa);
-    const saZoneIds = new Set(saZones?.map((z: any) => z.id) || []);
-    filteredTickets = filteredTickets.filter((t: any) => saZoneIds.has(t.match?.zone_id));
-    // For ODCAV matches, include if at least one zone belongs to this SA
-    allOdcavMatches = allOdcavMatches.filter(
-      (m) => saZoneIds.has(m.home_team_zone) || saZoneIds.has(m.away_team_zone)
-    );
-  }
-
-  const { count: matchesCount } = await supabase
-    .from("matches")
-    .select("*", { count: "exact", head: true });
 
   const now = new Date();
   const today = now.toISOString().split("T")[0];
   const selectedDate = params.date || today;
+  const selectedMonth = selectedDate.substring(0, 7);
 
-  // Charger tout l'historique des frais plateforme pour appliquer le bon tarif par jour
-  const { data: allPlatformSettings } = await supabase
-    .from("platform_settings")
-    .select("frais_plateforme, effective_date")
-    .order("effective_date", { ascending: true });
-  const platformHistory = (allPlatformSettings || []) as { frais_plateforme: number; effective_date: string }[];
+  // ── Fetch everything in parallel ─────────────────────────────────────────
+  const [
+    superAdminsRes,
+    zonesRes,
+    regularTicketsRes,
+    bileterieTicketsRes,
+    bilScansRes,
+    matchesRes,
+    platformSettingsRes,
+  ] = await Promise.all([
+    supabase.from("profiles").select("id, full_name").in("role", ["super_admin", "president_odcav"]),
+    supabase.from("zones").select("id, name, created_by"),
+    supabase.from("tickets").select("*", { count: "exact", head: true }).neq("status", "annule"),
+    supabase.from("billeterie_tickets").select("*", { count: "exact", head: true }).eq("withdrawn", false),
+    supabase.from("billeterie_scans").select("*", { count: "exact", head: true }),
+    supabase.from("matches").select("id, match_date, zone_id, home_team_zone, away_team_zone, status, match_type, created_by"),
+    supabase.from("platform_settings").select("frais_plateforme, effective_date").order("effective_date", { ascending: true }),
+  ]);
 
-  // Retourne le frais en vigueur à une date donnée (évite la rétroactivité)
+  const superAdmins = (superAdminsRes.data || []) as { id: string; full_name: string }[];
+  const allZones = (zonesRes.data || []) as { id: string; name: string; created_by: string }[];
+  const totalBillets = (regularTicketsRes.count || 0) + (bileterieTicketsRes.count || 0);
+  const totalBilScans = bilScansRes.count || 0;
+  const allMatches = (matchesRes.data || []).filter((m: any) => m.status !== "annule") as any[];
+  const platformHistory = (platformSettingsRes.data || []) as { frais_plateforme: number; effective_date: string }[];
+
+  // ── Platform fee helper ───────────────────────────────────────────────────
   function getFraisForDate(dateStr: string): number {
-    let frais = 5000;
+    let frais = 5000; // default fallback
     for (const row of platformHistory) {
       if (row.effective_date <= dateStr) frais = row.frais_plateforme;
       else break;
@@ -108,60 +62,93 @@ export default async function FondateurDashboardPage({
     return frais;
   }
 
-  const fraisPlateforme = getFraisForDate(selectedDate);
+  // ── SA filter ─────────────────────────────────────────────────────────────
+  // Build zone→SA map
+  const zoneToSa = new Map<string, string>();
+  for (const z of allZones) zoneToSa.set(z.id, z.created_by);
 
-  // Tickets filtrés par super admin uniquement (sans le filtre date/année) pour les calculs de revenus plateforme
-  let saFilteredTickets = allTickets || [];
+  let visibleMatches = allMatches;
   if (params.sa) {
-    const { data: saZones } = await supabase.from("zones").select("id").eq("created_by", params.sa);
-    const saZoneIds = new Set(saZones?.map((z: any) => z.id) || []);
-    saFilteredTickets = saFilteredTickets.filter((t: any) => saZoneIds.has(t.match?.zone_id));
+    const saZoneIds = new Set(allZones.filter((z) => z.created_by === params.sa).map((z) => z.id));
+    visibleMatches = allMatches.filter((m: any) => {
+      if (m.zone_id) return saZoneIds.has(m.zone_id);
+      // ODCAV match: include if any participating zone belongs to this SA
+      return saZoneIds.has(m.home_team_zone) || saZoneIds.has(m.away_team_zone);
+    });
   }
 
-  // Helper: returns all zone UUIDs active on a given day (ticket-based + ODCAV matches)
-  function getActiveZonesForDay(dayStr: string, ticketRows: any[], odcavMatches: typeof allOdcavMatches): Set<string> {
-    const zones = new Set<string>();
-    for (const t of ticketRows) {
-      if (t.match?.match_date?.startsWith(dayStr) && t.match?.zone_id) zones.add(t.match.zone_id);
-    }
-    for (const m of odcavMatches) {
-      if (m.match_date?.startsWith(dayStr)) {
-        if (m.home_team_zone) zones.add(m.home_team_zone);
-        if (m.away_team_zone) zones.add(m.away_team_zone);
+  // ── Core revenue engine ───────────────────────────────────────────────────
+  // For each match we determine the "billing units" (zone-days).
+  // Zone match    → 1 zone per day  (zone_id)
+  // ODCAV match   → home + away zones per day (if known), else 1 unit (match.id as proxy)
+  // This ensures ODCAV matches always generate revenue even if zone fields are null.
+
+  function getBillingUnitsForMatch(m: any): string[] {
+    if (m.zone_id) return [m.zone_id as string];
+    const units: string[] = [];
+    if (m.home_team_zone) units.push(m.home_team_zone as string);
+    if (m.away_team_zone) units.push(m.away_team_zone as string);
+    // Fallback: ODCAV match with no zone info → count as 1 unit using match id
+    if (units.length === 0) units.push(`match:${m.id as string}`);
+    return units;
+  }
+
+  // Build map: dayStr → Set<billingUnit>
+  function buildBillingByDay(matches: any[]): Map<string, Set<string>> {
+    const byDay = new Map<string, Set<string>>();
+    for (const m of matches) {
+      if (!m.match_date) continue;
+      const day = (m.match_date as string).split("T")[0];
+      if (!byDay.has(day)) byDay.set(day, new Set());
+      for (const unit of getBillingUnitsForMatch(m)) {
+        byDay.get(day)!.add(unit);
       }
     }
-    return zones;
+    return byDay;
   }
 
-  // Revenus journaliers = zones actives ce jour-là × frais en vigueur ce jour-là
-  const dailyActiveZones = getActiveZonesForDay(selectedDate, saFilteredTickets, allOdcavMatches);
-  const revenusJournaliers = dailyActiveZones.size * fraisPlateforme;
+  const billingByDay = buildBillingByDay(visibleMatches);
 
-  // Revenus mensuel = somme par (zone, jour de match) × frais en vigueur ce jour-là
-  const selectedMonth = selectedDate.substring(0, 7);
+  // ── Cards ─────────────────────────────────────────────────────────────────
+  const fraisPlateforme = getFraisForDate(selectedDate);
+  const dailyUnits = billingByDay.get(selectedDate) || new Set<string>();
+  const revenusJournaliers = dailyUnits.size * fraisPlateforme;
+
   let revenusMensuel = 0;
   {
     const seenPairs = new Set<string>();
-    // Zone-based tickets
-    for (const t of saFilteredTickets) {
-      if (!t.match?.match_date?.startsWith(selectedMonth) || !t.match?.zone_id) continue;
-      const dayStr = t.match.match_date.split("T")[0];
-      const key = `${t.match.zone_id}|${dayStr}`;
-      if (!seenPairs.has(key)) { seenPairs.add(key); revenusMensuel += getFraisForDate(dayStr); }
-    }
-    // ODCAV matches: each zone (home + away) counts separately per day
-    for (const m of allOdcavMatches) {
-      if (!m.match_date?.startsWith(selectedMonth)) continue;
-      const dayStr = m.match_date.split("T")[0];
-      for (const zoneId of [m.home_team_zone, m.away_team_zone]) {
-        if (!zoneId) continue;
-        const key = `${zoneId}|${dayStr}`;
-        if (!seenPairs.has(key)) { seenPairs.add(key); revenusMensuel += getFraisForDate(dayStr); }
+    for (const [dayStr, units] of billingByDay) {
+      if (!dayStr.startsWith(selectedMonth)) continue;
+      for (const unit of units) {
+        const key = `${unit}|${dayStr}`;
+        if (!seenPairs.has(key)) {
+          seenPairs.add(key);
+          revenusMensuel += getFraisForDate(dayStr);
+        }
       }
     }
   }
 
-  // Revenue line chart — 12 derniers mois, frais historiques par jour
+  // Total revenus (all-time)
+  let revenusTotal = 0;
+  {
+    const seenPairs = new Set<string>();
+    for (const [dayStr, units] of billingByDay) {
+      for (const unit of units) {
+        const key = `${unit}|${dayStr}`;
+        if (!seenPairs.has(key)) {
+          seenPairs.add(key);
+          revenusTotal += getFraisForDate(dayStr);
+        }
+      }
+    }
+  }
+
+  // Total matches count (visible scope)
+  const matchesCount = allMatches.length;
+  const visibleMatchesCount = visibleMatches.length;
+
+  // ── 12-month revenue chart ────────────────────────────────────────────────
   const monthNames = ["Jan", "Fév", "Mar", "Avr", "Mai", "Jun", "Jul", "Aoû", "Sep", "Oct", "Nov", "Déc"];
   const revenueChartData: { month: string; revenue: number }[] = [];
 
@@ -169,30 +156,22 @@ export default async function FondateurDashboardPage({
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
     const monthLabel = `${monthNames[d.getMonth()]} ${d.getFullYear().toString().slice(2)}`;
-    const activePairsByDay = new Map<string, Set<string>>();
-    // Zone-based tickets
-    for (const t of saFilteredTickets) {
-      if (!t.match?.match_date?.startsWith(monthKey) || !t.match?.zone_id) continue;
-      const dayStr = t.match.match_date.split("T")[0];
-      if (!activePairsByDay.has(dayStr)) activePairsByDay.set(dayStr, new Set());
-      activePairsByDay.get(dayStr)!.add(t.match.zone_id);
-    }
-    // ODCAV matches
-    for (const m of allOdcavMatches) {
-      if (!m.match_date?.startsWith(monthKey)) continue;
-      const dayStr = m.match_date.split("T")[0];
-      if (!activePairsByDay.has(dayStr)) activePairsByDay.set(dayStr, new Set());
-      if (m.home_team_zone) activePairsByDay.get(dayStr)!.add(m.home_team_zone);
-      if (m.away_team_zone) activePairsByDay.get(dayStr)!.add(m.away_team_zone);
-    }
     let monthRevenue = 0;
-    for (const [dayStr, zones] of activePairsByDay) {
-      monthRevenue += zones.size * getFraisForDate(dayStr);
+    const seenPairs = new Set<string>();
+    for (const [dayStr, units] of billingByDay) {
+      if (!dayStr.startsWith(monthKey)) continue;
+      for (const unit of units) {
+        const key = `${unit}|${dayStr}`;
+        if (!seenPairs.has(key)) {
+          seenPairs.add(key);
+          monthRevenue += getFraisForDate(dayStr);
+        }
+      }
     }
     revenueChartData.push({ month: monthLabel, revenue: monthRevenue });
   }
 
-  // Graphique journalier frais plateforme
+  // ── Daily platform chart (last 15 days by default) ───────────────────────
   const defaultChartTo = today;
   const defaultChartFrom = (() => {
     const d = new Date(now);
@@ -208,26 +187,40 @@ export default async function FondateurDashboardPage({
   while (chartCursor <= chartEnd) {
     const dayStr = chartCursor.toISOString().split("T")[0];
     const label = chartCursor.toLocaleDateString("fr-FR", { day: "2-digit", month: "short" });
-    const activeZones = getActiveZonesForDay(dayStr, saFilteredTickets, allOdcavMatches);
-    dailyPlatformData.push({ date: dayStr, label, revenue: activeZones.size * getFraisForDate(dayStr) });
+    const units = billingByDay.get(dayStr) || new Set<string>();
+    dailyPlatformData.push({ date: dayStr, label, revenue: units.size * getFraisForDate(dayStr) });
     chartCursor.setDate(chartCursor.getDate() + 1);
   }
 
-  // Stats par super_admin
-  const superAdminStats: { id: string; name: string; zones: number; revenue: number }[] = [];
-  if (superAdmins) {
-    for (const sa of superAdmins) {
-      const { data: zones } = await supabase.from("zones").select("id").eq("created_by", sa.id);
-      const zoneIds = zones?.map((z: any) => z.id) || [];
-      const revenue = (allTickets || [])
-        .filter((t: any) => zoneIds.includes(t.match?.zone_id))
-        .reduce((sum: number, t: any) => sum + t.price, 0);
+  // ── Super admin list (for filter UI) ────────────────────────────────────
+  const filterSAList = superAdmins.map((s) => ({ id: s.id, name: s.full_name }));
 
-      superAdminStats.push({ id: sa.id, name: sa.full_name, zones: zoneIds.length, revenue });
+  // ── SA performance stats ─────────────────────────────────────────────────
+  const saStats: { id: string; name: string; zones: number; matches: number; revenue: number }[] = [];
+  for (const sa of superAdmins) {
+    const saZoneIds = new Set(allZones.filter((z) => z.created_by === sa.id).map((z) => z.id));
+    const saMatches = allMatches.filter((m: any) => {
+      if (m.zone_id) return saZoneIds.has(m.zone_id);
+      return saZoneIds.has(m.home_team_zone) || saZoneIds.has(m.away_team_zone);
+    });
+    const saByDay = buildBillingByDay(saMatches);
+    let saRevenue = 0;
+    const seenPairs = new Set<string>();
+    for (const [dayStr, units] of saByDay) {
+      for (const unit of units) {
+        const key = `${unit}|${dayStr}`;
+        if (!seenPairs.has(key)) {
+          seenPairs.add(key);
+          saRevenue += getFraisForDate(dayStr);
+        }
+      }
     }
+    saStats.push({ id: sa.id, name: sa.full_name, zones: saZoneIds.size, matches: saMatches.length, revenue: saRevenue });
   }
+  saStats.sort((a, b) => b.revenue - a.revenue);
 
-  const filterSAList = (superAdmins || []).map((s: any) => ({ id: s.id, name: s.full_name }));
+  const dateLabel = new Date(selectedDate + "T12:00:00").toLocaleDateString("fr-FR", { day: "2-digit", month: "short" });
+  const monthLabel = `${monthNames[parseInt(selectedMonth.split("-")[1]) - 1]} ${selectedMonth.split("-")[0]}`;
 
   return (
     <div className="space-y-6">
@@ -235,78 +228,110 @@ export default async function FondateurDashboardPage({
 
       <FondateurFilters superAdmins={filterSAList} />
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* ── Stat cards ── */}
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         <Card className="bg-blue-50 border-blue-200">
-          <CardContent className="pt-6">
+          <CardContent className="pt-5 pb-5">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-blue-700">Revenus journaliers</p>
-                <p className="text-xl font-bold text-blue-700">{formatFCFA(revenusJournaliers)}</p>
-                <p className="text-[10px] text-blue-600 mt-0.5">
-                  {new Date(selectedDate + "T12:00:00").toLocaleDateString("fr-FR", { day: "2-digit", month: "short" })} · {dailyActiveZones.size} zone(s) active(s)
+                <p className="text-xs text-blue-700 font-medium">Revenus journaliers</p>
+                <p className="text-2xl font-bold text-blue-800">{formatFCFA(revenusJournaliers)}</p>
+                <p className="text-[11px] text-blue-600 mt-0.5">
+                  {dateLabel} · {dailyUnits.size} unité(s)
                 </p>
               </div>
-              <CalendarDays className="h-7 w-7 text-blue-400" />
+              <CalendarDays className="h-8 w-8 text-blue-300" />
             </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground">Zones</p>
-                <p className="text-2xl font-bold">{zonesCount || 0}</p>
-              </div>
-              <MapPin className="h-7 w-7 text-brand/40" />
-            </div>
-          </CardContent>
-        </Card>
+
         <Card className="bg-amber-50 border-amber-200">
-          <CardContent className="pt-6">
+          <CardContent className="pt-5 pb-5">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-amber-700">Revenus mensuel</p>
-                <p className="text-xl font-bold text-amber-700">{formatFCFA(revenusMensuel)}</p>
-                <p className="text-[10px] text-amber-600 mt-0.5">Frais plateforme — {monthNames[parseInt(selectedMonth.split("-")[1]) - 1]} {selectedMonth.split("-")[0]}</p>
+                <p className="text-xs text-amber-700 font-medium">Revenus mensuel</p>
+                <p className="text-2xl font-bold text-amber-800">{formatFCFA(revenusMensuel)}</p>
+                <p className="text-[11px] text-amber-600 mt-0.5">
+                  {monthLabel} · {getFraisForDate(selectedDate).toLocaleString("fr-FR")} F/unité
+                </p>
               </div>
-              <Wallet className="h-7 w-7 text-amber-400" />
+              <Wallet className="h-8 w-8 text-amber-300" />
             </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="pt-6">
+
+        <Card className="bg-green-50 border-green-200 col-span-2 lg:col-span-1">
+          <CardContent className="pt-5 pb-5">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-muted-foreground">Billets émis</p>
-                <p className="text-2xl font-bold">{totalBillets}</p>
-                <p className="text-[10px] text-muted-foreground mt-0.5">{totalBilScans} scannés</p>
+                <p className="text-xs text-green-700 font-medium">Revenus totaux</p>
+                <p className="text-2xl font-bold text-green-800">{formatFCFA(revenusTotal)}</p>
+                <p className="text-[11px] text-green-600 mt-0.5">Cumul frais plateforme</p>
               </div>
-              <Ticket className="h-7 w-7 text-brand/40" />
+              <Trophy className="h-8 w-8 text-green-300" />
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Revenue line chart */}
+      <div className="grid grid-cols-3 gap-4">
+        <Card>
+          <CardContent className="pt-5 pb-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground">Zones</p>
+                <p className="text-2xl font-bold">{allZones.length}</p>
+              </div>
+              <MapPin className="h-7 w-7 text-brand/30" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-5 pb-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground">Matchs</p>
+                <p className="text-2xl font-bold">{params.sa ? visibleMatchesCount : matchesCount}</p>
+              </div>
+              <Trophy className="h-7 w-7 text-brand/30" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-5 pb-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground">Billets</p>
+                <p className="text-2xl font-bold">{totalBillets}</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">{totalBilScans} scannés</p>
+              </div>
+              <Ticket className="h-7 w-7 text-brand/30" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* ── Revenue line chart — 12 months ── */}
       <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Revenus frais plateforme — 12 derniers mois</CardTitle>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Revenus frais plateforme — 12 derniers mois</CardTitle>
         </CardHeader>
         <CardContent>
           <RevenueLineChart data={revenueChartData} />
         </CardContent>
       </Card>
 
-      {/* Graphique frais plateforme journaliers */}
+      {/* ── Daily platform chart ── */}
       <Card>
-        <CardHeader>
+        <CardHeader className="pb-2">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
-            <CardTitle className="text-lg">Recettes Journalières — Frais Plateforme</CardTitle>
+            <CardTitle className="text-base">Recettes journalières — Frais Plateforme</CardTitle>
             <p className="text-xs text-muted-foreground">
               {new Date(chartFrom + "T12:00:00").toLocaleDateString("fr-FR", { day: "2-digit", month: "short" })}
               {" → "}
               {new Date(chartTo + "T12:00:00").toLocaleDateString("fr-FR", { day: "2-digit", month: "short" })}
-              {" · tarifs historiques"}
             </p>
           </div>
         </CardHeader>
@@ -315,36 +340,36 @@ export default async function FondateurDashboardPage({
         </CardContent>
       </Card>
 
-      {/* Super Admin performances */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Super Admins — Performances</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {superAdminStats.length === 0 ? (
-            <p className="text-muted-foreground text-center py-4">Aucun super admin créé</p>
-          ) : (
-            <div className="space-y-3">
-              {superAdminStats.map((sa) => (
+      {/* ── SA performances ── */}
+      {saStats.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Comptes ODCAV / Super Admins</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-1">
+              {saStats.map((sa) => (
                 <Link key={sa.id} href={`/fondateur/super-admins/${sa.id}`}>
                   <div className="flex items-center justify-between py-3 border-b last:border-0 hover:bg-muted/30 rounded-lg px-2 -mx-2 transition-colors cursor-pointer">
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center">
+                      <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
                         <Users className="h-4 w-4 text-amber-600" />
                       </div>
                       <div>
-                        <p className="font-semibold">{sa.name}</p>
-                        <p className="text-xs text-muted-foreground">{sa.zones} zone(s)</p>
+                        <p className="font-semibold text-sm">{sa.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {sa.zones} zone(s) · {sa.matches} match(s)
+                        </p>
                       </div>
                     </div>
-                    <p className="font-bold text-brand">{formatFCFA(sa.revenue)}</p>
+                    <p className="font-bold text-brand text-sm">{formatFCFA(sa.revenue)}</p>
                   </div>
                 </Link>
               ))}
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
