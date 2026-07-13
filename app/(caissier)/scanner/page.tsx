@@ -198,7 +198,7 @@ function ScannerContent() {
               {scanResult.status === "already_scanned" && "DÉJÀ UTILISÉ"}
               {scanResult.status === "invalid" && "BILLET INVALIDE"}
             </p>
-            {scanResult.categoryName && <p className="text-xl">{scanResult.categoryName}</p>}
+            {/* Only show detail on error/warning — keep the valid screen minimal for speed */}
             {scanResult.status === "already_scanned" && scanResult.scannedAt && (
               <p className="text-lg">à {formatDateTime(scanResult.scannedAt)}</p>
             )}
