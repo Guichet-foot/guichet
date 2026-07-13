@@ -18,6 +18,7 @@ import { GlobalStatsChart } from "./global-stats-chart";
 import { ZoneDonutChart } from "./zone-donut-chart";
 import { ZonePerformanceTable } from "./zone-performance-table";
 import { SecondaryIndicators } from "./secondary-indicators";
+import { AutoRefresh } from "@/components/auto-refresh";
 import type { ChartPoint } from "./global-stats-chart";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -642,6 +643,8 @@ export default async function DashboardPage({
 
   return (
     <div className="space-y-5 sm:space-y-6">
+      {/* Auto-refresh every 30s so scan counts update in real-time */}
+      <AutoRefresh intervalMs={30_000} />
       {selectedZone && <ZoneBackHeader zoneName={selectedZone.name} />}
       <div>
         <h1 className="text-xl sm:text-2xl font-bold font-heading">Tableau de bord</h1>

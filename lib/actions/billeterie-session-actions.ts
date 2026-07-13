@@ -76,7 +76,9 @@ export async function closeBilleterieSession(zoneId: string) {
 // ── Sessions C3 ───────────────────────────────────────────────────────────────
 
 export async function openC3ScanSession(c3AccountId: string) {
-  await requireRole(["c3"]);
+  // Allow c3, super_admin, fondateur, president_odcav so ODCAV admins can start
+  // a C3 session for their portiers without requiring the C3 to be logged in.
+  await requireRole(["c3", "super_admin", "fondateur", "president_odcav"]);
   const adminClient = await createAdminClient();
   const openUntil = new Date(Date.now() + 10 * 60 * 60 * 1000).toISOString();
 
@@ -90,7 +92,7 @@ export async function openC3ScanSession(c3AccountId: string) {
 }
 
 export async function closeC3ScanSession(c3AccountId: string) {
-  await requireRole(["c3"]);
+  await requireRole(["c3", "super_admin", "fondateur", "president_odcav"]);
   const adminClient = await createAdminClient();
   const { error } = await adminClient
     .from("scan_sessions")

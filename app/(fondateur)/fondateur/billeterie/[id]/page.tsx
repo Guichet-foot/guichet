@@ -10,6 +10,7 @@ import { formatFCFA, fmtZone } from "@/lib/format";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { AddTicketsDialog, WithdrawTicketsDialog } from "@/app/(admin)/billeterie/[id]/billeterie-actions-client";
+import { AutoRefresh } from "@/components/auto-refresh";
 
 export const metadata = { title: "Détail Billetterie — Fondateur" };
 
@@ -33,6 +34,7 @@ export default async function FondateurBilleterieDetailPage({
 
   return (
     <div className="space-y-6 max-w-2xl mx-auto">
+      <AutoRefresh intervalMs={30_000} />
       <div className="flex items-center gap-4">
         <Link href="/fondateur/billeterie">
           <Button variant="ghost" size="sm">
