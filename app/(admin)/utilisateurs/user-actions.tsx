@@ -47,6 +47,7 @@ interface UserActionsProps {
   user: {
     id: string;
     full_name: string;
+    email?: string;
     phone: string | null;
     role: string;
     active: boolean;
@@ -204,6 +205,12 @@ export function UserActions({
               <DialogTitle>Mes informations</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
+              {user.email && (
+                <div className="space-y-2">
+                  <Label>Email</Label>
+                  <Input value={user.email} readOnly disabled className="bg-muted text-muted-foreground" />
+                </div>
+              )}
               <div className="space-y-2">
                 <Label>Nom complet</Label>
                 <Input value={fullName} onChange={(e) => setFullName(e.target.value)} required />
@@ -347,6 +354,12 @@ export function UserActions({
             <DialogTitle>Modifier l&apos;utilisateur</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            {user.email && (
+              <div className="space-y-2">
+                <Label>Email</Label>
+                <Input value={user.email} readOnly disabled className="bg-muted text-muted-foreground" />
+              </div>
+            )}
             <div className="space-y-2">
               <Label>Nom complet</Label>
               <Input value={fullName} onChange={(e) => setFullName(e.target.value)} required />

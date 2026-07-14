@@ -18,6 +18,10 @@ export default async function UtilisateursPage() {
     .in("role", ["assistant_fondateur", "billetterie_fondateur"])
     .order("created_at", { ascending: false });
 
+  const { data: authData } = await adminClient.auth.admin.listUsers({ perPage: 1000, page: 1 });
+  const emailMap: Record<string, string> = {};
+  for (const u of authData?.users ?? []) emailMap[u.id] = u.email ?? "";
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -68,6 +72,7 @@ export default async function UtilisateursPage() {
                           </span>
                         )}
                       </div>
+                      {emailMap[u.id] && <p className="text-sm text-ink/60 mt-0.5">{emailMap[u.id]}</p>}
                       {u.phone && <p className="text-sm text-ink/60 mt-0.5">{u.phone}</p>}
                       {modules.length > 0 && (
                         <div className="flex flex-wrap gap-1 mt-1.5">

@@ -1,6 +1,13 @@
 import { requireRole } from "@/lib/auth";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { getEffectiveZone } from "@/lib/get-effective-zone";
+
+async function buildEmailMap(adminClient: Awaited<ReturnType<typeof createAdminClient>>) {
+  const { data } = await adminClient.auth.admin.listUsers({ perPage: 1000, page: 1 });
+  const map: Record<string, string> = {};
+  for (const u of data?.users ?? []) map[u.id] = u.email ?? "";
+  return map;
+}
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -60,6 +67,7 @@ export default async function UsersPage({
     }
 
     const { data: directUsers } = await directQuery;
+    const emailMap = await buildEmailMap(adminClient);
 
     return (
       <div className="space-y-6">
@@ -90,6 +98,7 @@ export default async function UsersPage({
                 <TableHeader>
                   <TableRow>
                     <TableHead>Nom</TableHead>
+                    <TableHead className="hidden md:table-cell">Email</TableHead>
                     <TableHead className="hidden sm:table-cell">Téléphone</TableHead>
                     <TableHead>Rôle</TableHead>
                     <TableHead>Statut</TableHead>
@@ -100,6 +109,7 @@ export default async function UsersPage({
                   {(directUsers as any[]).map((user) => (
                     <TableRow key={user.id}>
                       <TableCell className="font-medium">{user.full_name}</TableCell>
+                      <TableCell className="hidden md:table-cell text-muted-foreground text-sm">{emailMap[user.id] || "—"}</TableCell>
                       <TableCell className="hidden sm:table-cell">{user.phone || "—"}</TableCell>
                       <TableCell>
                         <Badge variant="secondary" className={ROLE_COLORS[user.role]}>
@@ -119,6 +129,7 @@ export default async function UsersPage({
                           user={{
                             id: user.id,
                             full_name: user.full_name,
+                            email: emailMap[user.id] || "",
                             phone: user.phone,
                             role: user.role,
                             active: user.active,
@@ -170,6 +181,9 @@ export default async function UsersPage({
   const { data: users } = await query;
   const currentUserIsPresident = profile.is_president ?? false;
 
+  const adminClientForEmails = await createAdminClient();
+  const emailMap = await buildEmailMap(adminClientForEmails);
+
   return (
     <div className="space-y-6">
       {isOdcavRole && !params.zone && <TabBar active="zones" />}
@@ -199,6 +213,7 @@ export default async function UsersPage({
               <TableHeader>
                 <TableRow>
                   <TableHead>Nom</TableHead>
+                  <TableHead className="hidden md:table-cell">Email</TableHead>
                   <TableHead className="hidden sm:table-cell">Téléphone</TableHead>
                   <TableHead>Rôle</TableHead>
                   <TableHead>Statut</TableHead>
@@ -209,6 +224,7 @@ export default async function UsersPage({
                 {(users as any[]).map((user) => (
                   <TableRow key={user.id}>
                     <TableCell className="font-medium">{user.full_name}</TableCell>
+                    <TableCell className="hidden md:table-cell text-muted-foreground text-sm">{emailMap[user.id] || "—"}</TableCell>
                     <TableCell className="hidden sm:table-cell">{user.phone || "—"}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1.5 flex-wrap">
@@ -236,6 +252,7 @@ export default async function UsersPage({
                         user={{
                           id: user.id,
                           full_name: user.full_name,
+                          email: emailMap[user.id] || "",
                           phone: user.phone,
                           role: user.role,
                           active: user.active,
