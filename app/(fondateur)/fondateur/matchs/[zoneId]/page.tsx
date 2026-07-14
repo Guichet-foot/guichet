@@ -69,7 +69,9 @@ export default async function FondateurZoneMatchsPage({
       );
     }
 
-    // Add billeterie ticket counts per match (non-withdrawn = available / "printed")
+    // Add billeterie invendus to each match's printed/validated counts.
+    // For match M: bilPrinted = non-withdrawn - scans at OTHER matches in same billeterie
+    // (= invendus available for M at any given moment)
     const { data: allBils } = await adminClient
       .from("billeterie")
       .select("id, match_ids");
@@ -79,40 +81,60 @@ export default async function FondateurZoneMatchsPage({
 
     if (relevantBils.length > 0) {
       const bilIds = relevantBils.map((b: any) => b.id as string);
+      // All match IDs across these billeteries (for fetching scans outside this zone too)
+      const allBilMatchIds = [...new Set(
+        relevantBils.flatMap((b: any) => (b.match_ids || []) as string[])
+      )];
 
-      const [bilTickets, bilScans] = await Promise.all([
-        fetchAll<any>((from, to) =>
-          adminClient.from("billeterie_tickets")
-            .select("billeterie_id")
-            .in("billeterie_id", bilIds)
-            .eq("withdrawn", false)
-            .range(from, to)
-        ),
-        fetchAll<any>((from, to) =>
-          adminClient.from("billeterie_scans")
-            .select("match_id")
-            .in("match_id", matchIds)
-            .range(from, to)
-        ),
-      ]);
+      // Fetch all tickets (with/without withdrawn) for ID→bilId map + non-withdrawn count
+      const bilAllTickets = await fetchAll<any>((from, to) =>
+        adminClient.from("billeterie_tickets")
+          .select("id, billeterie_id, withdrawn")
+          .in("billeterie_id", bilIds)
+          .range(from, to)
+      );
 
       const bilTicketCountByBilId: Record<string, number> = {};
-      bilTickets.forEach((t: any) => {
-        bilTicketCountByBilId[t.billeterie_id] = (bilTicketCountByBilId[t.billeterie_id] || 0) + 1;
+      const ticketIdToBilId: Record<string, string> = {};
+      bilAllTickets.forEach((t: any) => {
+        ticketIdToBilId[t.id] = t.billeterie_id;
+        if (!t.withdrawn) {
+          bilTicketCountByBilId[t.billeterie_id] = (bilTicketCountByBilId[t.billeterie_id] || 0) + 1;
+        }
       });
 
-      const bilScansByMatch: Record<string, number> = {};
+      // Scans across ALL matches in these billeteries (not just this zone)
+      const bilScans = await fetchAll<any>((from, to) =>
+        adminClient.from("billeterie_scans")
+          .select("ticket_id, match_id")
+          .in("match_id", allBilMatchIds)
+          .range(from, to)
+      );
+
+      // Per billeterie: total scans and scans per match
+      const totalScansByBil: Record<string, number> = {};
+      const scansByBilAndMatch: Record<string, Record<string, number>> = {};
       bilScans.forEach((s: any) => {
-        bilScansByMatch[s.match_id] = (bilScansByMatch[s.match_id] || 0) + 1;
+        const bilId = ticketIdToBilId[s.ticket_id];
+        if (!bilId) return;
+        totalScansByBil[bilId] = (totalScansByBil[bilId] || 0) + 1;
+        if (!scansByBilAndMatch[bilId]) scansByBilAndMatch[bilId] = {};
+        scansByBilAndMatch[bilId][s.match_id] = (scansByBilAndMatch[bilId][s.match_id] || 0) + 1;
       });
 
       matchIds.forEach((mId: string) => {
         const bilsForMatch = relevantBils.filter((b: any) => (b.match_ids || []).includes(mId));
-        const bilPrinted = bilsForMatch.reduce(
-          (sum: number, b: any) => sum + (bilTicketCountByBilId[b.id] || 0),
-          0
-        );
-        bilStats[mId] = { bilPrinted, bilValidated: bilScansByMatch[mId] || 0 };
+        let bilPrinted = 0;
+        let bilValidated = 0;
+        bilsForMatch.forEach((b: any) => {
+          const nonWithdrawn = bilTicketCountByBilId[b.id] || 0;
+          const totalScans = totalScansByBil[b.id] || 0;
+          const scansAtM = (scansByBilAndMatch[b.id] || {})[mId] || 0;
+          // Available for M = non-withdrawn minus scans that happened at OTHER matches
+          bilPrinted += Math.max(0, nonWithdrawn - (totalScans - scansAtM));
+          bilValidated += scansAtM;
+        });
+        bilStats[mId] = { bilPrinted, bilValidated };
       });
     }
   }
