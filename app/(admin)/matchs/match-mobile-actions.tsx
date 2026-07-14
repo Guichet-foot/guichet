@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { updateMatchStatus, deleteMatch } from "@/lib/actions/match-actions";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -47,33 +46,17 @@ interface MatchMobileActionsProps {
 export function MatchMobileActions({ match, detailUrl, editUrl }: MatchMobileActionsProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [scoreOpen, setScoreOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [loading, setLoading] = useState<string | null>(null);
-  const [homeScore, setHomeScore] = useState("");
-  const [awayScore, setAwayScore] = useState("");
 
   async function handleTerminer() {
     setOpen(false);
-    setHomeScore("");
-    setAwayScore("");
-    setScoreOpen(true);
-  }
-
-  async function handleSaveScore() {
-    if (homeScore === "" || awayScore === "") {
-      toast.error("Entrez les deux scores");
-      return;
-    }
     setLoading("terminer");
-    const result = await updateMatchStatus(match.id, "termine", {
-      homeScore: parseInt(homeScore),
-      awayScore: parseInt(awayScore),
-    });
-    if (result.error) toast.error(result.error);
-    else toast.success(`Match terminé : ${homeScore} - ${awayScore}`);
-    setScoreOpen(false);
+    const result = await updateMatchStatus(match.id, "termine");
     setLoading(null);
+    if (result.error) { toast.error(result.error); return; }
+    toast.success("Match terminé");
+    router.refresh();
   }
 
   async function handleDelete() {
@@ -130,8 +113,8 @@ export function MatchMobileActions({ match, detailUrl, editUrl }: MatchMobileAct
 
             <div className="space-y-2">
               {!isFinished && (
-                <Button type="button" variant="outline" onClick={handleTerminer} className="w-full justify-start">
-                  <CheckCircle className="h-4 w-4 mr-2" />
+                <Button type="button" variant="outline" onClick={handleTerminer} disabled={loading === "terminer"} className="w-full justify-start">
+                  {loading === "terminer" ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <CheckCircle className="h-4 w-4 mr-2" />}
                   Terminer le match
                 </Button>
               )}
@@ -159,31 +142,6 @@ export function MatchMobileActions({ match, detailUrl, editUrl }: MatchMobileAct
                 Supprimer le match
               </Button>
             </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Score dialog */}
-      <Dialog open={scoreOpen} onOpenChange={setScoreOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Score du match</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="flex items-center justify-center gap-4">
-              <div className="text-center flex-1">
-                <p className="font-semibold text-sm mb-2">{match.home_team}</p>
-                <Input type="number" min="0" value={homeScore} onChange={(e) => setHomeScore(e.target.value)} className="text-center text-2xl font-bold h-14" placeholder="0" autoFocus />
-              </div>
-              <span className="text-2xl font-bold text-muted-foreground mt-6">-</span>
-              <div className="text-center flex-1">
-                <p className="font-semibold text-sm mb-2">{match.away_team}</p>
-                <Input type="number" min="0" value={awayScore} onChange={(e) => setAwayScore(e.target.value)} className="text-center text-2xl font-bold h-14" placeholder="0" />
-              </div>
-            </div>
-            <Button type="button" onClick={handleSaveScore} disabled={loading === "terminer"} className="w-full h-12 bg-brand hover:bg-brand/90">
-              {loading === "terminer" ? <Loader2 className="h-5 w-5 animate-spin" /> : "Enregistrer et terminer"}
-            </Button>
           </div>
         </DialogContent>
       </Dialog>
