@@ -357,22 +357,23 @@ export async function getBilleterieInvendusList(): Promise<BilleterieInvendusIte
 
   const bilIds = bilList.map((b: any) => b.id as string);
 
-  // All non-withdrawn tickets
+  // Tous les tickets (distribués ou non) — le filtre withdrawn=false manquait
+  // les tickets distribués (withdrawn=true) qui ont été scannés à l'entrée
   const ticketRows = await fetchAll<any>((from, to) =>
     adminClient.from("billeterie_tickets")
-      .select("id, billeterie_id")
+      .select("id, billeterie_id, withdrawn")
       .in("billeterie_id", bilIds)
-      .eq("withdrawn", false)
       .range(from, to)
   );
 
-  const ticketsByBil: Record<string, string[]> = {};
+  type TicketRow = { id: string; withdrawn: boolean };
+  const ticketsByBil: Record<string, TicketRow[]> = {};
   ticketRows.forEach((t: any) => {
     if (!ticketsByBil[t.billeterie_id]) ticketsByBil[t.billeterie_id] = [];
-    ticketsByBil[t.billeterie_id].push(t.id as string);
+    ticketsByBil[t.billeterie_id].push({ id: t.id as string, withdrawn: t.withdrawn as boolean });
   });
 
-  // All scan records for these tickets
+  // Scans sur tous les tickets
   const allTicketIds = ticketRows.map((t: any) => t.id as string);
   const scannedIds = new Set<string>();
   if (allTicketIds.length > 0) {
@@ -385,7 +386,7 @@ export async function getBilleterieInvendusList(): Promise<BilleterieInvendusIte
     scanRows.forEach((s: any) => scannedIds.add(s.ticket_id as string));
   }
 
-  // Match info for display
+  // Match info pour affichage
   const allMatchIds = [...new Set(bilList.flatMap((b: any) => (b.match_ids || []) as string[]))];
   const { data: matchData } = allMatchIds.length > 0
     ? await adminClient.from("matches")
@@ -396,7 +397,10 @@ export async function getBilleterieInvendusList(): Promise<BilleterieInvendusIte
 
   return bilList.map((b: any) => {
     const tickets = ticketsByBil[b.id] || [];
-    const scanned = tickets.filter((id) => scannedIds.has(id)).length;
+    const totalTickets = tickets.length;
+    const totalScanned = tickets.filter((t) => scannedIds.has(t.id)).length;
+    // Invendus = tickets non distribués ET non scannés (encore chez l'organisateur)
+    const unscannedCount = tickets.filter((t) => !t.withdrawn && !scannedIds.has(t.id)).length;
     const matchIds = (b.match_ids || []) as string[];
     return {
       id: b.id as string,
@@ -404,9 +408,9 @@ export async function getBilleterieInvendusList(): Promise<BilleterieInvendusIte
       matchIds,
       price: b.price as number,
       createdAt: b.created_at as string,
-      totalTickets: tickets.length,
-      totalScanned: scanned,
-      unscannedCount: tickets.length - scanned,
+      totalTickets,
+      totalScanned,
+      unscannedCount,
       matches: matchIds
         .map((id: string) => matchMap.get(id))
         .filter(Boolean)
