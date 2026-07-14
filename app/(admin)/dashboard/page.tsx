@@ -189,27 +189,52 @@ export default async function DashboardPage({
       const bilPriceMap: Record<string, number> = {};
       bilsInPeriod.forEach((b: any) => { bilPriceMap[b.id] = b.price || 0; });
       if (bilIds.length > 0) {
-        // Fetch active tickets (for printed count) and ALL tickets (for revenue lookup)
-        const [bilActiveTickets, bilAllTickets, scanData] = await Promise.all([
+        const allBilMatchIds = [...new Set(
+          bilsInPeriod.flatMap((b: any) => (b.match_ids || []) as string[])
+        )];
+        const periodMatchSet = new Set(matchIds);
+
+        const [bilAllTickets, allBilScans] = await Promise.all([
           fetchAll<any>((from, to) =>
-            adminClient.from("billeterie_tickets").select("id, billeterie_id")
-              .in("billeterie_id", bilIds).eq("withdrawn", false).range(from, to)
-          ),
-          fetchAll<any>((from, to) =>
-            adminClient.from("billeterie_tickets").select("id, billeterie_id")
+            adminClient.from("billeterie_tickets").select("id, billeterie_id, withdrawn")
               .in("billeterie_id", bilIds).range(from, to)
           ),
           fetchAll<any>((from, to) =>
             adminClient.from("billeterie_scans").select("ticket_id, match_id")
-              .in("match_id", matchIds).range(from, to)
+              .in("match_id", allBilMatchIds).range(from, to)
           ),
         ]);
-        bilPrinted = bilActiveTickets.length;
-        // Build map from ALL tickets so a withdrawn/annulé ticket still generates revenue if scanned
+
+        const nonWithdrawnByBil: Record<string, number> = {};
         const bilTicketIdMap: Record<string, string> = {};
-        bilAllTickets.forEach((t: any) => { bilTicketIdMap[t.id as string] = t.billeterie_id as string; });
-        bilScanned = scanData.length;
-        bilRevenue = scanData.reduce((s: number, sc: any) => {
+        bilAllTickets.forEach((t: any) => {
+          bilTicketIdMap[t.id as string] = t.billeterie_id as string;
+          if (!t.withdrawn) {
+            nonWithdrawnByBil[t.billeterie_id] = (nonWithdrawnByBil[t.billeterie_id] || 0) + 1;
+          }
+        });
+
+        const totalScansByBil: Record<string, number> = {};
+        const periodScansByBil: Record<string, number> = {};
+        allBilScans.forEach((s: any) => {
+          const bId = bilTicketIdMap[s.ticket_id as string];
+          if (!bId) return;
+          totalScansByBil[bId] = (totalScansByBil[bId] || 0) + 1;
+          if (periodMatchSet.has(s.match_id)) {
+            periodScansByBil[bId] = (periodScansByBil[bId] || 0) + 1;
+          }
+        });
+
+        bilPrinted = bilIds.reduce((sum: number, bId: string) => {
+          const nw = nonWithdrawnByBil[bId] || 0;
+          const ts = totalScansByBil[bId] || 0;
+          const ps = periodScansByBil[bId] || 0;
+          return sum + Math.max(0, nw - (ts - ps));
+        }, 0);
+
+        const periodBilScans = allBilScans.filter((s: any) => periodMatchSet.has(s.match_id));
+        bilScanned = periodBilScans.length;
+        bilRevenue = periodBilScans.reduce((s: number, sc: any) => {
           const bId = bilTicketIdMap[sc.ticket_id as string];
           return s + (bId ? bilPriceMap[bId] || 0 : 0);
         }, 0);
@@ -522,27 +547,52 @@ export default async function DashboardPage({
     const bilPriceMap: Record<string, number> = {};
     bilsInPeriod.forEach((b: any) => { bilPriceMap[b.id] = b.price || 0; });
     if (bilIds.length > 0) {
-      // Fetch active tickets (for printed count) and ALL tickets (for revenue lookup)
-      const [bilActiveTickets, bilAllTickets, scanData] = await Promise.all([
+      const allBilMatchIds = [...new Set(
+        bilsInPeriod.flatMap((b: any) => (b.match_ids || []) as string[])
+      )];
+      const periodMatchSet = new Set(matchIdsInPeriod);
+
+      const [bilAllTickets, allBilScans] = await Promise.all([
         fetchAll<any>((from, to) =>
-          adminClient.from("billeterie_tickets").select("id, billeterie_id")
-            .in("billeterie_id", bilIds).neq("status", "annule").eq("withdrawn", false).range(from, to)
-        ),
-        fetchAll<any>((from, to) =>
-          adminClient.from("billeterie_tickets").select("id, billeterie_id")
+          adminClient.from("billeterie_tickets").select("id, billeterie_id, withdrawn")
             .in("billeterie_id", bilIds).range(from, to)
         ),
         fetchAll<any>((from, to) =>
-          adminClient.from("billeterie_scans").select("ticket_id")
-            .in("match_id", matchIdsInPeriod).range(from, to)
+          adminClient.from("billeterie_scans").select("ticket_id, match_id")
+            .in("match_id", allBilMatchIds).range(from, to)
         ),
       ]);
-      bilPrinted = bilActiveTickets.length;
-      // Use ALL tickets for revenue map so withdrawn/annulé tickets still count if scanned
+
+      const nonWithdrawnByBil: Record<string, number> = {};
       const bilTicketIdMap: Record<string, string> = {};
-      bilAllTickets.forEach((t: any) => { bilTicketIdMap[t.id as string] = t.billeterie_id as string; });
-      bilScanned = scanData.length;
-      bilRevenue = scanData.reduce((s: number, sc: any) => {
+      bilAllTickets.forEach((t: any) => {
+        bilTicketIdMap[t.id as string] = t.billeterie_id as string;
+        if (!t.withdrawn) {
+          nonWithdrawnByBil[t.billeterie_id] = (nonWithdrawnByBil[t.billeterie_id] || 0) + 1;
+        }
+      });
+
+      const totalScansByBil: Record<string, number> = {};
+      const periodScansByBil: Record<string, number> = {};
+      allBilScans.forEach((s: any) => {
+        const bId = bilTicketIdMap[s.ticket_id as string];
+        if (!bId) return;
+        totalScansByBil[bId] = (totalScansByBil[bId] || 0) + 1;
+        if (periodMatchSet.has(s.match_id)) {
+          periodScansByBil[bId] = (periodScansByBil[bId] || 0) + 1;
+        }
+      });
+
+      bilPrinted = bilIds.reduce((sum: number, bId: string) => {
+        const nw = nonWithdrawnByBil[bId] || 0;
+        const ts = totalScansByBil[bId] || 0;
+        const ps = periodScansByBil[bId] || 0;
+        return sum + Math.max(0, nw - (ts - ps));
+      }, 0);
+
+      const periodBilScans = allBilScans.filter((s: any) => periodMatchSet.has(s.match_id));
+      bilScanned = periodBilScans.length;
+      bilRevenue = periodBilScans.reduce((s: number, sc: any) => {
         const bId = bilTicketIdMap[sc.ticket_id as string];
         return s + (bId ? bilPriceMap[bId] || 0 : 0);
       }, 0);
