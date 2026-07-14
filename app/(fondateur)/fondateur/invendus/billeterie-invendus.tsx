@@ -75,7 +75,7 @@ export function BilleterieInvendusList({ items, canAssign = true }: Props) {
                       </Badge>
                     ) : (
                       <Badge className="shrink-0 bg-green-600 text-white text-xs">
-                        Tout distribué
+                        Tout scanné
                       </Badge>
                     )}
                   </div>
@@ -91,7 +91,7 @@ export function BilleterieInvendusList({ items, canAssign = true }: Props) {
                     </span>
                     <span className="flex items-center gap-1 text-green-700 font-medium">
                       <ScanLine className="h-3 w-3" />
-                      {bil.totalScanned} retiré{bil.totalScanned !== 1 ? "s" : ""}
+                      {bil.totalScanned} scanné{bil.totalScanned !== 1 ? "s" : ""}
                     </span>
                     {bil.unscannedCount > 0 && (
                       <span className="flex items-center gap-1 text-amber-700 font-medium">

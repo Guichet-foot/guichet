@@ -372,6 +372,22 @@ export async function getBilleterieInvendusList(): Promise<BilleterieInvendusIte
     ticketsByBil[t.billeterie_id].push({ id: t.id as string, withdrawn: Boolean(t.withdrawn) });
   });
 
+  // Scans depuis billeterie_scans — requête par lots de 500 pour éviter
+  // la limite URL de PostgREST avec les grands tableaux .in()
+  const allTicketIds = ticketRows.map((t: any) => t.id as string);
+  const scannedIds = new Set<string>();
+  const BATCH = 500;
+  for (let i = 0; i < allTicketIds.length; i += BATCH) {
+    const batch = allTicketIds.slice(i, i + BATCH);
+    const scanRows = await fetchAll<any>((from, to) =>
+      adminClient.from("billeterie_scans")
+        .select("ticket_id")
+        .in("ticket_id", batch)
+        .range(from, to)
+    );
+    scanRows.forEach((s: any) => scannedIds.add(s.ticket_id as string));
+  }
+
   // Match info pour affichage
   const allMatchIds = [...new Set(bilList.flatMap((b: any) => (b.match_ids || []) as string[]))];
   const { data: matchData } = allMatchIds.length > 0
@@ -384,10 +400,10 @@ export async function getBilleterieInvendusList(): Promise<BilleterieInvendusIte
   return bilList.map((b: any) => {
     const tickets = ticketsByBil[b.id] || [];
     const totalTickets = tickets.length;
-    // withdrawn=true = billet retiré/distribué (sorti du stock)
-    const totalScanned = tickets.filter((t) => t.withdrawn).length;
-    // Invendus = billets non retirés, encore en stock chez l'organisateur
-    const unscannedCount = tickets.filter((t) => !t.withdrawn).length;
+    // Scannés = billets validés à l'entrée (enregistrés dans billeterie_scans)
+    const totalScanned = tickets.filter((t) => scannedIds.has(t.id)).length;
+    // Invendus = billets non retirés du stock ET non scannés (encore chez l'organisateur)
+    const unscannedCount = tickets.filter((t) => !t.withdrawn && !scannedIds.has(t.id)).length;
     const matchIds = (b.match_ids || []) as string[];
     return {
       id: b.id as string,
