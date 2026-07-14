@@ -357,7 +357,8 @@ export async function getBilleterieInvendusList(): Promise<BilleterieInvendusIte
 
   const bilIds = bilList.map((b: any) => b.id as string);
 
-  // Tous les tickets avec leur statut de retrait
+  // Tous les tickets — on a besoin de l'id ET du billeterie_id pour la map inverse
+  // même logique que getBilleterieDetails : totalTickets = withdrawn=false seulement
   const ticketRows = await fetchAll<any>((from, to) =>
     adminClient.from("billeterie_tickets")
       .select("id, billeterie_id, withdrawn")
@@ -365,31 +366,35 @@ export async function getBilleterieInvendusList(): Promise<BilleterieInvendusIte
       .range(from, to)
   );
 
-  type TicketRow = { id: string; withdrawn: boolean };
-  const ticketsByBil: Record<string, TicketRow[]> = {};
+  // Comptage tickets non-retirés par billeterie (= même que la page détail)
+  const nonWithdrawnByBil: Record<string, number> = {};
+  // Map inverse ticket_id → billeterie_id pour l'attribution des scans
+  const ticketToBilId: Record<string, string> = {};
   ticketRows.forEach((t: any) => {
-    if (!ticketsByBil[t.billeterie_id]) ticketsByBil[t.billeterie_id] = [];
-    ticketsByBil[t.billeterie_id].push({ id: t.id as string, withdrawn: Boolean(t.withdrawn) });
+    ticketToBilId[t.id as string] = t.billeterie_id as string;
+    if (!t.withdrawn) {
+      nonWithdrawnByBil[t.billeterie_id] = (nonWithdrawnByBil[t.billeterie_id] || 0) + 1;
+    }
   });
 
-  // Scans depuis billeterie_scans — requête par lots de 500 pour éviter
-  // la limite URL de PostgREST avec les grands tableaux .in()
-  const allTicketIds = ticketRows.map((t: any) => t.id as string);
-  const scannedIds = new Set<string>();
-  const BATCH = 500;
-  for (let i = 0; i < allTicketIds.length; i += BATCH) {
-    const batch = allTicketIds.slice(i, i + BATCH);
+  // Scans : filtre par match_id (petit ensemble, évite la limite URL PostgREST)
+  // puis attribution via ticket_id → billeterie_id (même logique que la page détail)
+  const allMatchIds = [...new Set(bilList.flatMap((b: any) => (b.match_ids || []) as string[]))];
+  const scanCountByBil: Record<string, number> = {};
+  if (allMatchIds.length > 0) {
     const scanRows = await fetchAll<any>((from, to) =>
       adminClient.from("billeterie_scans")
-        .select("ticket_id")
-        .in("ticket_id", batch)
+        .select("ticket_id, match_id")
+        .in("match_id", allMatchIds)
         .range(from, to)
     );
-    scanRows.forEach((s: any) => scannedIds.add(s.ticket_id as string));
+    scanRows.forEach((s: any) => {
+      const bilId = ticketToBilId[s.ticket_id as string];
+      if (bilId) scanCountByBil[bilId] = (scanCountByBil[bilId] || 0) + 1;
+    });
   }
 
   // Match info pour affichage
-  const allMatchIds = [...new Set(bilList.flatMap((b: any) => (b.match_ids || []) as string[]))];
   const { data: matchData } = allMatchIds.length > 0
     ? await adminClient.from("matches")
         .select("id, home_team, away_team, match_date, status, match_type")
@@ -398,13 +403,10 @@ export async function getBilleterieInvendusList(): Promise<BilleterieInvendusIte
   const matchMap = new Map((matchData || []).map((m: any) => [m.id as string, m]));
 
   return bilList.map((b: any) => {
-    const tickets = ticketsByBil[b.id] || [];
-    const totalTickets = tickets.length;
-    // Scannés = billets validés à l'entrée (enregistrés dans billeterie_scans)
-    const totalScanned = tickets.filter((t) => scannedIds.has(t.id)).length;
-    // Invendus = billets non retirés du stock ET non scannés (encore chez l'organisateur)
-    const unscannedCount = tickets.filter((t) => !t.withdrawn && !scannedIds.has(t.id)).length;
     const matchIds = (b.match_ids || []) as string[];
+    const totalTickets = nonWithdrawnByBil[b.id] || 0;   // withdrawn=false uniquement
+    const totalScanned = scanCountByBil[b.id] || 0;       // scans via billeterie_scans
+    const unscannedCount = Math.max(0, totalTickets - totalScanned);
     return {
       id: b.id as string,
       name: b.name as string,
