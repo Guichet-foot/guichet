@@ -253,6 +253,8 @@ export async function getBilleterieDetails(id: string): Promise<{
   batches: { batchId: string; createdAt: string; count: number; withdrawnCount: number }[];
   totalTickets: number;
   totalScans: number;
+  attributedBillets: number;
+  attributedScans: number;
 } | null> {
   const adminClient = await createAdminClient();
 
@@ -292,6 +294,72 @@ export async function getBilleterieDetails(id: string): Promise<{
     ? await adminClient.from("billeterie_scans").select("*", { count: "exact", head: true }).in("match_id", matchIds)
     : { count: 0 };
 
+  // Invendus attribués depuis d'autres billeteries couvrant les mêmes matchs
+  let attributedBillets = 0;
+  let attributedScans = 0;
+  if (matchIds.length > 0) {
+    const { data: otherBils } = await adminClient
+      .from("billeterie")
+      .select("id, match_ids")
+      .neq("id", id);
+
+    const relatedBils = (otherBils || []).filter((b: any) =>
+      (b.match_ids || []).some((mid: string) => matchIds.includes(mid))
+    );
+
+    if (relatedBils.length > 0) {
+      const relatedBilIds = relatedBils.map((b: any) => b.id as string);
+      const allRelatedMatchIds = [...new Set(
+        relatedBils.flatMap((b: any) => (b.match_ids || []) as string[])
+      )];
+      const thisMatchSet = new Set(matchIds);
+
+      const [relatedTickets, relatedScans] = await Promise.all([
+        fetchAll<any>((from, to) =>
+          adminClient.from("billeterie_tickets")
+            .select("id, billeterie_id, withdrawn")
+            .in("billeterie_id", relatedBilIds)
+            .range(from, to)
+        ),
+        fetchAll<any>((from, to) =>
+          adminClient.from("billeterie_scans")
+            .select("ticket_id, match_id")
+            .in("match_id", allRelatedMatchIds)
+            .range(from, to)
+        ),
+      ]);
+
+      const nonWithdrawnByBil: Record<string, number> = {};
+      const ticketIdToBilId: Record<string, string> = {};
+      relatedTickets.forEach((t: any) => {
+        ticketIdToBilId[t.id] = t.billeterie_id;
+        if (!t.withdrawn) {
+          nonWithdrawnByBil[t.billeterie_id] = (nonWithdrawnByBil[t.billeterie_id] || 0) + 1;
+        }
+      });
+
+      const totalScansByBil: Record<string, number> = {};
+      const sharedScansByBil: Record<string, number> = {};
+      relatedScans.forEach((s: any) => {
+        const bilId = ticketIdToBilId[s.ticket_id];
+        if (!bilId) return;
+        totalScansByBil[bilId] = (totalScansByBil[bilId] || 0) + 1;
+        if (thisMatchSet.has(s.match_id)) {
+          sharedScansByBil[bilId] = (sharedScansByBil[bilId] || 0) + 1;
+        }
+      });
+
+      relatedBilIds.forEach((bilId: string) => {
+        const nw = nonWithdrawnByBil[bilId] || 0;
+        const ts = totalScansByBil[bilId] || 0;
+        const ss = sharedScansByBil[bilId] || 0;
+        // Invendus disponibles pour nos matchs = non-retirés − scans aux autres matchs
+        attributedBillets += Math.max(0, nw - (ts - ss));
+        attributedScans += ss;
+      });
+    }
+  }
+
   return {
     id: bil.id,
     name: bil.name,
@@ -302,6 +370,8 @@ export async function getBilleterieDetails(id: string): Promise<{
     batches,
     totalTickets: allTicketRows.filter((t: any) => !t.withdrawn).length,
     totalScans: scanCount || 0,
+    attributedBillets,
+    attributedScans,
   };
 }
 
