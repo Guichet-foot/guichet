@@ -357,8 +357,7 @@ export async function getBilleterieInvendusList(): Promise<BilleterieInvendusIte
 
   const bilIds = bilList.map((b: any) => b.id as string);
 
-  // Tous les tickets (distribués ou non) — le filtre withdrawn=false manquait
-  // les tickets distribués (withdrawn=true) qui ont été scannés à l'entrée
+  // Tous les tickets avec leur statut de retrait
   const ticketRows = await fetchAll<any>((from, to) =>
     adminClient.from("billeterie_tickets")
       .select("id, billeterie_id, withdrawn")
@@ -370,21 +369,8 @@ export async function getBilleterieInvendusList(): Promise<BilleterieInvendusIte
   const ticketsByBil: Record<string, TicketRow[]> = {};
   ticketRows.forEach((t: any) => {
     if (!ticketsByBil[t.billeterie_id]) ticketsByBil[t.billeterie_id] = [];
-    ticketsByBil[t.billeterie_id].push({ id: t.id as string, withdrawn: t.withdrawn as boolean });
+    ticketsByBil[t.billeterie_id].push({ id: t.id as string, withdrawn: Boolean(t.withdrawn) });
   });
-
-  // Scans sur tous les tickets
-  const allTicketIds = ticketRows.map((t: any) => t.id as string);
-  const scannedIds = new Set<string>();
-  if (allTicketIds.length > 0) {
-    const scanRows = await fetchAll<any>((from, to) =>
-      adminClient.from("billeterie_scans")
-        .select("ticket_id")
-        .in("ticket_id", allTicketIds)
-        .range(from, to)
-    );
-    scanRows.forEach((s: any) => scannedIds.add(s.ticket_id as string));
-  }
 
   // Match info pour affichage
   const allMatchIds = [...new Set(bilList.flatMap((b: any) => (b.match_ids || []) as string[]))];
@@ -398,9 +384,10 @@ export async function getBilleterieInvendusList(): Promise<BilleterieInvendusIte
   return bilList.map((b: any) => {
     const tickets = ticketsByBil[b.id] || [];
     const totalTickets = tickets.length;
-    const totalScanned = tickets.filter((t) => scannedIds.has(t.id)).length;
-    // Invendus = tickets non distribués ET non scannés (encore chez l'organisateur)
-    const unscannedCount = tickets.filter((t) => !t.withdrawn && !scannedIds.has(t.id)).length;
+    // withdrawn=true = billet retiré/distribué (sorti du stock)
+    const totalScanned = tickets.filter((t) => t.withdrawn).length;
+    // Invendus = billets non retirés, encore en stock chez l'organisateur
+    const unscannedCount = tickets.filter((t) => !t.withdrawn).length;
     const matchIds = (b.match_ids || []) as string[];
     return {
       id: b.id as string,
