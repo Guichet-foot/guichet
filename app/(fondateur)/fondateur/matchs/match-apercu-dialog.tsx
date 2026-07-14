@@ -11,6 +11,8 @@ export interface MatchStats {
   validated: number;
   printedRevenue: number;
   validatedRevenue: number;
+  bilPrinted?: number;
+  bilValidated?: number;
 }
 
 interface Props {
@@ -21,8 +23,10 @@ interface Props {
 export function MatchApercuDialog({ matchName, stats }: Props) {
   const [open, setOpen] = useState(false);
 
-  const invendus = Math.max(0, stats.printed - stats.validated);
-  const platformRevenue = stats.printed * 10;
+  const totalPrinted = stats.printed + (stats.bilPrinted || 0);
+  const totalValidated = stats.validated + (stats.bilValidated || 0);
+  const invendus = Math.max(0, totalPrinted - totalValidated);
+  const platformRevenue = totalValidated * 10;
 
   return (
     <>
@@ -50,12 +54,12 @@ export function MatchApercuDialog({ matchName, stats }: Props) {
           <div className="grid grid-cols-3 gap-2">
             <div className="rounded-xl bg-muted/60 p-3 text-center">
               <Printer className="h-4 w-4 mx-auto mb-1 text-muted-foreground" />
-              <p className="text-xl font-bold">{stats.printed.toLocaleString("fr-FR")}</p>
+              <p className="text-xl font-bold">{totalPrinted.toLocaleString("fr-FR")}</p>
               <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">Imprimés</p>
             </div>
             <div className="rounded-xl bg-success/10 p-3 text-center">
               <CheckCircle className="h-4 w-4 mx-auto mb-1 text-success" />
-              <p className="text-xl font-bold text-success">{stats.validated.toLocaleString("fr-FR")}</p>
+              <p className="text-xl font-bold text-success">{totalValidated.toLocaleString("fr-FR")}</p>
               <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">Validés</p>
             </div>
             <div className="rounded-xl bg-orange-500/10 p-3 text-center">
@@ -72,7 +76,7 @@ export function MatchApercuDialog({ matchName, stats }: Props) {
                 <TrendingUp className="h-4 w-4 text-muted-foreground shrink-0" />
                 <div>
                   <p className="text-sm font-medium">Recettes</p>
-                  <p className="text-[10px] text-muted-foreground">{stats.printed} billets imprimés</p>
+                  <p className="text-[10px] text-muted-foreground">{totalPrinted} billets imprimés</p>
                 </div>
               </div>
               <p className="font-bold tabular-nums">{formatFCFA(stats.printedRevenue)}</p>
@@ -83,7 +87,7 @@ export function MatchApercuDialog({ matchName, stats }: Props) {
                 <Wallet className="h-4 w-4 text-success shrink-0" />
                 <div>
                   <p className="text-sm font-medium text-success">Solde Net</p>
-                  <p className="text-[10px] text-muted-foreground">{stats.validated} billets validés</p>
+                  <p className="text-[10px] text-muted-foreground">{totalValidated} billets validés</p>
                 </div>
               </div>
               <p className="font-bold text-success tabular-nums">{formatFCFA(stats.validatedRevenue)}</p>
@@ -94,7 +98,7 @@ export function MatchApercuDialog({ matchName, stats }: Props) {
                 <Building2 className="h-4 w-4 text-brand shrink-0" />
                 <div>
                   <p className="text-sm font-medium text-brand">Revenus Plateforme</p>
-                  <p className="text-[10px] text-muted-foreground">{stats.printed} × 10 FCFA</p>
+                  <p className="text-[10px] text-muted-foreground">{totalValidated} × 10 FCFA</p>
                 </div>
               </div>
               <p className="font-bold text-brand tabular-nums">{formatFCFA(platformRevenue)}</p>

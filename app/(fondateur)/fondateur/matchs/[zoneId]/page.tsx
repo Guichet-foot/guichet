@@ -11,6 +11,7 @@ import { MATCH_STATUS_LABELS, MATCH_STATUS_COLORS } from "@/lib/constants";
 import { formatDateShort } from "@/lib/format";
 import { PrintBlocsButton } from "@/app/(admin)/matchs/print-blocs-button";
 import { MatchApercuDialog } from "../match-apercu-dialog";
+import { fetchAll } from "@/lib/supabase/paginate";
 
 export const metadata = { title: "Matchs de zone — Fondateur" };
 
@@ -41,6 +42,7 @@ export default async function FondateurZoneMatchsPage({
 
   const matchIds = (matches || []).map((m: any) => m.id as string);
   let ticketStats: Record<string, { printed: number; validated: number; printedRevenue: number; validatedRevenue: number }> = {};
+  const bilStats: Record<string, { bilPrinted: number; bilValidated: number }> = {};
 
   if (matchIds.length > 0) {
     const { data: tickets } = await adminClient
@@ -65,6 +67,53 @@ export default async function FondateurZoneMatchsPage({
         },
         {} as Record<string, { printed: number; validated: number; printedRevenue: number; validatedRevenue: number }>
       );
+    }
+
+    // Add billeterie ticket counts per match (non-withdrawn = available / "printed")
+    const { data: allBils } = await adminClient
+      .from("billeterie")
+      .select("id, match_ids");
+    const relevantBils = (allBils || []).filter((b: any) =>
+      (b.match_ids || []).some((mid: string) => matchIds.includes(mid))
+    );
+
+    if (relevantBils.length > 0) {
+      const bilIds = relevantBils.map((b: any) => b.id as string);
+
+      const [bilTickets, bilScans] = await Promise.all([
+        fetchAll<any>((from, to) =>
+          adminClient.from("billeterie_tickets")
+            .select("billeterie_id")
+            .in("billeterie_id", bilIds)
+            .eq("withdrawn", false)
+            .range(from, to)
+        ),
+        fetchAll<any>((from, to) =>
+          adminClient.from("billeterie_scans")
+            .select("match_id")
+            .in("match_id", matchIds)
+            .range(from, to)
+        ),
+      ]);
+
+      const bilTicketCountByBilId: Record<string, number> = {};
+      bilTickets.forEach((t: any) => {
+        bilTicketCountByBilId[t.billeterie_id] = (bilTicketCountByBilId[t.billeterie_id] || 0) + 1;
+      });
+
+      const bilScansByMatch: Record<string, number> = {};
+      bilScans.forEach((s: any) => {
+        bilScansByMatch[s.match_id] = (bilScansByMatch[s.match_id] || 0) + 1;
+      });
+
+      matchIds.forEach((mId: string) => {
+        const bilsForMatch = relevantBils.filter((b: any) => (b.match_ids || []).includes(mId));
+        const bilPrinted = bilsForMatch.reduce(
+          (sum: number, b: any) => sum + (bilTicketCountByBilId[b.id] || 0),
+          0
+        );
+        bilStats[mId] = { bilPrinted, bilValidated: bilScansByMatch[mId] || 0 };
+      });
     }
   }
 
@@ -114,6 +163,9 @@ export default async function FondateurZoneMatchsPage({
               <TableBody>
                 {(matches as any[]).map((match) => {
                   const stats = ticketStats[match.id] || { printed: 0, validated: 0, printedRevenue: 0, validatedRevenue: 0 };
+                  const bil = bilStats[match.id] || { bilPrinted: 0, bilValidated: 0 };
+                  const totalPrinted = stats.printed + bil.bilPrinted;
+                  const totalValidated = stats.validated + bil.bilValidated;
                   return (
                     <TableRow key={match.id}>
                       <TableCell className="font-medium">
@@ -128,15 +180,15 @@ export default async function FondateurZoneMatchsPage({
                         </Badge>
                       </TableCell>
                       <TableCell className="hidden lg:table-cell text-right">
-                        {stats.printed > 0 ? (
-                          <span className="font-semibold">{stats.printed.toLocaleString("fr-FR")}</span>
+                        {totalPrinted > 0 ? (
+                          <span className="font-semibold">{totalPrinted.toLocaleString("fr-FR")}</span>
                         ) : (
                           <span className="text-muted-foreground text-xs">—</span>
                         )}
                       </TableCell>
                       <TableCell className="hidden lg:table-cell text-right">
-                        {stats.validated > 0 ? (
-                          <span className="font-semibold text-success">{stats.validated.toLocaleString("fr-FR")}</span>
+                        {totalValidated > 0 ? (
+                          <span className="font-semibold text-success">{totalValidated.toLocaleString("fr-FR")}</span>
                         ) : (
                           <span className="text-muted-foreground text-xs">—</span>
                         )}
@@ -145,7 +197,7 @@ export default async function FondateurZoneMatchsPage({
                         <div className="flex items-center justify-end gap-1">
                           <MatchApercuDialog
                             matchName={`${match.home_team} vs ${match.away_team}`}
-                            stats={stats}
+                            stats={{ ...stats, bilPrinted: bil.bilPrinted, bilValidated: bil.bilValidated }}
                           />
                           {match.status !== "termine" && match.status !== "annule" && (
                             <PrintBlocsButton
