@@ -289,10 +289,18 @@ export async function getBilleterieDetails(id: string): Promise<{
   });
   const batches = Object.values(batchMap).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-  // Scan count by match_id (avoids huge .in(ticket_id,[...3000 ids]) query that breaks PostgREST URL limits)
-  const { count: scanCount } = matchIds.length > 0
-    ? await adminClient.from("billeterie_scans").select("*", { count: "exact", head: true }).in("match_id", matchIds)
-    : { count: 0 };
+  // Scan count for OWN tickets only (filter in memory to avoid PostgREST URL limit on ticket_id)
+  const ownTicketIdSet = new Set(allTicketRows.map((t: any) => t.id as string));
+  let ownScanCount = 0;
+  if (matchIds.length > 0 && ownTicketIdSet.size > 0) {
+    const scansAtOwnMatches = await fetchAll<any>((from, to) =>
+      adminClient.from("billeterie_scans")
+        .select("ticket_id")
+        .in("match_id", matchIds)
+        .range(from, to)
+    );
+    ownScanCount = scansAtOwnMatches.filter((s: any) => ownTicketIdSet.has(s.ticket_id as string)).length;
+  }
 
   // Invendus attribués depuis d'autres billeteries couvrant les mêmes matchs
   let attributedBillets = 0;
@@ -369,7 +377,7 @@ export async function getBilleterieDetails(id: string): Promise<{
     matches: ((matches || []) as MatchOption[]).sort((a, b) => new Date(a.match_date).getTime() - new Date(b.match_date).getTime()),
     batches,
     totalTickets: allTicketRows.filter((t: any) => !t.withdrawn).length,
-    totalScans: scanCount || 0,
+    totalScans: ownScanCount,
     attributedBillets,
     attributedScans,
   };

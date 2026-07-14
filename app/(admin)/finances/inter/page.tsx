@@ -207,7 +207,32 @@ export default async function FinancesInterPage({
       const allBilMatchIds = [...new Set(
         bilsInPeriod.flatMap((b: any) => (b.match_ids || []) as string[])
       )];
-      const periodMatchSet = new Set(scanMatchIds);
+
+      // Expand periodMatchSet to include ALL matches from these billeteries
+      // that are within the period date range (regardless of who created them).
+      // This ensures bilScanned counts scans at all 4 billeterie matches,
+      // not just the 2 that the super_admin created.
+      let expandedScanMatchIds = [...new Set([...scanMatchIds])];
+      if (allBilMatchIds.length > 0) {
+        const unownedBilMatchIds = allBilMatchIds.filter(id => !matchIdSet.has(id));
+        if (unownedBilMatchIds.length > 0) {
+            let extraMatchQuery: any = adminSupabase
+            .from("matches")
+            .select("id")
+            .in("id", unownedBilMatchIds);
+          if (!filterMatchId) {
+            extraMatchQuery = extraMatchQuery
+              .gte("match_date", dateStart.toISOString())
+              .lte("match_date", dateEnd.toISOString());
+          }
+          const { data: extraMatches } = await extraMatchQuery;
+          for (const m of (extraMatches || []) as any[]) {
+            if (!expandedScanMatchIds.includes(m.id)) expandedScanMatchIds.push(m.id);
+          }
+        }
+      }
+
+      const periodMatchSet = new Set(expandedScanMatchIds);
 
       const [bilAllTickets, allBilScans] = await Promise.all([
         fetchAll<any>((from, to) =>
