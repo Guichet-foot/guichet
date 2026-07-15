@@ -100,6 +100,16 @@ export async function getOdcavCards(): Promise<AccessCard[]> {
   return (data || []) as AccessCard[];
 }
 
+export async function getAllOdcavCards(): Promise<AccessCard[]> {
+  const adminClient = await createAdminClient();
+  const { data } = await adminClient
+    .from("access_cards")
+    .select("*")
+    .eq("card_type", "odcav")
+    .order("created_at", { ascending: false });
+  return (data || []) as AccessCard[];
+}
+
 export async function getAccessCard(id: string): Promise<AccessCard | null> {
   const adminClient = await createAdminClient();
   const { data } = await adminClient

@@ -24,7 +24,7 @@ const ODCAV_FONCTIONS = [
   "Délégué ODCAV",
 ];
 
-export function OdcavCardForm() {
+export function OdcavCardForm({ successRedirect }: { successRedirect?: string }) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -111,7 +111,7 @@ export function OdcavCardForm() {
     setDone(true);
     toast.success("Carte ODCAV créée !");
     setTimeout(() => {
-      router.push(`/cartes/${result.card!.id}`);
+      router.push(successRedirect ?? `/cartes/${result.card!.id}`);
     }, 1000);
   }
 
