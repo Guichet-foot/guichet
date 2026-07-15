@@ -47,7 +47,7 @@ export async function getAllMatchesForBilleterie(): Promise<MatchOption[]> {
 
   const fields = "id, home_team, away_team, venue, match_date, match_type, status, home_team_zone, away_team_zone";
 
-  // Fondateur, super_admin, president_odcav, tresorier → voient tous les matchs programmés
+  // Fondateur, super_admin, president_odcav, tresorier → voient tous les matchs programmés ou en cours
   if (
     profile.role === "fondateur" ||
     profile.role === "super_admin" ||
@@ -57,7 +57,7 @@ export async function getAllMatchesForBilleterie(): Promise<MatchOption[]> {
     const { data } = await adminClient
       .from("matches")
       .select(fields)
-      .eq("status", "programme")
+      .in("status", ["programme", "en_cours"])
       .order("match_date", { ascending: false });
     return (data || []) as MatchOption[];
   }
@@ -66,13 +66,13 @@ export async function getAllMatchesForBilleterie(): Promise<MatchOption[]> {
   if (profile.role === "admin_zone") {
     const { data: prof } = await supabase.from("profiles").select("zone_id").eq("id", user.id).single();
     if (!prof?.zone_id) return [];
-    const { data } = await adminClient.from("matches").select(fields).eq("zone_id", prof.zone_id as string).eq("status", "programme").order("match_date", { ascending: false });
+    const { data } = await adminClient.from("matches").select(fields).eq("zone_id", prof.zone_id as string).in("status", ["programme", "en_cours"]).order("match_date", { ascending: false });
     return (data || []) as MatchOption[];
   }
 
   // C3 → uniquement leurs matchs
   if (profile.role === "c3") {
-    const { data } = await adminClient.from("matches").select(fields).eq("c3_account_id", user.id).eq("status", "programme").order("match_date", { ascending: false });
+    const { data } = await adminClient.from("matches").select(fields).eq("c3_account_id", user.id).in("status", ["programme", "en_cours"]).order("match_date", { ascending: false });
     return (data || []) as MatchOption[];
   }
 
@@ -435,41 +435,44 @@ export async function getBilleterieInvendusList(): Promise<BilleterieInvendusIte
 
   const bilIds = bilList.map((b: any) => b.id as string);
 
-  // Tous les tickets — on a besoin de l'id ET du billeterie_id pour la map inverse
-  // même logique que getBilleterieDetails : totalTickets = withdrawn=false seulement
+  // Comptage tickets non-retirés par billeterie (invendus en stock = withdrawn=false)
+  const nonWithdrawnByBil: Record<string, number> = {};
   const ticketRows = await fetchAll<any>((from, to) =>
     adminClient.from("billeterie_tickets")
-      .select("id, billeterie_id, withdrawn")
+      .select("billeterie_id, withdrawn")
       .in("billeterie_id", bilIds)
       .range(from, to)
   );
-
-  // Comptage tickets non-retirés par billeterie (= même que la page détail)
-  const nonWithdrawnByBil: Record<string, number> = {};
-  // Map inverse ticket_id → billeterie_id pour l'attribution des scans
-  const ticketToBilId: Record<string, string> = {};
   ticketRows.forEach((t: any) => {
-    ticketToBilId[t.id as string] = t.billeterie_id as string;
     if (!t.withdrawn) {
       nonWithdrawnByBil[t.billeterie_id] = (nonWithdrawnByBil[t.billeterie_id] || 0) + 1;
     }
   });
 
-  // Scans : filtre par match_id (petit ensemble, évite la limite URL PostgREST)
-  // puis attribution via ticket_id → billeterie_id (même logique que la page détail)
+  // Scans : on compte TOUS les scans par match_id (toutes billeteries confondues)
+  // puis on agrège par billeterie selon ses match_ids → donne la fréquentation réelle des matchs
   const allMatchIds = [...new Set(bilList.flatMap((b: any) => (b.match_ids || []) as string[]))];
   const scanCountByBil: Record<string, number> = {};
   if (allMatchIds.length > 0) {
     const scanRows = await fetchAll<any>((from, to) =>
       adminClient.from("billeterie_scans")
-        .select("ticket_id, match_id")
+        .select("match_id")
         .in("match_id", allMatchIds)
         .range(from, to)
     );
+    // Scans par match_id
+    const scansAtMatch: Record<string, number> = {};
     scanRows.forEach((s: any) => {
-      const bilId = ticketToBilId[s.ticket_id as string];
-      if (bilId) scanCountByBil[bilId] = (scanCountByBil[bilId] || 0) + 1;
+      scansAtMatch[s.match_id as string] = (scansAtMatch[s.match_id as string] || 0) + 1;
     });
+    // Agrégation par billeterie
+    for (const b of bilList) {
+      let count = 0;
+      for (const mId of ((b.match_ids || []) as string[])) {
+        count += scansAtMatch[mId] || 0;
+      }
+      if (count > 0) scanCountByBil[b.id as string] = count;
+    }
   }
 
   // Match info pour affichage
@@ -482,9 +485,9 @@ export async function getBilleterieInvendusList(): Promise<BilleterieInvendusIte
 
   return bilList.map((b: any) => {
     const matchIds = (b.match_ids || []) as string[];
-    const totalTickets = nonWithdrawnByBil[b.id] || 0;   // withdrawn=false uniquement
-    const totalScanned = scanCountByBil[b.id] || 0;       // scans via billeterie_scans
-    const unscannedCount = Math.max(0, totalTickets - totalScanned);
+    const totalTickets = nonWithdrawnByBil[b.id] || 0;   // withdrawn=false = invendus en stock
+    const totalScanned = scanCountByBil[b.id] || 0;       // fréquentation totale aux matchs
+    const unscannedCount = totalTickets;                   // invendus = tout le stock non-retiré
     return {
       id: b.id as string,
       name: b.name as string,
