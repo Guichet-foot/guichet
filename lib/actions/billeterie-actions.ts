@@ -695,27 +695,7 @@ export async function validateBilleterieTicket(rawToken: string): Promise<ScanRe
   const matchIds: string[] = bil?.match_ids || [];
   if (matchIds.length === 0) return { status: "invalid", message: "Billetterie sans match" };
 
-  // 1. Check if this ticket was already scanned for ANY match in this billeterie.
-  //    One ticket = one entry total, regardless of how many matches are en_cours.
-  const { data: anyExistingScan } = await adminClient
-    .from("billeterie_scans")
-    .select("scanned_at")
-    .eq("ticket_id", ticket.id)
-    .in("match_id", matchIds)
-    .order("scanned_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (anyExistingScan) {
-    return {
-      status: "already_scanned",
-      message: "Déjà utilisé",
-      scannedAt: anyExistingScan.scanned_at || undefined,
-      categoryName: bil.name,
-    };
-  }
-
-  // 2. No prior scan — find the current en_cours match and record entry.
+  // 1. Trouver le match en cours parmi ceux de la billeterie.
   const { data: enCoursMatches } = await adminClient
     .from("matches")
     .select("id, home_team, away_team")
@@ -727,6 +707,26 @@ export async function validateBilleterieTicket(rawToken: string): Promise<ScanRe
   }
 
   const match = enCoursMatches[0];
+
+  // 2. Vérifier si ce billet a déjà été scanné pour CE MATCH SPÉCIFIQUE seulement.
+  //    Un billet reste valable pour chaque match de la billeterie tant qu'il n'y a pas été scanné.
+  const { data: existingScan } = await adminClient
+    .from("billeterie_scans")
+    .select("scanned_at")
+    .eq("ticket_id", ticket.id)
+    .eq("match_id", match.id)
+    .maybeSingle();
+
+  if (existingScan) {
+    return {
+      status: "already_scanned",
+      message: "Déjà utilisé pour ce match",
+      scannedAt: existingScan.scanned_at || undefined,
+      categoryName: bil.name,
+    };
+  }
+
+  // 3. Enregistrer l'entrée pour ce match.
   const { error } = await adminClient.from("billeterie_scans").insert({
     ticket_id: ticket.id,
     match_id: match.id,
