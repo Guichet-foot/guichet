@@ -303,25 +303,32 @@ export function CardPDFView({ card }: { card: CardPDFData }) {
         </View>
 
         {/* QR column — 35% */}
-        <View style={{
-          width: QR_COL_W, height: BODY_H,
-          alignItems: "center",
-          justifyContent: "flex-end",
-          paddingBottom: CARD_H * 0.03,
-        }}>
-          <View style={{
-            borderWidth: 0.8, borderColor: "#1a5c2a",
-            padding: CARD_W * 0.007,
-          }}>
-            <Image
-              src={card.qrDataUrl}
-              style={{
-                width:  QR_COL_W * 0.96,
-                height: QR_COL_W * 0.96,
-              }}
-            />
-          </View>
-        </View>
+        {(() => {
+          // Compute QR size so border+padding+image ≤ QR_COL_W
+          const qrBorder = 0.8;
+          const qrPad    = CARD_W * 0.012; // 2.91 pt each side
+          const qrColPad = CARD_W * 0.015; // 3.64 pt each side, keeps QR off the divider line
+          const qrImg    = QR_COL_W - 2 * qrColPad - 2 * qrPad - 2 * qrBorder;
+          return (
+            <View style={{
+              width: QR_COL_W, height: BODY_H,
+              alignItems: "center",
+              justifyContent: "flex-end",
+              paddingBottom: CARD_H * 0.03,
+              paddingHorizontal: qrColPad,
+            }}>
+              <View style={{
+                borderWidth: qrBorder, borderColor: "#1a5c2a",
+                padding: qrPad,
+              }}>
+                <Image
+                  src={card.qrDataUrl}
+                  style={{ width: qrImg, height: qrImg }}
+                />
+              </View>
+            </View>
+          );
+        })()}
       </View>
 
       {/* ── PHOTO — portrait rectangle, top-right, spans header+body ── */}
