@@ -10,14 +10,14 @@ export default async function MatchModifierPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ zone?: string }>;
 }) {
-  await requireRole(["super_admin", "admin_zone", "c3", "fondateur"]);
+  const profile = await requireRole(["super_admin", "admin_zone", "c3", "fondateur"]);
   const { id } = await params;
   const { zone } = await searchParams;
 
   const adminClient = await createAdminClient();
   const { data: match } = await adminClient
     .from("matches")
-    .select("id, home_team, away_team, venue, match_date, notes")
+    .select("id, home_team, away_team, venue, match_date, notes, match_type, zone_id")
     .eq("id", id)
     .single();
 
@@ -28,7 +28,18 @@ export default async function MatchModifierPage({
     ? new Date(match.match_date).toISOString().slice(0, 16)
     : "";
 
-  const backUrl = zone ? `/matchs/${id}?zone=${zone}` : `/matchs/${id}`;
+  const isFondateur = profile.role === "fondateur";
+
+  // Retourner vers l'onglet d'origine selon le type du match
+  let backUrl: string;
+  if (match.match_type === "Match Départemental") {
+    backUrl = isFondateur ? "/fondateur/matchs/departementaux" : "/matchs/departementaux";
+  } else if (match.match_type === "Match Communal") {
+    backUrl = isFondateur ? "/fondateur/matchs/communaux" : "/matchs/communaux";
+  } else {
+    const zoneId = zone || match.zone_id;
+    backUrl = zoneId ? `/matchs?zone=${zoneId}` : "/matchs";
+  }
 
   return (
     <MatchEditForm

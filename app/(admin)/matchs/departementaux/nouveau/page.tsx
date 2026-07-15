@@ -8,7 +8,7 @@ export default async function NouveauMatchDepartementalPage() {
   return (
     <NouveauInterMatchForm
       matchType="Match Départemental"
-      backHref="/matchs?tab=departementaux"
+      backHref="/matchs/departementaux"
       title="Nouveau match départemental"
     />
   );

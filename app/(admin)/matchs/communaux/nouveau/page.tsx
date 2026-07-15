@@ -8,7 +8,7 @@ export default async function NouveauMatchCommunalPage() {
   return (
     <NouveauInterMatchForm
       matchType="Match Communal"
-      backHref="/matchs?tab=communaux"
+      backHref="/matchs/communaux"
       title="Nouveau match communal"
     />
   );
