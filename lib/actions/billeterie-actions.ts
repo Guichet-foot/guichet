@@ -684,7 +684,7 @@ export async function validateBilleterieTicket(rawToken: string): Promise<ScanRe
 
   const { data: ticket } = await adminClient
     .from("billeterie_tickets")
-    .select("id, billeterie_id, status, billeterie:billeterie_id(name, match_ids, created_at)")
+    .select("id, billeterie_id, status, billeterie:billeterie_id(name, match_ids)")
     .eq("qr_token", qrToken)
     .maybeSingle();
 
@@ -693,17 +693,23 @@ export async function validateBilleterieTicket(rawToken: string): Promise<ScanRe
 
   const bil = (ticket as any).billeterie;
   const matchIds: string[] = bil?.match_ids || [];
-  const bilCreatedAt: string = bil?.created_at || "";
   if (matchIds.length === 0) return { status: "invalid", message: "Billetterie sans match" };
 
-  // Suivre la chaîne d'attribution : si des billeteries plus récentes partagent des matchs
-  // avec celle-ci (attribution successive), leurs matchs sont aussi valables pour ce billet.
+  // Charger created_at de la billeterie pour suivre la chaîne d'attribution
+  const { data: bilRow } = await adminClient
+    .from("billeterie")
+    .select("created_at")
+    .eq("id", (ticket as any).billeterie_id)
+    .single();
+
+  // Suivre la chaîne d'attribution : les billeteries plus récentes qui partagent des matchs
+  // avec celle-ci ont reçu les invendus → leurs matchs sont aussi valables pour ce billet.
   let allMatchIds: string[] = [...matchIds];
-  if (bilCreatedAt) {
+  if (bilRow?.created_at) {
     const { data: newerBilleteries } = await adminClient
-      .from("billeteries")
+      .from("billeterie")
       .select("match_ids")
-      .gt("created_at", bilCreatedAt);
+      .gt("created_at", bilRow.created_at);
 
     for (const nb of (newerBilleteries || []) as any[]) {
       const nbIds: string[] = nb.match_ids || [];
