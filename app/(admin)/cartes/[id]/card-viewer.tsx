@@ -30,12 +30,14 @@ const TYPE_LABELS: Record<string, string> = {
   delegue: "DÉLÉGUÉ",
   vendeur: "VENDEUR",
   spectateur: "SPECTATEUR",
+  odcav: "ODCAV",
 };
 const TYPE_COLORS: Record<string, string> = {
   zone: "#166534",
   delegue: "#1D4ED8",
   vendeur: "#B45309",
   spectateur: "#6D28D9",
+  odcav: "#7C3AED",
 };
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
@@ -62,15 +64,18 @@ export function CardViewer({ card, qrDataUrl, printUrl, zoneLogo }: CardViewerPr
 
   const cardType = card.card_type || "zone";
   const isPaidCard = cardType === "vendeur" || cardType === "spectateur";
+  const isOdcavCard = cardType === "odcav";
   const typeColor = TYPE_COLORS[cardType] || "#166534";
-  const typeLabel = TYPE_LABELS[cardType] || "ZONE";
+  const typeLabel = cardType === "zone" && card.zone_name
+    ? card.zone_name.toUpperCase()
+    : (TYPE_LABELS[cardType] || "ZONE");
 
   const infoRows = [
     { Icon: User,      label: "NOM COMPLET", value: card.full_name },
     { Icon: Phone,     label: "TÉLÉPHONE",   value: card.phone },
-    ...(!isPaidCard ? [{ Icon: MapPin, label: "ZONE", value: card.zone_name }] : []),
-    ...(!isPaidCard ? [{ Icon: Briefcase, label: "POSTE", value: card.poste }] : []),
-    ...(card.asc_name ? [{ Icon: Shield, label: "ASC", value: card.asc_name }] : []),
+    ...(!isPaidCard && !isOdcavCard ? [{ Icon: MapPin, label: "ZONE", value: card.zone_name }] : []),
+    ...(!isPaidCard ? [{ Icon: Briefcase, label: isOdcavCard ? "FONCTION" : "POSTE", value: card.poste }] : []),
+    ...(!isOdcavCard && card.asc_name ? [{ Icon: Shield, label: "ASC", value: card.asc_name }] : []),
     ...(card.price != null && card.price > 0
       ? [{ Icon: Tag, label: "MONTANT", value: `${card.price.toLocaleString("fr-FR")} FCFA` }]
       : []),

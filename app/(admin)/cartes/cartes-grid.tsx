@@ -72,6 +72,10 @@ function CardDesign({ card, qrDataUrl, zoneLogo }: { card: AccessCard; qrDataUrl
   const isOdcavCard = type === "odcav";
   const isPaidCard = type === "vendeur" || type === "spectateur";
 
+  const badgeText = type === "zone" && card.zone_name
+    ? card.zone_name.toUpperCase()
+    : (TYPE_LABELS[type] || "ZONE");
+
   const rows: { Icon: React.ElementType; label: string; value: string | null | undefined }[] = [
     { Icon: User,  label: "NOM COMPLET", value: card.full_name },
     { Icon: Phone, label: "TÉLÉPHONE",   value: card.phone },
@@ -129,7 +133,7 @@ function CardDesign({ card, qrDataUrl, zoneLogo }: { card: AccessCard; qrDataUrl
               letterSpacing: "0.06em",
               display: "inline-block",
             }}>
-              {TYPE_LABELS[type] || "ZONE"}
+              {badgeText}
             </span>
           </div>
         </div>
