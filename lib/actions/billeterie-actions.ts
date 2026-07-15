@@ -393,6 +393,7 @@ export interface BilleterieInvendusItem {
   totalTickets: number;
   totalScanned: number;
   unscannedCount: number;
+  isAttributed: boolean; // true si les invendus ont déjà été attribués à une autre billetterie
   matches: { id: string; home_team: string; away_team: string; match_date: string; status: string; match_type: string | null }[];
 }
 
@@ -509,6 +510,24 @@ export async function getBilleterieInvendusList(): Promise<BilleterieInvendusIte
     attributedByBil[B.id] = attributed;
   }
 
+  // Détection des billeteries dont les invendus ont été attribués à une billeterie plus récente.
+  // Heuristique : une billeterie X est "attribuée" si une billeterie créée APRÈS X partage ses matchs.
+  // La plus récente est la billeterie principale (ex. Phases Dép.) ; l'ancienne est celle redistribuée.
+  const isAttributedByBil: Record<string, boolean> = {};
+  for (const X of bilList) {
+    const Xset = bilMatchSet[X.id];
+    const Xtime = new Date(X.created_at).getTime();
+    for (const B of bilList) {
+      if (B.id === X.id) continue;
+      if (new Date(B.created_at).getTime() <= Xtime) continue; // B doit être plus récent que X
+      const Bset = bilMatchSet[B.id];
+      for (const mId of Bset) {
+        if (Xset.has(mId)) { isAttributedByBil[X.id] = true; break; }
+      }
+      if (isAttributedByBil[X.id]) break;
+    }
+  }
+
   // Match info pour affichage
   const { data: matchData } = allMatchIds.length > 0
     ? await adminClient.from("matches")
@@ -519,11 +538,14 @@ export async function getBilleterieInvendusList(): Promise<BilleterieInvendusIte
 
   return bilList.map((b: any) => {
     const matchIds = (b.match_ids || []) as string[];
+    const isAttributed = isAttributedByBil[b.id] || false;
     const ownTickets = nonWithdrawnByBil[b.id] || 0;
-    const attributed = attributedByBil[b.id] || 0;
-    const totalTickets = ownTickets + attributed;           // propres + attribués = même logique que page détail
-    const totalScanned = attendanceByBil[b.id] || 0;       // fréquentation totale aux matchs
-    const unscannedCount = Math.max(0, totalTickets - totalScanned);
+    // Si la billeterie est attribuée, ses invendus sont "consommés" → on n'additionne pas les autres
+    const attributed = isAttributed ? 0 : (attributedByBil[b.id] || 0);
+    const totalTickets = ownTickets + attributed;
+    const totalScanned = attendanceByBil[b.id] || 0;
+    // Si attribuée : 0 invendus restants (les tickets ont été affectés à une autre billetterie)
+    const unscannedCount = isAttributed ? 0 : Math.max(0, totalTickets - totalScanned);
     return {
       id: b.id as string,
       name: b.name as string,
@@ -533,6 +555,7 @@ export async function getBilleterieInvendusList(): Promise<BilleterieInvendusIte
       totalTickets,
       totalScanned,
       unscannedCount,
+      isAttributed,
       matches: matchIds
         .map((id: string) => matchMap.get(id))
         .filter(Boolean)

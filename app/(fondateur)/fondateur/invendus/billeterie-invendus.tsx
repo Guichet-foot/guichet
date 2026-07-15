@@ -28,6 +28,7 @@ import {
   Search,
   CalendarDays,
   Shield,
+  CheckCircle2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
@@ -61,14 +62,19 @@ export function BilleterieInvendusList({ items, canAssign = true }: Props) {
         {items.map((bil) => (
           <Card
             key={bil.id}
-            className={bil.unscannedCount > 0 ? "border-amber-200" : "border-green-200"}
+            className={bil.isAttributed ? "border-blue-200 opacity-75" : bil.unscannedCount > 0 ? "border-amber-200" : "border-green-200"}
           >
             <CardContent className="pt-4 pb-4">
               <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2">
                     <p className="font-bold text-base leading-snug">{bil.name}</p>
-                    {bil.unscannedCount > 0 ? (
+                    {bil.isAttributed ? (
+                      <Badge className="shrink-0 bg-blue-600 text-white gap-1 text-xs">
+                        <CheckCircle2 className="h-3 w-3" />
+                        Attribué
+                      </Badge>
+                    ) : bil.unscannedCount > 0 ? (
                       <Badge variant="outline" className="shrink-0 border-amber-400 text-amber-700 gap-1 text-xs">
                         <PackageX className="h-3 w-3" />
                         {bil.unscannedCount} invendu{bil.unscannedCount !== 1 ? "s" : ""}
@@ -123,7 +129,7 @@ export function BilleterieInvendusList({ items, canAssign = true }: Props) {
                   )}
                 </div>
 
-                {canAssign && bil.unscannedCount > 0 && (
+                {canAssign && !bil.isAttributed && bil.unscannedCount > 0 && (
                   <div className="flex items-end shrink-0 self-end pb-0.5">
                     <Button
                       size="sm"
