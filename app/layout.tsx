@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, Sora } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
+import { PullToRefresh } from "@/components/pull-to-refresh";
 import "./globals.css";
 
 const inter = Inter({
@@ -66,6 +67,7 @@ export default function RootLayout({
   return (
     <html lang="fr" className={`${inter.variable} ${sora.variable} h-full`}>
       <body className="min-h-full flex flex-col font-sans antialiased">
+        <PullToRefresh />
         {children}
         <Toaster position="top-center" richColors duration={1500} />
       </body>
