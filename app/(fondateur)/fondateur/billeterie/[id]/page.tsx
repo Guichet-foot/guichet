@@ -50,7 +50,7 @@ export default async function FondateurBilleterieDetailPage({
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card>
           <CardContent className="pt-4 pb-4">
             <div className="flex items-center gap-2">

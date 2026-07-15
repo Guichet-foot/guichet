@@ -277,7 +277,7 @@ export default async function FondateurDashboardPage({
         </Card>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card>
           <CardContent className="pt-5 pb-5">
             <div className="flex items-center justify-between">
