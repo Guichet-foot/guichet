@@ -39,10 +39,10 @@ const ROW_H = CARD_H * 0.105;      // 16.1 pt (fixed, NOT body/numRows)
 
 // ── Types ──────────────────────────────────────────────────────────
 const TYPE_LABELS: Record<string, string> = {
-  zone: "ZONE", delegue: "DÉLÉGUÉ", vendeur: "VENDEUR", spectateur: "SPECTATEUR",
+  zone: "ZONE", delegue: "DÉLÉGUÉ", vendeur: "VENDEUR", spectateur: "SPECTATEUR", odcav: "ODCAV",
 };
 const TYPE_COLORS: Record<string, string> = {
-  zone: "#166534", delegue: "#1D4ED8", vendeur: "#B45309", spectateur: "#6D28D9",
+  zone: "#166534", delegue: "#1D4ED8", vendeur: "#B45309", spectateur: "#6D28D9", odcav: "#7C3AED",
 };
 
 export interface CardPDFData {
@@ -152,22 +152,26 @@ function getSaison(card: CardPDFData): string {
 
 // ── Card component ─────────────────────────────────────────────────
 export function CardPDFView({ card }: { card: CardPDFData }) {
-  const type      = card.card_type || "zone";
-  const isPaid    = type === "vendeur" || type === "spectateur";
-  const typeLabel = TYPE_LABELS[type] || "ZONE";
-  const typeColor = TYPE_COLORS[type] || "#166534";
-  const saison    = getSaison(card);
+  const type       = card.card_type || "zone";
+  const isPaid     = type === "vendeur" || type === "spectateur";
+  const isOdcav    = type === "odcav";
+  const typeColor  = TYPE_COLORS[type] || "#166534";
+  // Zone cards: badge = zone_name; others: use TYPE_LABELS
+  const typeLabel  = type === "zone" && card.zone_name
+    ? card.zone_name.toUpperCase()
+    : (TYPE_LABELS[type] || "ZONE");
+  const saison     = getSaison(card);
 
   const rows: CardRow[] = [
-    { label: "NOM COMPLET", value: card.full_name,  icon: <IconUser /> },
-    { label: "TÉLÉPHONE",   value: card.phone,       icon: <IconPhone /> },
-    ...(!isPaid
+    { label: "NOM COMPLET", value: card.full_name, icon: <IconUser /> },
+    { label: "TÉLÉPHONE",   value: card.phone,      icon: <IconPhone /> },
+    ...(!isPaid && !isOdcav
       ? [{ label: "ZONE", value: card.zone_name, icon: <IconMapPin /> }]
       : []),
     ...(!isPaid && card.poste
-      ? [{ label: "POSTE", value: card.poste, icon: <IconBriefcase /> }]
+      ? [{ label: isOdcav ? "FONCTION" : "POSTE", value: card.poste, icon: <IconBriefcase /> }]
       : []),
-    ...(card.asc_name
+    ...(!isOdcav && card.asc_name
       ? [{ label: "ASC", value: card.asc_name, icon: <IconShield /> }]
       : []),
     ...(card.price
@@ -175,8 +179,8 @@ export function CardPDFView({ card }: { card: CardPDFData }) {
       : []),
   ];
 
-  // Fixed compact row height — rows stack from top, empty space at bottom
-  const rowH = ROW_H;
+  // Dynamic row height: fill body exactly like HTML flex:1, matching the preview
+  const rowH = BODY_H / rows.length;
   // Row padding — 2% of card width like HTML's "padding: 0 2%"
   const rowPad = CARD_W * 0.02;
 
