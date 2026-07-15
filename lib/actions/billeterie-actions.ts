@@ -684,7 +684,7 @@ export async function validateBilleterieTicket(rawToken: string): Promise<ScanRe
 
   const { data: ticket } = await adminClient
     .from("billeterie_tickets")
-    .select("id, billeterie_id, status, billeterie:billeterie_id(name, match_ids)")
+    .select("id, billeterie_id, status, billeterie:billeterie_id(name, match_ids, created_at)")
     .eq("qr_token", qrToken)
     .maybeSingle();
 
@@ -693,15 +693,35 @@ export async function validateBilleterieTicket(rawToken: string): Promise<ScanRe
 
   const bil = (ticket as any).billeterie;
   const matchIds: string[] = bil?.match_ids || [];
+  const bilCreatedAt: string = bil?.created_at || "";
   if (matchIds.length === 0) return { status: "invalid", message: "Billetterie sans match" };
 
-  // 1. Vérifier si ce billet a déjà été scanné à N'IMPORTE QUEL match de la billeterie.
+  // Suivre la chaîne d'attribution : si des billeteries plus récentes partagent des matchs
+  // avec celle-ci (attribution successive), leurs matchs sont aussi valables pour ce billet.
+  let allMatchIds: string[] = [...matchIds];
+  if (bilCreatedAt) {
+    const { data: newerBilleteries } = await adminClient
+      .from("billeteries")
+      .select("match_ids")
+      .gt("created_at", bilCreatedAt);
+
+    for (const nb of (newerBilleteries || []) as any[]) {
+      const nbIds: string[] = nb.match_ids || [];
+      if (nbIds.some((m: string) => matchIds.includes(m))) {
+        for (const m of nbIds) {
+          if (!allMatchIds.includes(m)) allMatchIds.push(m);
+        }
+      }
+    }
+  }
+
+  // 1. Vérifier si ce billet a déjà été scanné à N'IMPORTE QUEL match (chaîne complète).
   //    Un billet déjà utilisé reste bloqué définitivement.
   const { data: anyExistingScan } = await adminClient
     .from("billeterie_scans")
     .select("scanned_at")
     .eq("ticket_id", ticket.id)
-    .in("match_id", matchIds)
+    .in("match_id", allMatchIds)
     .order("scanned_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -715,11 +735,11 @@ export async function validateBilleterieTicket(rawToken: string): Promise<ScanRe
     };
   }
 
-  // 2. Billet non scanné — trouver un match disponible (en_cours en priorité, sinon programme).
+  // 2. Trouver un match disponible dans toute la chaîne (en_cours en priorité, sinon programme).
   const { data: availableMatches } = await adminClient
     .from("matches")
     .select("id, home_team, away_team, status")
-    .in("id", matchIds)
+    .in("id", allMatchIds)
     .in("status", ["en_cours", "programme"])
     .order("match_date", { ascending: true });
 
