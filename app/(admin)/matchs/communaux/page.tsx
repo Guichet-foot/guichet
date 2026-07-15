@@ -12,7 +12,7 @@ import { PrintBlocsButton } from "@/app/(admin)/matchs/print-blocs-button";
 import { MatchActionButtons } from "@/app/(admin)/matchs/match-action-buttons";
 import { MatchTabBar } from "@/app/(admin)/matchs/match-tab-bar";
 import { ScanSessionButton } from "@/components/scan-session-button";
-import { openOdcavScanSession, closeOdcavScanSession, getOdcavScanSession } from "@/lib/actions/billeterie-session-actions";
+import { openCommunalScanSession, closeCommunalScanSession, getCommunalScanSession } from "@/lib/actions/billeterie-session-actions";
 
 export const metadata = { title: "Matchs Communal" };
 
@@ -22,7 +22,7 @@ export default async function MatchsCommunauxPage() {
   const profile = await requireRole(["super_admin", "fondateur"]);
   const [matches, odcavOpenUntil] = await Promise.all([
     getOdcavInterMatches("Match Communal"),
-    getOdcavScanSession(),
+    getCommunalScanSession(),
   ]);
 
   return (
@@ -36,8 +36,8 @@ export default async function MatchsCommunauxPage() {
         <div className="flex flex-wrap gap-2">
           <ScanSessionButton
             openUntil={odcavOpenUntil}
-            openAction={openOdcavScanSession}
-            closeAction={closeOdcavScanSession}
+            openAction={openCommunalScanSession}
+            closeAction={closeCommunalScanSession}
           />
           <Link href="/finances/inter?type=communal">
             <Button variant="outline" className="text-blue-700 border-blue-300 hover:bg-blue-50">

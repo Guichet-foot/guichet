@@ -113,7 +113,7 @@ export async function getC3ScanSession(c3AccountId: string): Promise<string | nu
   return openUntil;
 }
 
-// ── Sessions ODCAV (matchs communaux/départementaux) ─────────────────────────
+// ── Sessions ODCAV Départemental ──────────────────────────────────────────────
 
 export async function openOdcavScanSession() {
   await requireRole(["super_admin", "fondateur", "president_odcav"]);
@@ -122,10 +122,16 @@ export async function openOdcavScanSession() {
 
   const { error } = await adminClient
     .from("scan_sessions")
-    .upsert({ scope: "odcav", open_until: openUntil, updated_at: new Date().toISOString() });
+    .upsert({ scope: "odcav_departemental", open_until: openUntil, updated_at: new Date().toISOString() });
   if (error) return { error: error.message };
 
-  await setTodayMatchesEnCours({ odcav: true });
+  // Uniquement les matchs départementaux
+  await (await createAdminClient())
+    .from("matches")
+    .update({ status: "en_cours" })
+    .eq("status", "programme")
+    .eq("match_type", "Match Départemental");
+
   return { success: true, openUntil };
 }
 
@@ -134,7 +140,7 @@ export async function closeOdcavScanSession() {
   const adminClient = await createAdminClient();
   const { error } = await adminClient
     .from("scan_sessions")
-    .upsert({ scope: "odcav", open_until: null, updated_at: new Date().toISOString() });
+    .upsert({ scope: "odcav_departemental", open_until: null, updated_at: new Date().toISOString() });
   if (error) return { error: error.message };
   return { success: true };
 }
@@ -144,7 +150,51 @@ export async function getOdcavScanSession(): Promise<string | null> {
   const { data } = await adminClient
     .from("scan_sessions")
     .select("open_until")
-    .eq("scope", "odcav")
+    .eq("scope", "odcav_departemental")
+    .maybeSingle();
+  const openUntil = data?.open_until || null;
+  if (!openUntil || new Date(openUntil) <= new Date()) return null;
+  return openUntil;
+}
+
+// ── Sessions ODCAV Communal ───────────────────────────────────────────────────
+
+export async function openCommunalScanSession() {
+  await requireRole(["super_admin", "fondateur", "president_odcav"]);
+  const adminClient = await createAdminClient();
+  const openUntil = new Date(Date.now() + 10 * 60 * 60 * 1000).toISOString();
+
+  const { error } = await adminClient
+    .from("scan_sessions")
+    .upsert({ scope: "odcav_communal", open_until: openUntil, updated_at: new Date().toISOString() });
+  if (error) return { error: error.message };
+
+  // Uniquement les matchs communaux
+  await (await createAdminClient())
+    .from("matches")
+    .update({ status: "en_cours" })
+    .eq("status", "programme")
+    .eq("match_type", "Match Communal");
+
+  return { success: true, openUntil };
+}
+
+export async function closeCommunalScanSession() {
+  await requireRole(["super_admin", "fondateur", "president_odcav"]);
+  const adminClient = await createAdminClient();
+  const { error } = await adminClient
+    .from("scan_sessions")
+    .upsert({ scope: "odcav_communal", open_until: null, updated_at: new Date().toISOString() });
+  if (error) return { error: error.message };
+  return { success: true };
+}
+
+export async function getCommunalScanSession(): Promise<string | null> {
+  const adminClient = await createAdminClient();
+  const { data } = await adminClient
+    .from("scan_sessions")
+    .select("open_until")
+    .eq("scope", "odcav_communal")
     .maybeSingle();
   const openUntil = data?.open_until || null;
   if (!openUntil || new Date(openUntil) <= new Date()) return null;
