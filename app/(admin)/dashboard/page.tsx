@@ -4,7 +4,7 @@ import { getEffectiveZone } from "@/lib/get-effective-zone";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Banknote, PackageX, Layers, ScanLine, Landmark, ReceiptText, MapPin, Link as LinkIcon } from "lucide-react";
+import { Banknote, PackageX, Layers, ScanLine, Landmark, ReceiptText, Link as LinkIcon } from "lucide-react";
 import { formatFCFA, formatDateShort } from "@/lib/format";
 import { fetchAll } from "@/lib/supabase/paginate";
 import { MATCH_STATUS_LABELS, MATCH_STATUS_COLORS } from "@/lib/constants";
@@ -14,12 +14,9 @@ import { DashboardFilters } from "./dashboard-filters";
 import { ZoneCardGrid } from "@/components/zone-card-grid";
 import { ZoneBackHeader } from "@/components/zone-back-header";
 import { StatCard } from "./stat-card";
-import { GlobalStatsChart } from "./global-stats-chart";
 import { ZoneDonutChart } from "./zone-donut-chart";
 import { ZonePerformanceTable } from "./zone-performance-table";
-import { SecondaryIndicators } from "./secondary-indicators";
 import { AutoRefresh } from "@/components/auto-refresh";
-import type { ChartPoint } from "./global-stats-chart";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -291,11 +288,6 @@ export default async function DashboardPage({
       };
     }).filter((z) => z.matchCount > 0 || z.printed > 0);
 
-    // Zones actives (zones with at least one match in period)
-    const zonesActive = zoneFilter ? 1 : zonesForFilter.filter((z) =>
-      (matchesPeriod || []).some((m: any) => m.zone_id === z.id)
-    ).length;
-
     // ── Revenue by zone for donut ──────────────────────────────────────────
     const revenueByZone = zonePerformance
       .filter((z) => z.revenue > 0)
@@ -306,39 +298,6 @@ export default async function DashboardPage({
         revenue: z.revenue,
         pct: grossRevenue > 0 ? (z.revenue / grossRevenue) * 100 : 0,
       }));
-
-    // ── Chart data (daily time series) ────────────────────────────────────
-    const chartData: ChartPoint[] = [];
-    {
-      const cur = new Date(dateStart);
-      cur.setHours(0, 0, 0, 0);
-      const end = new Date(dateEnd);
-      while (cur <= end) {
-        const dayStr = cur.toISOString().split("T")[0];
-        const dayMatchIds = new Set(
-          (matchesPeriod || [])
-            .filter((m: any) => m.match_date.startsWith(dayStr))
-            .map((m: any) => m.id)
-        );
-        const dayTickets = allTickets.filter((t: any) => dayMatchIds.has(t.match_id));
-        const printed  = dayTickets.filter((t: any) => t.bloc_printed).length;
-        const scanned  = dayTickets.filter((t: any) => t.status === "scanne").length;
-        const revenue  = dayTickets
-          .filter((t: any) => t.counts_as_revenue && t.status === "scanne")
-          .reduce((s: number, t: any) => s + t.price, 0);
-        chartData.push({
-          date: cur.toLocaleDateString("fr-FR", { day: "numeric", month: "short" }),
-          printed,
-          unsold: Math.max(0, printed - scanned),
-          revenue,
-        });
-        cur.setDate(cur.getDate() + 1);
-      }
-    }
-
-    // Zone name map (for StatCard zone label)
-    const zoneNameMap: Record<string, string> = {};
-    allZones.forEach((z) => { zoneNameMap[z.id] = z.name; });
 
     const unsoldRate   = totalPrinted > 0 ? (totalUnsold / totalPrinted) * 100 : 0;
     const fraisODCAV   = Math.round(grossRevenue * 0.05);
@@ -364,15 +323,8 @@ export default async function DashboardPage({
           showZoneFilter
         />
 
-        {/* Stat cards — 4 cols on desktop, 2 on tablet, 1 on mobile */}
-        <div className="grid grid-cols-1 min-[480px]:grid-cols-2 xl:grid-cols-4 gap-4">
-          <StatCard
-            title="Zones actives"
-            value={zonesActive}
-            subtitle={zoneFilter ? (zoneNameMap[zoneFilter] || "Zone sélectionnée") : "Toutes les zones"}
-            icon={<MapPin className="h-5 w-5 text-brand" />}
-            iconBg="bg-brand/10"
-          />
+        {/* Stat cards — 3 cols on desktop, 2 on tablet, 1 on mobile */}
+        <div className="grid grid-cols-1 min-[480px]:grid-cols-2 xl:grid-cols-3 gap-4">
           <StatCard
             title="Billets imprimés"
             value={totalPrinted.toLocaleString("fr-FR")}
@@ -427,43 +379,15 @@ export default async function DashboardPage({
           </Card>
         </div>
 
-        {/* Secondary indicators */}
+        {/* Chart — Recettes par zone */}
         <Card className="rounded-2xl shadow-sm border-border/40">
-          <CardContent className="p-5 sm:p-6">
-            <SecondaryIndicators
-              data={{
-                matchesPlayed: (matchesPeriod || []).filter((m: any) => m.status === "termine").length,
-                ticketsSold: totalScanned,
-                unsoldRate,
-                totalRevenue: grossRevenue,
-              }}
-            />
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base sm:text-lg">Recettes par zone</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ZoneDonutChart zones={revenueByZone} total={grossRevenue} />
           </CardContent>
         </Card>
-
-        {/* Charts row — 2 cols on desktop */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 sm:gap-6">
-          <Card className="rounded-2xl shadow-sm border-border/40">
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between gap-2">
-                <CardTitle className="text-base sm:text-lg">Statistiques globales</CardTitle>
-                <span className="text-xs text-muted-foreground hidden sm:block">{periodLabel}</span>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <GlobalStatsChart data={chartData} />
-            </CardContent>
-          </Card>
-
-          <Card className="rounded-2xl shadow-sm border-border/40">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base sm:text-lg">Recettes par zone</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ZoneDonutChart zones={revenueByZone} total={grossRevenue} />
-            </CardContent>
-          </Card>
-        </div>
 
         {/* Zone performance table — full width */}
         <Card className="rounded-2xl shadow-sm border-border/40">
