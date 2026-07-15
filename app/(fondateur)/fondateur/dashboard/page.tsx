@@ -6,6 +6,7 @@ import { formatFCFA } from "@/lib/format";
 import { RevenueLineChart } from "./revenue-line-chart";
 import { FraisPlateformeChart } from "./frais-plateforme-chart";
 import { FondateurFilters } from "./fondateur-filters";
+import { Suspense } from "react";
 
 export const metadata = { title: "Dashboard Fondateur" };
 
@@ -27,6 +28,15 @@ export default async function FondateurDashboardPage({
   const selectedDate = params.date || today;
   const selectedMonth = selectedDate.substring(0, 7);
 
+  // Date ranges for daily/monthly scan queries
+  const todayStart = `${selectedDate}T00:00:00`;
+  const nextDayObj = new Date(`${selectedDate}T12:00:00`);
+  nextDayObj.setDate(nextDayObj.getDate() + 1);
+  const tomorrowStart = `${nextDayObj.toISOString().split("T")[0]}T00:00:00`;
+  const [smYear, smMonth] = selectedMonth.split("-").map(Number);
+  const monthStart = `${selectedMonth}-01T00:00:00`;
+  const nextMonthStart = `${smMonth === 12 ? smYear + 1 : smYear}-${String(smMonth === 12 ? 1 : smMonth + 1).padStart(2, "0")}-01T00:00:00`;
+
   // ── Fetch everything in parallel ─────────────────────────────────────────
   const [
     superAdminsRes,
@@ -37,6 +47,10 @@ export default async function FondateurDashboardPage({
     bilScansRes,
     matchesRes,
     platformSettingsRes,
+    todayBilScansRes,
+    todayRegScansRes,
+    monthBilScansRes,
+    monthRegScansRes,
   ] = await Promise.all([
     supabase.from("profiles").select("id, full_name").in("role", ["super_admin", "president_odcav"]),
     supabase.from("zones").select("id, name, created_by"),
@@ -46,6 +60,10 @@ export default async function FondateurDashboardPage({
     supabase.from("billeterie_scans").select("*", { count: "exact", head: true }),
     supabase.from("matches").select("id, match_date, zone_id, home_team_zone, away_team_zone, status, match_type, created_by"),
     supabase.from("platform_settings").select("fee_per_block, effective_date").order("effective_date", { ascending: true }),
+    supabase.from("billeterie_scans").select("*", { count: "exact", head: true }).gte("scanned_at", todayStart).lt("scanned_at", tomorrowStart),
+    supabase.from("tickets").select("id", { count: "exact", head: true }).eq("status", "scanne").eq("counts_as_revenue", true).gte("scanned_at", todayStart).lt("scanned_at", tomorrowStart),
+    supabase.from("billeterie_scans").select("*", { count: "exact", head: true }).gte("scanned_at", monthStart).lt("scanned_at", nextMonthStart),
+    supabase.from("tickets").select("id", { count: "exact", head: true }).eq("status", "scanne").eq("counts_as_revenue", true).gte("scanned_at", monthStart).lt("scanned_at", nextMonthStart),
   ]);
 
   const allSuperAdmins = (superAdminsRes.data || []) as { id: string; full_name: string }[];
@@ -125,51 +143,40 @@ export default async function FondateurDashboardPage({
 
   const billingByDay = buildBillingByDay(visibleMatches);
 
-  // ── Cards ─────────────────────────────────────────────────────────────────
-  const fraisPlateforme = getFraisForDate(selectedDate);
-  const dailyUnits = billingByDay.get(selectedDate) || new Set<string>();
-  const revenusJournaliers = dailyUnits.size * fraisPlateforme;
+  // ── Demo exclusion (total + daily + monthly) ──────────────────────────────
+  let demoRegScanned = 0, demoBilScanned = 0;
+  let demoDailyBil = 0, demoDailyReg = 0, demoMonthBil = 0, demoMonthReg = 0;
 
-  let revenusMensuel = 0;
-  {
-    const seenPairs = new Set<string>();
-    for (const [dayStr, units] of billingByDay) {
-      if (!dayStr.startsWith(selectedMonth)) continue;
-      for (const unit of units) {
-        const key = `${unit}|${dayStr}`;
-        if (!seenPairs.has(key)) {
-          seenPairs.add(key);
-          revenusMensuel += getFraisForDate(dayStr);
-        }
-      }
-    }
-  }
-
-  // Total revenus = billets scannés × 10 FCFA (tous comptes sauf démo)
-  let demoRegScanned = 0;
-  let demoBilScanned = 0;
   if (demoZoneIds.length > 0) {
-    const { data: demoMatchData } = await supabase
-      .from("matches")
-      .select("id")
-      .in("zone_id", demoZoneIds);
+    const { data: demoMatchData } = await supabase.from("matches").select("id").in("zone_id", demoZoneIds);
     const demoMatchIds = (demoMatchData || []).map((m: any) => m.id as string);
     if (demoMatchIds.length > 0) {
-      const [dReg, dBil] = await Promise.all([
-        supabase.from("tickets").select("id", { count: "exact", head: true })
-          .eq("status", "scanne").eq("counts_as_revenue", true)
-          .in("match_id", demoMatchIds),
-        supabase.from("billeterie_scans").select("id", { count: "exact", head: true })
-          .in("match_id", demoMatchIds),
+      const [dReg, dBil, dDayBil, dDayReg, dMonBil, dMonReg] = await Promise.all([
+        supabase.from("tickets").select("id", { count: "exact", head: true }).eq("status", "scanne").eq("counts_as_revenue", true).in("match_id", demoMatchIds),
+        supabase.from("billeterie_scans").select("id", { count: "exact", head: true }).in("match_id", demoMatchIds),
+        supabase.from("billeterie_scans").select("*", { count: "exact", head: true }).in("match_id", demoMatchIds).gte("scanned_at", todayStart).lt("scanned_at", tomorrowStart),
+        supabase.from("tickets").select("id", { count: "exact", head: true }).eq("status", "scanne").eq("counts_as_revenue", true).in("match_id", demoMatchIds).gte("scanned_at", todayStart).lt("scanned_at", tomorrowStart),
+        supabase.from("billeterie_scans").select("*", { count: "exact", head: true }).in("match_id", demoMatchIds).gte("scanned_at", monthStart).lt("scanned_at", nextMonthStart),
+        supabase.from("tickets").select("id", { count: "exact", head: true }).eq("status", "scanne").eq("counts_as_revenue", true).in("match_id", demoMatchIds).gte("scanned_at", monthStart).lt("scanned_at", nextMonthStart),
       ]);
       demoRegScanned = dReg.count || 0;
       demoBilScanned = dBil.count || 0;
+      demoDailyBil = dDayBil.count || 0;
+      demoDailyReg = dDayReg.count || 0;
+      demoMonthBil = dMonBil.count || 0;
+      demoMonthReg = dMonReg.count || 0;
     }
   }
 
+  // ── Revenue cards (scans × 10 FCFA — même modèle pour les 3 cartes) ──────
   const totalAllScanned = (regularScannedRes.count || 0) + totalBilScans;
   const totalNonDemoScanned = Math.max(0, totalAllScanned - demoRegScanned - demoBilScanned);
-  const revenusTotal = totalNonDemoScanned * 10; // 10 FCFA par billet scanné
+  const revenusTotal = totalNonDemoScanned * 10;
+
+  const dailyNonDemo = Math.max(0, (todayBilScansRes.count || 0) + (todayRegScansRes.count || 0) - demoDailyBil - demoDailyReg);
+  const monthNonDemo = Math.max(0, (monthBilScansRes.count || 0) + (monthRegScansRes.count || 0) - demoMonthBil - demoMonthReg);
+  const revenusJournaliers = dailyNonDemo * 10;
+  const revenusMensuel = monthNonDemo * 10;
 
   // Total matches count (visible scope)
   const matchesCount = allMatches.length;
@@ -229,7 +236,9 @@ export default async function FondateurDashboardPage({
     <div className="space-y-6">
       <h1 className="text-2xl font-bold font-heading">Dashboard Fondateur</h1>
 
-      <FondateurFilters superAdmins={filterSAList} />
+      <Suspense>
+        <FondateurFilters superAdmins={filterSAList} />
+      </Suspense>
 
       {/* ── Stat cards ── */}
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
@@ -240,7 +249,7 @@ export default async function FondateurDashboardPage({
                 <p className="text-xs text-blue-700 font-medium">Revenus journaliers</p>
                 <p className="text-2xl font-bold text-blue-800">{formatFCFA(revenusJournaliers)}</p>
                 <p className="text-[11px] text-blue-600 mt-0.5">
-                  {dateLabel} · {dailyUnits.size} unité(s)
+                  {dateLabel} · {dailyNonDemo} scan{dailyNonDemo !== 1 ? "s" : ""} × 10 FCFA
                 </p>
               </div>
               <CalendarDays className="h-8 w-8 text-blue-300" />
@@ -255,7 +264,7 @@ export default async function FondateurDashboardPage({
                 <p className="text-xs text-amber-700 font-medium">Revenus mensuel</p>
                 <p className="text-2xl font-bold text-amber-800">{formatFCFA(revenusMensuel)}</p>
                 <p className="text-[11px] text-amber-600 mt-0.5">
-                  {monthLabel} · {getFraisForDate(selectedDate).toLocaleString("fr-FR")} F/unité
+                  {monthLabel} · {monthNonDemo} scan{monthNonDemo !== 1 ? "s" : ""} × 10 FCFA
                 </p>
               </div>
               <Wallet className="h-8 w-8 text-amber-300" />

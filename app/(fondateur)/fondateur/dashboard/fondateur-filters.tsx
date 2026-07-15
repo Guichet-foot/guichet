@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Filter, X } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 interface FondateurFiltersProps {
   superAdmins: { id: string; name: string }[];
@@ -37,6 +37,15 @@ export function FondateurFilters({ superAdmins }: FondateurFiltersProps) {
   const [showFilters, setShowFilters] = useState(
     !!(currentYear || currentSA || currentDate || currentChartFrom || currentChartTo)
   );
+
+  // Sync local state when URL params change (e.g. after navigation)
+  useEffect(() => {
+    setYear(searchParams.get("year") || "");
+    setSa(searchParams.get("sa") || "");
+    setDate(searchParams.get("date") || "");
+    setChartFrom(searchParams.get("chartFrom") || "");
+    setChartTo(searchParams.get("chartTo") || "");
+  }, [searchParams]);
 
   const currentYearNum = new Date().getFullYear();
   const years = Array.from({ length: 5 }, (_, i) => String(currentYearNum - i));
