@@ -434,45 +434,79 @@ export async function getBilleterieInvendusList(): Promise<BilleterieInvendusIte
   if (!bilList || bilList.length === 0) return [];
 
   const bilIds = bilList.map((b: any) => b.id as string);
+  const allMatchIds = [...new Set(bilList.flatMap((b: any) => (b.match_ids || []) as string[]))];
 
-  // Comptage tickets non-retirés par billeterie (invendus en stock = withdrawn=false)
-  const nonWithdrawnByBil: Record<string, number> = {};
+  // Tickets : id + billeterie_id + withdrawn (pour ticketToBilId et comptage invendus)
   const ticketRows = await fetchAll<any>((from, to) =>
     adminClient.from("billeterie_tickets")
-      .select("billeterie_id, withdrawn")
+      .select("id, billeterie_id, withdrawn")
       .in("billeterie_id", bilIds)
       .range(from, to)
   );
+  const nonWithdrawnByBil: Record<string, number> = {};
+  const ticketToBilId: Record<string, string> = {};
   ticketRows.forEach((t: any) => {
+    ticketToBilId[t.id as string] = t.billeterie_id as string;
     if (!t.withdrawn) {
       nonWithdrawnByBil[t.billeterie_id] = (nonWithdrawnByBil[t.billeterie_id] || 0) + 1;
     }
   });
 
-  // Scans : on compte TOUS les scans par match_id (toutes billeteries confondues)
-  // puis on agrège par billeterie selon ses match_ids → donne la fréquentation réelle des matchs
-  const allMatchIds = [...new Set(bilList.flatMap((b: any) => (b.match_ids || []) as string[]))];
-  const scanCountByBil: Record<string, number> = {};
+  // Scans : ticket_id + match_id pour fréquentation ET calcul attributedBillets
+  const scansAtMatch: Record<string, number> = {};
+  const totalScansByBil: Record<string, number> = {};
+  const scansByBilAndMatch: Record<string, Record<string, number>> = {};
+
   if (allMatchIds.length > 0) {
     const scanRows = await fetchAll<any>((from, to) =>
       adminClient.from("billeterie_scans")
-        .select("match_id")
+        .select("ticket_id, match_id")
         .in("match_id", allMatchIds)
         .range(from, to)
     );
-    // Scans par match_id
-    const scansAtMatch: Record<string, number> = {};
     scanRows.forEach((s: any) => {
-      scansAtMatch[s.match_id as string] = (scansAtMatch[s.match_id as string] || 0) + 1;
-    });
-    // Agrégation par billeterie
-    for (const b of bilList) {
-      let count = 0;
-      for (const mId of ((b.match_ids || []) as string[])) {
-        count += scansAtMatch[mId] || 0;
+      scansAtMatch[s.match_id] = (scansAtMatch[s.match_id] || 0) + 1;
+      const bilId = ticketToBilId[s.ticket_id as string];
+      if (bilId) {
+        totalScansByBil[bilId] = (totalScansByBil[bilId] || 0) + 1;
+        if (!scansByBilAndMatch[bilId]) scansByBilAndMatch[bilId] = {};
+        scansByBilAndMatch[bilId][s.match_id] = (scansByBilAndMatch[bilId][s.match_id] || 0) + 1;
       }
-      if (count > 0) scanCountByBil[b.id as string] = count;
+    });
+  }
+
+  // Set de matchIds par billeterie pour les calculs croisés
+  const bilMatchSet: Record<string, Set<string>> = {};
+  for (const b of bilList) bilMatchSet[b.id] = new Set((b.match_ids || []) as string[]);
+
+  // Pour chaque billeterie B : fréquentation + billets attribués depuis billeteries partenaires
+  const attendanceByBil: Record<string, number> = {};
+  const attributedByBil: Record<string, number> = {};
+
+  for (const B of bilList) {
+    const Bset = bilMatchSet[B.id];
+
+    // Fréquentation = total scans à ses matchs (toutes billeteries confondues)
+    let attendance = 0;
+    for (const mId of Bset) attendance += scansAtMatch[mId] || 0;
+    attendanceByBil[B.id] = attendance;
+
+    // Billets attribués depuis billeteries partageant au moins un match avec B
+    let attributed = 0;
+    for (const X of bilList) {
+      if (X.id === B.id) continue;
+      const Xset = bilMatchSet[X.id];
+      let hasOverlap = false;
+      for (const mId of Xset) { if (Bset.has(mId)) { hasOverlap = true; break; } }
+      if (!hasOverlap) continue;
+      const nw_X = nonWithdrawnByBil[X.id] || 0;
+      const ts_X = totalScansByBil[X.id] || 0;
+      let ss_X = 0;
+      const xByMatch = scansByBilAndMatch[X.id] || {};
+      for (const mId of Bset) { if (Xset.has(mId)) ss_X += xByMatch[mId] || 0; }
+      attributed += Math.max(0, nw_X - (ts_X - ss_X));
     }
+    attributedByBil[B.id] = attributed;
   }
 
   // Match info pour affichage
@@ -485,9 +519,11 @@ export async function getBilleterieInvendusList(): Promise<BilleterieInvendusIte
 
   return bilList.map((b: any) => {
     const matchIds = (b.match_ids || []) as string[];
-    const totalTickets = nonWithdrawnByBil[b.id] || 0;   // withdrawn=false = billets en stock
-    const totalScanned = scanCountByBil[b.id] || 0;       // fréquentation totale aux matchs
-    const unscannedCount = Math.max(0, totalTickets - totalScanned); // invendus = stock - scannés
+    const ownTickets = nonWithdrawnByBil[b.id] || 0;
+    const attributed = attributedByBil[b.id] || 0;
+    const totalTickets = ownTickets + attributed;           // propres + attribués = même logique que page détail
+    const totalScanned = attendanceByBil[b.id] || 0;       // fréquentation totale aux matchs
+    const unscannedCount = Math.max(0, totalTickets - totalScanned);
     return {
       id: b.id as string,
       name: b.name as string,
