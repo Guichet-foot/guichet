@@ -485,9 +485,9 @@ export async function getBilleterieInvendusList(): Promise<BilleterieInvendusIte
 
   return bilList.map((b: any) => {
     const matchIds = (b.match_ids || []) as string[];
-    const totalTickets = nonWithdrawnByBil[b.id] || 0;   // withdrawn=false = invendus en stock
+    const totalTickets = nonWithdrawnByBil[b.id] || 0;   // withdrawn=false = billets en stock
     const totalScanned = scanCountByBil[b.id] || 0;       // fréquentation totale aux matchs
-    const unscannedCount = totalTickets;                   // invendus = tout le stock non-retiré
+    const unscannedCount = Math.max(0, totalTickets - totalScanned); // invendus = stock - scannés
     return {
       id: b.id as string,
       name: b.name as string,
