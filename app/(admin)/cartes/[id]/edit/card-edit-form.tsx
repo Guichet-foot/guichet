@@ -39,7 +39,7 @@ export function CardEditForm({ card, zones, isSuperAdmin, initialTeams }: CardEd
 
   const [fullName, setFullName] = useState(card.full_name);
   const [phone, setPhone] = useState(card.phone);
-  const [zoneId, setZoneId] = useState(card.zone_id);
+  const [zoneId, setZoneId] = useState(card.zone_id ?? "");
   const [zoneName, setZoneName] = useState(card.zone_name);
   const [poste, setPoste] = useState(card.poste);
   const [cardType, setCardType] = useState<CardType>(card.card_type || "zone");

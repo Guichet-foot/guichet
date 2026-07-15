@@ -7,7 +7,7 @@ import type { AccessCard } from "@/lib/types";
 export async function createAccessCard(data: {
   full_name: string;
   phone: string;
-  zone_id: string;
+  zone_id?: string | null;
   zone_name: string;
   poste: string;
   asc_name?: string;
@@ -29,7 +29,8 @@ export async function createAccessCard(data: {
   if (!profile || !["super_admin", "president_odcav", "admin_zone", "fondateur"].includes(profile.role)) {
     return { error: "Non autorisé" };
   }
-  if (profile.role === "admin_zone" && profile.zone_id !== data.zone_id) {
+  const isOdcavCard = data.card_type === "odcav";
+  if (profile.role === "admin_zone" && !isOdcavCard && profile.zone_id !== data.zone_id) {
     return { error: "Vous ne pouvez créer des cartes que pour votre zone" };
   }
 
@@ -81,6 +82,21 @@ export async function getAccessCards(zoneId?: string): Promise<AccessCard[]> {
   // fondateur: no filter — sees all
 
   const { data } = await query;
+  return (data || []) as AccessCard[];
+}
+
+export async function getOdcavCards(): Promise<AccessCard[]> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const adminClient = await createAdminClient();
+  const { data } = await adminClient
+    .from("access_cards")
+    .select("*")
+    .eq("card_type", "odcav")
+    .eq("created_by", user.id)
+    .order("created_at", { ascending: false });
   return (data || []) as AccessCard[];
 }
 

@@ -150,14 +150,14 @@ export interface ScanResult {
   scannedAt?: string;
 }
 
-export type CardType = 'zone' | 'delegue' | 'vendeur' | 'spectateur';
+export type CardType = 'zone' | 'delegue' | 'vendeur' | 'spectateur' | 'odcav';
 
 export interface AccessCard {
   id: string;
   qr_token: string;
   full_name: string;
   phone: string;
-  zone_id: string;
+  zone_id: string | null;
   zone_name: string;
   poste: string;
   asc_name: string | null;

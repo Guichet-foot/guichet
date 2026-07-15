@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import Link from "next/link";
 import {
   Dialog,
@@ -45,6 +45,7 @@ const TYPE_LABELS: Record<string, string> = {
   delegue: "DÉLÉGUÉ",
   vendeur: "VENDEUR",
   spectateur: "SPECTATEUR",
+  odcav: "ODCAV",
 };
 
 const TYPE_COLORS: Record<string, string> = {
@@ -52,6 +53,7 @@ const TYPE_COLORS: Record<string, string> = {
   delegue: "#1D4ED8",
   vendeur: "#B45309",
   spectateur: "#6D28D9",
+  odcav: "#7C3AED",
 };
 
 function getSaison(card: AccessCard): string {
@@ -67,13 +69,15 @@ function CardDesign({ card, qrDataUrl, zoneLogo }: { card: AccessCard; qrDataUrl
   const type = card.card_type || "zone";
   const price = card.price;
 
+  const isOdcavCard = type === "odcav";
   const isPaidCard = type === "vendeur" || type === "spectateur";
-  const rows = [
-    { Icon: User,      label: "NOM COMPLET", value: card.full_name },
-    { Icon: Phone,     label: "TÉLÉPHONE",   value: card.phone },
-    ...(!isPaidCard ? [{ Icon: MapPin, label: "ZONE", value: card.zone_name }] : []),
-    ...(!isPaidCard ? [{ Icon: Briefcase, label: "POSTE", value: card.poste }] : []),
-    ...(card.asc_name ? [{ Icon: Shield, label: "ASC", value: card.asc_name }] : []),
+
+  const rows: { Icon: React.ElementType; label: string; value: string | null | undefined }[] = [
+    { Icon: User,  label: "NOM COMPLET", value: card.full_name },
+    { Icon: Phone, label: "TÉLÉPHONE",   value: card.phone },
+    ...(!isPaidCard && !isOdcavCard ? [{ Icon: MapPin,     label: "ZONE",     value: card.zone_name }] : []),
+    ...(!isPaidCard ? [{ Icon: Briefcase, label: isOdcavCard ? "FONCTION" : "POSTE", value: card.poste }] : []),
+    ...(!isOdcavCard && card.asc_name ? [{ Icon: Shield, label: "ASC", value: card.asc_name }] : []),
     ...(price != null && price > 0
       ? [{ Icon: Tag, label: "MONTANT", value: `${price.toLocaleString("fr-FR")} FCFA` }]
       : []),
@@ -268,9 +272,32 @@ function CartesGrid({ items, zoneLogo, readOnly }: CartesGridProps) {
 }
 
 /** Main client component: stats cards + tabs + filtered grid */
-export function CartesClient({ items, zoneLogo, readOnly }: { items: CardWithQR[]; zoneLogo?: string; readOnly?: boolean }) {
+export function CartesClient({ items, zoneLogo, readOnly, odcavOnly }: { items: CardWithQR[]; zoneLogo?: string; readOnly?: boolean; odcavOnly?: boolean }) {
   const [activeTab, setActiveTab] = useState<Tab>("zone_delegue");
   const [downloading, setDownloading] = useState(false);
+
+  // Mode ODCAV : affichage direct sans stats/onglets zone
+  if (odcavOnly) {
+    return (
+      <div className="space-y-4">
+        <div className="flex justify-end">
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-xs gap-1.5 border-purple-700 text-purple-700 hover:bg-purple-50"
+            onClick={() => downloadBulk(items)}
+            disabled={downloading || items.length === 0}
+          >
+            {downloading
+              ? <><Loader2 className="h-3.5 w-3.5 animate-spin" />Génération…</>
+              : <><FileDown className="h-3.5 w-3.5" />PDF A4 ({items.length})</>
+            }
+          </Button>
+        </div>
+        <CartesGrid items={items} zoneLogo={zoneLogo} readOnly={readOnly} />
+      </div>
+    );
+  }
 
   async function downloadBulk(cardItems: CardWithQR[]) {
     if (cardItems.length === 0) return;
