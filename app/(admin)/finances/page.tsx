@@ -16,6 +16,7 @@ import { FinancesFilters } from "./finances-filters";
 import { FinancesOdcavTabs } from "./finances-odcav-tabs";
 import { fetchAll } from "@/lib/supabase/paginate";
 import { ExpenseRowActions } from "./expense-row-actions";
+import { FicheRecettesButton } from "./fiche-recettes-button";
 
 export const metadata = { title: "Finances" };
 
@@ -302,7 +303,12 @@ export default async function FinancesPage({
           <h1 className="text-2xl font-bold font-heading print:hidden">Finances</h1>
           <p className="text-muted-foreground print:hidden">{periodLabel}</p>
         </div>
-        <div className="flex gap-2 print:hidden">
+        <div className="flex flex-wrap gap-2 print:hidden">
+          <FicheRecettesButton
+            date={period === "jour" ? (params.date || today) : today}
+            zoneId={zoneId}
+            c3AccountId={c3AccountId}
+          />
           <Link href={buildZoneUrl("/finances/depenses/nouveau", params.zone)}>
             <Button className="bg-brand hover:bg-brand/90">
               <Plus className="h-4 w-4 mr-2" />

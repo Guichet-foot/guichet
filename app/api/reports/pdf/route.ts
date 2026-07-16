@@ -40,8 +40,34 @@ export async function POST(request: Request) {
   const effectiveC3Id: string | null =
     profile.role === "c3" ? (c3AccountId || user.id) : null;
 
-  // Infos ODCAV pour le PDF
   const adminSupabase = await createAdminClient();
+
+  // Paramètres plateforme
+  const { data: platformData } = await adminSupabase
+    .from("platform_settings")
+    .select("fee_per_block, odcav_rate")
+    .lte("effective_date", endDate)
+    .order("effective_date", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const odcavRate = platformData?.odcav_rate ?? 0.05;
+  const fraisParBloc = platformData?.fee_per_block ?? 5000;
+
+  // Pour C3 : récupérer tous les match IDs visibles (propres + communaux non assignés)
+  let c3AllMatchIds: string[] | null = null;
+  if (effectiveC3Id) {
+    const [ownRes, communalRes] = await Promise.all([
+      adminSupabase.from("matches").select("id").eq("c3_account_id", effectiveC3Id),
+      adminSupabase.from("matches").select("id").eq("is_direct", true).eq("match_type", "Match Communal").is("c3_account_id", null),
+    ]);
+    c3AllMatchIds = [...new Set([
+      ...(ownRes.data || []).map((m: any) => m.id as string),
+      ...(communalRes.data || []).map((m: any) => m.id as string),
+    ])];
+  }
+  const c3MatchSet = c3AllMatchIds ? new Set(c3AllMatchIds) : null;
+
+  // Infos ODCAV pour le PDF
   // For super_admin/C3: their own settings row (id = user.id)
   // For admin_zone: their super_admin's settings row (zone.created_by)
   let odcavSettingsId = user.id;
@@ -81,8 +107,8 @@ export async function POST(request: Request) {
 
   const { data: tickets } = await ticketsQuery as { data: any[] | null };
 
-  const filteredTickets = (effectiveC3Id
-    ? tickets?.filter((t: any) => t.match?.c3_account_id === effectiveC3Id)
+  const filteredTickets = (c3MatchSet
+    ? tickets?.filter((t: any) => c3MatchSet.has(t.match_id))
     : zoneId
       ? tickets?.filter((t: any) => t.match?.zone_id === zoneId)
       : tickets) || [];
@@ -156,6 +182,11 @@ export async function POST(request: Request) {
     return { ...m, matchExpenses, solde: m.revenue - matchExpenses };
   });
 
+  const totalScanned = filteredTickets.filter((t: any) => t.status === "scanne").length;
+  const odcavCommission = Math.round(totalRevenue * odcavRate);
+  const fraisPlateforme = Math.round(totalScanned / 100) * fraisParBloc;
+  const netZone = totalRevenue - totalExpenses - odcavCommission - fraisPlateforme;
+
   const reportData = {
     zoneName: (profile as any).zone?.name || "Toutes zones",
     startDate: format(new Date(startDate), "dd/MM/yyyy", { locale: fr }),
@@ -164,6 +195,10 @@ export async function POST(request: Request) {
     generatedAt: format(new Date(), "dd/MM/yyyy HH:mm", { locale: fr }),
     totalRevenue,
     totalExpenses,
+    odcavRate,
+    odcavCommission,
+    fraisPlateforme,
+    netZone,
     revenueByMatch: enrichedRevenueByMatch,
     odcavInfo,
     expenses:

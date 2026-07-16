@@ -137,6 +137,10 @@ interface ReportData {
   generatedAt: string;
   totalRevenue: number;
   totalExpenses: number;
+  odcavRate?: number;
+  odcavCommission?: number;
+  fraisPlateforme?: number;
+  netZone?: number;
   revenueByMatch: {
     teams: string;
     date: string;
@@ -159,6 +163,8 @@ interface ReportData {
 
 export function FinancialReport({ data }: { data: ReportData }) {
   const balance = data.totalRevenue - data.totalExpenses;
+  const hasDeductions = data.reportType === "complet" && data.odcavRate !== undefined;
+  const odcavPct = data.odcavRate ? (data.odcavRate * 100).toFixed(0) : "5";
   const typeLabel =
     data.reportType === "complet"
       ? "Rapport complet"
@@ -234,6 +240,55 @@ export function FinancialReport({ data }: { data: ReportData }) {
             </View>
           )}
         </View>
+
+        {/* Déductions ODCAV + plateforme — Rapport complet uniquement */}
+        {hasDeductions && (
+          <View style={{ marginBottom: 14 }}>
+            {/* Bannière recettes brutes */}
+            <View style={{ flexDirection: "row", justifyContent: "space-between", backgroundColor: "#DC2626", padding: "5 10", marginBottom: 2 }}>
+              <Text style={{ fontSize: 9, fontFamily: "Helvetica-Bold", color: "#FFF", fontStyle: "italic" }}>RECETTES BRUTES</Text>
+              <Text style={{ fontSize: 10, fontFamily: "Helvetica-Bold", color: "#FFF" }}>{formatAmount(data.totalRevenue)}</Text>
+            </View>
+
+            {/* Total dépenses */}
+            <View style={{ flexDirection: "row", justifyContent: "space-between", borderWidth: 1, borderColor: "#000", padding: "5 10", marginBottom: 4 }}>
+              <Text style={{ fontSize: 9, fontFamily: "Helvetica-Bold" }}>TOTAL DES DÉPENSES</Text>
+              <Text style={{ fontSize: 9, fontFamily: "Helvetica-Bold" }}>{formatAmount(data.totalExpenses)}</Text>
+            </View>
+
+            {/* Distribution ODCAV + zone */}
+            <View style={{ borderWidth: 0.5, borderColor: "#D1D5DB", marginBottom: 4 }}>
+              <View style={{ flexDirection: "row", justifyContent: "space-between", padding: "4 10", borderBottomWidth: 0.5, borderBottomColor: "#D1D5DB" }}>
+                <Text style={{ fontSize: 8, fontFamily: "Helvetica-Bold", fontStyle: "italic", color: "#1D4ED8" }}>
+                  Commission ODCAV {odcavPct}%{data.odcavInfo?.nom ? `  (${data.odcavInfo.nom})` : ""}
+                </Text>
+                <Text style={{ fontSize: 8, fontFamily: "Helvetica-Bold", fontStyle: "italic", color: "#1D4ED8" }}>
+                  {formatAmount(data.odcavCommission ?? 0)}
+                </Text>
+              </View>
+              <View style={{ flexDirection: "row", justifyContent: "space-between", padding: "4 10" }}>
+                <Text style={{ fontSize: 8, fontFamily: "Helvetica-Bold", fontStyle: "italic", color: "#0D5C3F" }}>
+                  Zone / ASC {(100 - (data.odcavRate ?? 0.05) * 100).toFixed(0)}%  ({data.zoneName})
+                </Text>
+                <Text style={{ fontSize: 8, fontFamily: "Helvetica-Bold", fontStyle: "italic", color: "#0D5C3F" }}>
+                  {formatAmount(Math.max(0, data.totalRevenue - data.totalExpenses - (data.odcavCommission ?? 0)))}
+                </Text>
+              </View>
+            </View>
+
+            {/* Frais plateforme */}
+            <View style={{ flexDirection: "row", justifyContent: "space-between", padding: "4 10", backgroundColor: "#FFF7ED", borderWidth: 0.5, borderColor: "#FED7AA", marginBottom: 4 }}>
+              <Text style={{ fontSize: 8, color: "#C2410C" }}>Frais de plateforme Guichet Foot</Text>
+              <Text style={{ fontSize: 8, color: "#C2410C", fontFamily: "Helvetica-Bold" }}>- {formatAmount(data.fraisPlateforme ?? 0)}</Text>
+            </View>
+
+            {/* Net à reverser */}
+            <View style={{ flexDirection: "row", justifyContent: "space-between", backgroundColor: "#0D5C3F", padding: "6 10" }}>
+              <Text style={{ fontSize: 10, fontFamily: "Helvetica-Bold", color: "#FFF" }}>NET À REVERSER À LA ZONE</Text>
+              <Text style={{ fontSize: 10, fontFamily: "Helvetica-Bold", color: "#FFF" }}>{formatAmount(Math.max(0, data.netZone ?? 0))}</Text>
+            </View>
+          </View>
+        )}
 
         {/* Détail recettes */}
         {(data.reportType === "complet" || data.reportType === "recettes") &&
