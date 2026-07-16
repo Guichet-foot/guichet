@@ -68,16 +68,8 @@ export async function getAdminZonesForForm(): Promise<{ id: string; name: string
   // Sub-admins use their parent's zones
   const ownerId = profile.created_by_admin ?? user.id;
 
-  if (profile.role === "fondateur") {
-    const { data } = await adminClient.from("zones").select("id, name").order("name");
-    return (data || []) as { id: string; name: string }[];
-  }
-
-  const { data } = await adminClient
-    .from("zones")
-    .select("id, name")
-    .eq("created_by", ownerId)
-    .order("name");
+  // fondateur, super_admin, president_odcav → see all zones
+  const { data } = await adminClient.from("zones").select("id, name").order("name");
   return (data || []) as { id: string; name: string }[];
 }
 

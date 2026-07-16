@@ -22,17 +22,17 @@ export default async function ZonesPage() {
   const profile = await requireRole(["super_admin", "president_odcav", "tresorier"]);
   const adminClient = await createAdminClient();
 
-  // Include both the account's own ID and its parent (created_by_admin) to handle
-  // zones created before the current hierarchy: some were stored with created_by = parent.id
+  // super_admin and president_odcav see ALL zones (shared pool)
+  const isGlobalRole = profile.role === "super_admin" || profile.role === "president_odcav";
   const ownerIds = [...new Set(
     [profile.id, (profile as any).created_by_admin].filter(Boolean) as string[]
   )];
 
-  const { data: zones } = await adminClient
-    .from("zones")
-    .select("*")
-    .in("created_by", ownerIds)
-    .order("name");
+  const zonesQuery = isGlobalRole
+    ? adminClient.from("zones").select("*").order("name")
+    : adminClient.from("zones").select("*").in("created_by", ownerIds).order("name");
+
+  const { data: zones } = await zonesQuery;
 
   const canCreateZone = profile.role !== "tresorier";
   const canEditZone = profile.role !== "tresorier";

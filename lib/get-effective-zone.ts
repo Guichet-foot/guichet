@@ -35,21 +35,18 @@ export async function getEffectiveZone(
     };
   }
 
-  // Use admin client for ODCAV roles to bypass RLS (president_odcav would be blocked
-  // by policies that only list 'super_admin'). Data isolation is enforced by the
-  // created_by filter at the app level.
   const adminClient = await createAdminClient();
   const supabase = await createClient();
 
-  // Include both the account's own ID and its parent (created_by_admin) to handle
-  // zones created before the current hierarchy: some were stored with created_by = parent.id
-  const isOdcavRole = profile.role === "super_admin" || profile.role === "president_odcav";
+  // super_admin and president_odcav see ALL zones (shared pool — no created_by filter)
+  // tresorier is scoped to their parent admin's zones
+  const isGlobalRole = profile.role === "fondateur" || profile.role === "super_admin" || profile.role === "president_odcav";
   const ownerIds = [...new Set(
     [profile.id, profile.created_by_admin].filter(Boolean) as string[]
   )];
-  const zonesQuery = profile.role === "fondateur"
-    ? supabase.from("zones").select("*").order("name")
-    : isOdcavRole || profile.role === "tresorier"
+  const zonesQuery = isGlobalRole
+    ? adminClient.from("zones").select("*").order("name")
+    : profile.role === "tresorier"
     ? adminClient.from("zones").select("*").in("created_by", ownerIds).order("name")
     : supabase.from("zones").select("*").eq("created_by", profile.id).order("name");
 

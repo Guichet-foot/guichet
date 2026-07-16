@@ -29,16 +29,12 @@ export default async function FinancesInterPage({
   const adminSupabase = await createAdminClient();
 
   // ── ODCAV isolation: build the set of creator IDs this user can see ──
-  // fondateur → no filter (sees all)
-  // super_admin / tresorier → inherit parent's identity via created_by_admin
-  // president_odcav → use their own ID
-  let creatorIds: string[] | null = null; // null = no filter (fondateur)
+  // fondateur, super_admin, president_odcav → no filter (see all)
+  // tresorier → scoped to parent's data
+  let creatorIds: string[] | null = null; // null = no filter
   let ownerId: string = profile.id;
-  if (profile.role !== "fondateur") {
-    ownerId =
-      (profile.role === "super_admin" || profile.role === "tresorier") && profile.created_by_admin
-        ? profile.created_by_admin
-        : profile.id;
+  if (profile.role === "tresorier") {
+    ownerId = profile.created_by_admin ?? profile.id;
     const { data: subAdmins } = await adminSupabase
       .from("profiles")
       .select("id")

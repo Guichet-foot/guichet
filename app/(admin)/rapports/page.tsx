@@ -27,17 +27,23 @@ export default async function RapportsPage({
   // ── Onglet Communale ──────────────────────────────────────────────────────────
   if (isOdcavRole && activeTab === "communale") {
     const adminClient = await createAdminClient();
+    // super_admin and president_odcav see all matches (no created_by filter)
+    const isGlobalRole = profile.role === "super_admin" || profile.role === "president_odcav";
     const ownerId = (profile.role === "tresorier" && (profile as any).created_by_admin)
       ? (profile as any).created_by_admin as string : profile.id;
-    const { data: subAdmins } = await adminClient.from("profiles").select("id").eq("created_by_admin", ownerId);
-    const creatorIds = [ownerId, ...((subAdmins || []) as any[]).map((p: any) => p.id as string)];
-    const { data: matches } = await adminClient
+    let creatorIds: string[] | null = null;
+    if (!isGlobalRole) {
+      const { data: subAdmins } = await adminClient.from("profiles").select("id").eq("created_by_admin", ownerId);
+      creatorIds = [ownerId, ...((subAdmins || []) as any[]).map((p: any) => p.id as string)];
+    }
+    let matchesQuery: any = adminClient
       .from("matches")
       .select("id, home_team, away_team, match_date")
       .eq("match_type", "Match Communal")
       .is("zone_id", null)
-      .in("created_by", creatorIds)
       .order("match_date", { ascending: false });
+    if (creatorIds) matchesQuery = matchesQuery.in("created_by", creatorIds);
+    const { data: matches } = await matchesQuery;
 
     const { data: odcavData } = await adminClient
       .from("odcav_settings")
@@ -68,17 +74,22 @@ export default async function RapportsPage({
   // ── Onglet Départemental ──────────────────────────────────────────────────────
   if (isOdcavRole && activeTab === "departemental") {
     const adminClient = await createAdminClient();
+    const isGlobalRole = profile.role === "super_admin" || profile.role === "president_odcav";
     const ownerId = (profile.role === "tresorier" && (profile as any).created_by_admin)
       ? (profile as any).created_by_admin as string : profile.id;
-    const { data: subAdmins } = await adminClient.from("profiles").select("id").eq("created_by_admin", ownerId);
-    const creatorIds = [ownerId, ...((subAdmins || []) as any[]).map((p: any) => p.id as string)];
-    const { data: matches } = await adminClient
+    let creatorIds: string[] | null = null;
+    if (!isGlobalRole) {
+      const { data: subAdmins } = await adminClient.from("profiles").select("id").eq("created_by_admin", ownerId);
+      creatorIds = [ownerId, ...((subAdmins || []) as any[]).map((p: any) => p.id as string)];
+    }
+    let matchesQuery: any = adminClient
       .from("matches")
       .select("id, home_team, away_team, match_date")
       .eq("match_type", "Match Départemental")
       .is("zone_id", null)
-      .in("created_by", creatorIds)
       .order("match_date", { ascending: false });
+    if (creatorIds) matchesQuery = matchesQuery.in("created_by", creatorIds);
+    const { data: matches } = await matchesQuery;
 
     const { data: odcavData } = await adminClient
       .from("odcav_settings")
