@@ -25,7 +25,8 @@ export default async function FondateurDashboardPage({
 
   const now = new Date();
   const today = now.toISOString().split("T")[0];
-  const selectedDate = params.date || today;
+  // Si "Date précise" non renseignée, utiliser chartFrom pour synchroniser les cards avec la période du graphique
+  const selectedDate = params.date || params.chartFrom || today;
   const selectedMonth = selectedDate.substring(0, 7);
 
   // Date ranges for daily/monthly scan queries

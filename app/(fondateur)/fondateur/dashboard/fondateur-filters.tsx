@@ -106,7 +106,7 @@ export function FondateurFilters({ superAdmins }: FondateurFiltersProps) {
         )}
         {(currentChartFrom || currentChartTo) && (
           <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full font-medium">
-            Graphique : {currentChartFrom || "..."} → {currentChartTo || "..."}
+            {!currentDate ? "Stats + Graphique" : "Graphique"} : {currentChartFrom || "..."} → {currentChartTo || "..."}
           </span>
         )}
       </div>
@@ -177,6 +177,9 @@ export function FondateurFilters({ superAdmins }: FondateurFiltersProps) {
               </div>
               <p className="text-xs text-muted-foreground self-end pb-2">
                 Par défaut : 15 derniers jours
+                {!date && chartFrom && (
+                  <span className="text-blue-600 ml-1">· aussi utilisé comme date de référence des cards</span>
+                )}
               </p>
             </div>
           </div>
