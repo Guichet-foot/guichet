@@ -408,7 +408,7 @@ export default async function DashboardPage({
   if (c3AccountId) {
     const [ownRes, communalRes] = await Promise.all([
       adminClient.from("matches").select("id").eq("c3_account_id", c3AccountId),
-      adminClient.from("matches").select("id").eq("is_direct", true).eq("match_type", "Match Communal"),
+      adminClient.from("matches").select("id").eq("is_direct", true).eq("match_type", "Match Communal").is("c3_account_id", null),
     ]);
     c3AllMatchIds = [...new Set([
       ...(ownRes.data || []).map((m: any) => m.id as string),

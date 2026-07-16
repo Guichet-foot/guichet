@@ -15,6 +15,18 @@ async function getOdcavUser() {
   return { user, profile };
 }
 
+// Returns all C3 accounts (for the communal match C3 selector)
+export async function getCommunalC3Accounts(): Promise<{ id: string; name: string }[]> {
+  await requireRole(["super_admin", "fondateur"]);
+  const adminClient = await createAdminClient();
+  const { data } = await adminClient
+    .from("profiles")
+    .select("id, full_name")
+    .eq("role", "c3")
+    .order("full_name");
+  return (data || []).map((p: any) => ({ id: p.id as string, name: (p.full_name as string) || "C3" }));
+}
+
 // Returns all ODCAV president accounts created by the current fondateur
 export async function getFondateurOdcavAccounts(): Promise<{
   id: string;
@@ -112,6 +124,7 @@ export async function createOdcavInterMatch(formData: {
   notes: string;
   inlineCategories?: { name: string; price: number }[];
   odcavId?: string; // When fondateur creates, sets created_by to this ODCAV's ID
+  c3AccountId?: string; // Optional C3 account to assign this communal match to
 }) {
   const ctx = await getOdcavUser();
   if (!ctx) return { error: "Non autorisé" };
@@ -131,6 +144,7 @@ export async function createOdcavInterMatch(formData: {
       notes: formData.notes || null,
       created_by: formData.odcavId ?? ctx.user.id,
       is_direct: true,
+      c3_account_id: formData.c3AccountId || null,
     })
     .select("id")
     .single();
