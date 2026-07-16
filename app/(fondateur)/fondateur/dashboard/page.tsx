@@ -25,9 +25,17 @@ export default async function FondateurDashboardPage({
 
   const now = new Date();
   const today = now.toISOString().split("T")[0];
-  // Si "Date précise" non renseignée, utiliser chartFrom pour synchroniser les cards avec la période du graphique
   const selectedDate = params.date || params.chartFrom || today;
-  const selectedMonth = selectedDate.substring(0, 7);
+
+  // Year: explicit year filter OR year of selectedDate
+  const selectedYear = params.year || selectedDate.substring(0, 4);
+  const yearStart = `${selectedYear}-01-01T00:00:00`;
+  const nextYearStart = `${String(parseInt(selectedYear) + 1)}-01-01T00:00:00`;
+
+  // Month: if date/chartFrom → use that month; if year-only filter → use year + current month
+  const selectedMonth = (params.date || params.chartFrom)
+    ? selectedDate.substring(0, 7)
+    : `${selectedYear}-${today.substring(5, 7)}`;
 
   // Date ranges for daily/monthly scan queries
   const todayStart = `${selectedDate}T00:00:00`;
@@ -38,47 +46,24 @@ export default async function FondateurDashboardPage({
   const monthStart = `${selectedMonth}-01T00:00:00`;
   const nextMonthStart = `${smMonth === 12 ? smYear + 1 : smYear}-${String(smMonth === 12 ? 1 : smMonth + 1).padStart(2, "0")}-01T00:00:00`;
 
-  // ── Fetch everything in parallel ─────────────────────────────────────────
-  const [
-    superAdminsRes,
-    zonesRes,
-    regularTicketsRes,
-    regularScannedRes,
-    bileterieTicketsRes,
-    bilScansRes,
-    matchesRes,
-    platformSettingsRes,
-    todayBilScansRes,
-    todayRegScansRes,
-    monthBilScansRes,
-    monthRegScansRes,
-  ] = await Promise.all([
+  // ── Phase 1: profiles, zones, matches, platform settings ─────────────────
+  const [superAdminsRes, zonesRes, matchesRes, platformSettingsRes] = await Promise.all([
     supabase.from("profiles").select("id, full_name").in("role", ["super_admin", "president_odcav"]),
     supabase.from("zones").select("id, name, created_by"),
-    supabase.from("tickets").select("*", { count: "exact", head: true }).neq("status", "annule"),
-    supabase.from("tickets").select("id", { count: "exact", head: true }).eq("status", "scanne").eq("counts_as_revenue", true),
-    supabase.from("billeterie_tickets").select("*", { count: "exact", head: true }).eq("withdrawn", false),
-    supabase.from("billeterie_scans").select("*", { count: "exact", head: true }),
     supabase.from("matches").select("id, match_date, zone_id, home_team_zone, away_team_zone, status, match_type, created_by"),
     supabase.from("platform_settings").select("fee_per_block, effective_date").order("effective_date", { ascending: true }),
-    supabase.from("billeterie_scans").select("*", { count: "exact", head: true }).gte("scanned_at", todayStart).lt("scanned_at", tomorrowStart),
-    supabase.from("tickets").select("id", { count: "exact", head: true }).eq("status", "scanne").eq("counts_as_revenue", true).gte("scanned_at", todayStart).lt("scanned_at", tomorrowStart),
-    supabase.from("billeterie_scans").select("*", { count: "exact", head: true }).gte("scanned_at", monthStart).lt("scanned_at", nextMonthStart),
-    supabase.from("tickets").select("id", { count: "exact", head: true }).eq("status", "scanne").eq("counts_as_revenue", true).gte("scanned_at", monthStart).lt("scanned_at", nextMonthStart),
   ]);
 
   const allSuperAdmins = (superAdminsRes.data || []) as { id: string; full_name: string }[];
-  // Exclure le compte démo des calculs et de l'affichage
   const superAdmins = allSuperAdmins.filter((sa) => sa.id !== DEMO_ACCOUNT_ID);
   const allZones = (zonesRes.data || []) as { id: string; name: string; created_by: string }[];
-  const totalBillets = (regularTicketsRes.count || 0) + (bileterieTicketsRes.count || 0);
-  const totalBilScans = bilScansRes.count || 0;
-  const allMatches = (matchesRes.data || []).filter((m: any) => m.status !== "annule") as any[];
+  const allMatchesRaw = (matchesRes.data || []) as any[];
+  const allMatches = allMatchesRaw.filter((m: any) => m.status !== "annule") as any[];
   const platformHistory = (platformSettingsRes.data || []) as { fee_per_block: number; effective_date: string }[];
 
   // ── Platform fee helper ───────────────────────────────────────────────────
   function getFraisForDate(dateStr: string): number {
-    let frais = 1000; // default fallback (fee_per_block)
+    let frais = 1000;
     for (const row of platformHistory) {
       if (row.effective_date <= dateStr) frais = row.fee_per_block ?? 1000;
       else break;
@@ -86,9 +71,56 @@ export default async function FondateurDashboardPage({
     return frais;
   }
 
-  // ── Demo zone IDs (computed early, used for billing exclusion + scan subtraction) ──
+  // Demo zone IDs
   const demoZoneIds = allZones.filter((z) => z.created_by === DEMO_ACCOUNT_ID).map((z) => z.id);
   const demoZoneIdsSet = new Set(demoZoneIds);
+  // Demo match IDs from memory (no extra DB query)
+  const demoMatchIds = allMatchesRaw
+    .filter((m) => m.zone_id && demoZoneIdsSet.has(m.zone_id as string))
+    .map((m) => m.id as string);
+
+  // SA filter → compute match IDs for scoping all scan queries
+  const saZoneIds = params.sa
+    ? new Set(allZones.filter((z) => z.created_by === params.sa).map((z) => z.id))
+    : null;
+  let saMatchIds: string[] | null = null;
+  if (saZoneIds) {
+    saMatchIds = allMatches
+      .filter((m) => {
+        if (m.zone_id) return saZoneIds.has(m.zone_id as string);
+        return saZoneIds.has(m.home_team_zone as string) || saZoneIds.has(m.away_team_zone as string);
+      })
+      .map((m) => m.id as string);
+  }
+
+  function withSAFilter(q: any): any {
+    if (saMatchIds === null) return q;
+    if (saMatchIds.length === 0) return q.eq("match_id", "00000000-0000-0000-0000-000000000000");
+    return q.in("match_id", saMatchIds);
+  }
+
+  // ── Phase 2: scan counts (year-scoped + SA-scoped) ───────────────────────
+  const [
+    regularTicketsRes,
+    regularScannedRes,
+    bileterieTicketsRes,
+    bilScansRes,
+    todayBilScansRes,
+    todayRegScansRes,
+    monthBilScansRes,
+    monthRegScansRes,
+  ] = await Promise.all([
+    supabase.from("tickets").select("*", { count: "exact", head: true }).neq("status", "annule"),
+    withSAFilter(supabase.from("tickets").select("id", { count: "exact", head: true }).eq("status", "scanne").eq("counts_as_revenue", true).gte("scanned_at", yearStart).lt("scanned_at", nextYearStart)),
+    supabase.from("billeterie_tickets").select("*", { count: "exact", head: true }).eq("withdrawn", false),
+    withSAFilter(supabase.from("billeterie_scans").select("*", { count: "exact", head: true }).gte("scanned_at", yearStart).lt("scanned_at", nextYearStart)),
+    withSAFilter(supabase.from("billeterie_scans").select("*", { count: "exact", head: true }).gte("scanned_at", todayStart).lt("scanned_at", tomorrowStart)),
+    withSAFilter(supabase.from("tickets").select("id", { count: "exact", head: true }).eq("status", "scanne").eq("counts_as_revenue", true).gte("scanned_at", todayStart).lt("scanned_at", tomorrowStart)),
+    withSAFilter(supabase.from("billeterie_scans").select("*", { count: "exact", head: true }).gte("scanned_at", monthStart).lt("scanned_at", nextMonthStart)),
+    withSAFilter(supabase.from("tickets").select("id", { count: "exact", head: true }).eq("status", "scanne").eq("counts_as_revenue", true).gte("scanned_at", monthStart).lt("scanned_at", nextMonthStart)),
+  ]);
+  const totalBillets = (regularTicketsRes.count || 0) + (bileterieTicketsRes.count || 0);
+  const totalBilScans = bilScansRes.count || 0;
 
   // ── Matches filter : demo exclusion → year → SA ───────────────────────────
   // 1. Always strip demo account zones from billing
@@ -104,11 +136,10 @@ export default async function FondateurDashboardPage({
   }
 
   // 3. SA filter
-  if (params.sa) {
-    const saZoneIds = new Set(allZones.filter((z) => z.created_by === params.sa).map((z) => z.id));
+  if (saZoneIds) {
     visibleMatches = visibleMatches.filter((m: any) => {
-      if (m.zone_id) return saZoneIds.has(m.zone_id as string);
-      return saZoneIds.has(m.home_team_zone as string) || saZoneIds.has(m.away_team_zone as string);
+      if (m.zone_id) return saZoneIds!.has(m.zone_id as string);
+      return saZoneIds!.has(m.home_team_zone as string) || saZoneIds!.has(m.away_team_zone as string);
     });
   }
 
@@ -144,29 +175,25 @@ export default async function FondateurDashboardPage({
 
   const billingByDay = buildBillingByDay(visibleMatches);
 
-  // ── Demo exclusion (total + daily + monthly) ──────────────────────────────
+  // ── Demo exclusion (skipped when SA filter applied — demo naturally excluded) ──
   let demoRegScanned = 0, demoBilScanned = 0;
   let demoDailyBil = 0, demoDailyReg = 0, demoMonthBil = 0, demoMonthReg = 0;
 
-  if (demoZoneIds.length > 0) {
-    const { data: demoMatchData } = await supabase.from("matches").select("id").in("zone_id", demoZoneIds);
-    const demoMatchIds = (demoMatchData || []).map((m: any) => m.id as string);
-    if (demoMatchIds.length > 0) {
-      const [dReg, dBil, dDayBil, dDayReg, dMonBil, dMonReg] = await Promise.all([
-        supabase.from("tickets").select("id", { count: "exact", head: true }).eq("status", "scanne").eq("counts_as_revenue", true).in("match_id", demoMatchIds),
-        supabase.from("billeterie_scans").select("id", { count: "exact", head: true }).in("match_id", demoMatchIds),
-        supabase.from("billeterie_scans").select("*", { count: "exact", head: true }).in("match_id", demoMatchIds).gte("scanned_at", todayStart).lt("scanned_at", tomorrowStart),
-        supabase.from("tickets").select("id", { count: "exact", head: true }).eq("status", "scanne").eq("counts_as_revenue", true).in("match_id", demoMatchIds).gte("scanned_at", todayStart).lt("scanned_at", tomorrowStart),
-        supabase.from("billeterie_scans").select("*", { count: "exact", head: true }).in("match_id", demoMatchIds).gte("scanned_at", monthStart).lt("scanned_at", nextMonthStart),
-        supabase.from("tickets").select("id", { count: "exact", head: true }).eq("status", "scanne").eq("counts_as_revenue", true).in("match_id", demoMatchIds).gte("scanned_at", monthStart).lt("scanned_at", nextMonthStart),
-      ]);
-      demoRegScanned = dReg.count || 0;
-      demoBilScanned = dBil.count || 0;
-      demoDailyBil = dDayBil.count || 0;
-      demoDailyReg = dDayReg.count || 0;
-      demoMonthBil = dMonBil.count || 0;
-      demoMonthReg = dMonReg.count || 0;
-    }
+  if (demoMatchIds.length > 0 && saMatchIds === null) {
+    const [dReg, dBil, dDayBil, dDayReg, dMonBil, dMonReg] = await Promise.all([
+      supabase.from("tickets").select("id", { count: "exact", head: true }).eq("status", "scanne").eq("counts_as_revenue", true).in("match_id", demoMatchIds).gte("scanned_at", yearStart).lt("scanned_at", nextYearStart),
+      supabase.from("billeterie_scans").select("id", { count: "exact", head: true }).in("match_id", demoMatchIds).gte("scanned_at", yearStart).lt("scanned_at", nextYearStart),
+      supabase.from("billeterie_scans").select("*", { count: "exact", head: true }).in("match_id", demoMatchIds).gte("scanned_at", todayStart).lt("scanned_at", tomorrowStart),
+      supabase.from("tickets").select("id", { count: "exact", head: true }).eq("status", "scanne").eq("counts_as_revenue", true).in("match_id", demoMatchIds).gte("scanned_at", todayStart).lt("scanned_at", tomorrowStart),
+      supabase.from("billeterie_scans").select("*", { count: "exact", head: true }).in("match_id", demoMatchIds).gte("scanned_at", monthStart).lt("scanned_at", nextMonthStart),
+      supabase.from("tickets").select("id", { count: "exact", head: true }).eq("status", "scanne").eq("counts_as_revenue", true).in("match_id", demoMatchIds).gte("scanned_at", monthStart).lt("scanned_at", nextMonthStart),
+    ]);
+    demoRegScanned = dReg.count || 0;
+    demoBilScanned = dBil.count || 0;
+    demoDailyBil = dDayBil.count || 0;
+    demoDailyReg = dDayReg.count || 0;
+    demoMonthBil = dMonBil.count || 0;
+    demoMonthReg = dMonReg.count || 0;
   }
 
   // ── Revenue cards (scans × 10 FCFA — même modèle pour les 3 cartes) ──────
@@ -279,7 +306,7 @@ export default async function FondateurDashboardPage({
               <div>
                 <p className="text-xs text-green-700 font-medium">Revenus totaux</p>
                 <p className="text-2xl font-bold text-green-800">{formatFCFA(revenusTotal)}</p>
-                <p className="text-[11px] text-green-600 mt-0.5">{totalNonDemoScanned.toLocaleString("fr-FR")} billets scannés × 10 FCFA</p>
+                <p className="text-[11px] text-green-600 mt-0.5">{selectedYear} · {totalNonDemoScanned.toLocaleString("fr-FR")} billets × 10 FCFA</p>
               </div>
               <Trophy className="h-8 w-8 text-green-300" />
             </div>

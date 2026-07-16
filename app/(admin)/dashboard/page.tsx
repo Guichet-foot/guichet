@@ -403,6 +403,20 @@ export default async function DashboardPage({
   // ── Zone-specific Dashboard (admin_zone, c3, or ODCAV with zone) ───────────
   const zoneFilter = effectiveZoneId;
 
+  // C3 voit ses propres matchs + tous les matchs communaux is_direct (créés par les SA)
+  let c3AllMatchIds: string[] | null = null;
+  if (c3AccountId) {
+    const [ownRes, communalRes] = await Promise.all([
+      adminClient.from("matches").select("id").eq("c3_account_id", c3AccountId),
+      adminClient.from("matches").select("id").eq("is_direct", true).eq("match_type", "Match Communal"),
+    ]);
+    c3AllMatchIds = [...new Set([
+      ...(ownRes.data || []).map((m: any) => m.id as string),
+      ...(communalRes.data || []).map((m: any) => m.id as string),
+    ])];
+  }
+  const c3MatchIdSet = c3AllMatchIds ? new Set(c3AllMatchIds) : null;
+
   // Legacy period parsing (backward compat with ?date, ?year, ?match)
   const filterMatchId = params.match || null;
   const filterDate    = params.date  || null;
@@ -442,8 +456,10 @@ export default async function DashboardPage({
       .gte("match_date", dateStart2.toISOString())
       .lte("match_date", dateEnd2.toISOString());
   }
-  if (c3AccountId)  matchesPeriodQuery = (matchesPeriodQuery as any).eq("c3_account_id", c3AccountId);
-  else if (zoneFilter) matchesPeriodQuery = matchesPeriodQuery.eq("zone_id", zoneFilter);
+  if (c3AllMatchIds !== null) {
+    if (c3AllMatchIds.length > 0) matchesPeriodQuery = (matchesPeriodQuery as any).in("id", c3AllMatchIds);
+    else matchesPeriodQuery = (matchesPeriodQuery as any).eq("id", "00000000-0000-0000-0000-000000000000");
+  } else if (zoneFilter) matchesPeriodQuery = matchesPeriodQuery.eq("zone_id", zoneFilter);
 
   const { data: matchesPeriodData } = await matchesPeriodQuery;
   const matchIdsInPeriod = (matchesPeriodData || []).map((m: any) => m.id as string);
@@ -540,8 +556,10 @@ export default async function DashboardPage({
   let matchQuery2 = adminClient.from("matches").select("*")
     .gte("match_date", now).in("status", ["programme", "en_cours"])
     .order("match_date").limit(5);
-  if (c3AccountId)   matchQuery2 = matchQuery2.eq("c3_account_id", c3AccountId);
-  else if (zoneFilter) matchQuery2 = matchQuery2.eq("zone_id", zoneFilter);
+  if (c3AllMatchIds !== null) {
+    if (c3AllMatchIds.length > 0) matchQuery2 = (matchQuery2 as any).in("id", c3AllMatchIds);
+    else matchQuery2 = (matchQuery2 as any).eq("id", "00000000-0000-0000-0000-000000000000");
+  } else if (zoneFilter) matchQuery2 = matchQuery2.eq("zone_id", zoneFilter);
   const { data: upcomingMatches } = await matchQuery2;
 
   // 7-day chart
@@ -553,8 +571,8 @@ export default async function DashboardPage({
     .gte("sold_at", sevenDaysAgo.toISOString())
     .lte("sold_at", new Date().toISOString())
     .neq("status", "annule");
-  const filteredWeekTickets = ((c3AccountId
-    ? weekRaw?.filter((t: any) => t.match?.c3_account_id === c3AccountId)
+  const filteredWeekTickets = ((c3MatchIdSet
+    ? weekRaw?.filter((t: any) => c3MatchIdSet.has(t.match_id as string))
     : zoneFilter
     ? weekRaw?.filter((t: any) => t.match?.zone_id === zoneFilter)
     : weekRaw) || []) as any[];
@@ -603,8 +621,10 @@ export default async function DashboardPage({
   let last5Query = adminClient.from("matches")
     .select("id, home_team, away_team, match_date")
     .eq("status", "termine").order("match_date", { ascending: false }).limit(5);
-  if (c3AccountId)   last5Query = last5Query.eq("c3_account_id", c3AccountId);
-  else if (zoneFilter) last5Query = last5Query.eq("zone_id", zoneFilter);
+  if (c3AllMatchIds !== null) {
+    if (c3AllMatchIds.length > 0) last5Query = (last5Query as any).in("id", c3AllMatchIds);
+    else last5Query = (last5Query as any).eq("id", "00000000-0000-0000-0000-000000000000");
+  } else if (zoneFilter) last5Query = last5Query.eq("zone_id", zoneFilter);
   const { data: last5Matches } = await last5Query;
   const last5MatchIds = last5Matches?.map((m: any) => m.id) || [];
   let last5Revenue: { id: string; teams: string; date: string; revenue: number }[] = [];
@@ -621,8 +641,10 @@ export default async function DashboardPage({
   // Match filter list
   let allMatchesQuery = adminClient.from("matches").select("id, home_team, away_team")
     .order("match_date", { ascending: false });
-  if (c3AccountId)   allMatchesQuery = allMatchesQuery.eq("c3_account_id", c3AccountId);
-  else if (zoneFilter) allMatchesQuery = allMatchesQuery.eq("zone_id", zoneFilter);
+  if (c3AllMatchIds !== null) {
+    if (c3AllMatchIds.length > 0) allMatchesQuery = (allMatchesQuery as any).in("id", c3AllMatchIds);
+    else allMatchesQuery = (allMatchesQuery as any).eq("id", "00000000-0000-0000-0000-000000000000");
+  } else if (zoneFilter) allMatchesQuery = allMatchesQuery.eq("zone_id", zoneFilter);
   const { data: allMatchesList } = await allMatchesQuery;
   const filterMatches = (allMatchesList || []).map((m: any) => ({
     id: m.id, label: `${m.home_team} vs ${m.away_team}`,

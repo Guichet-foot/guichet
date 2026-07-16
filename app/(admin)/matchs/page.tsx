@@ -71,9 +71,26 @@ export default async function MatchsPage({
     sessionOpenUntil = await getC3ScanSession(c3AccountId);
   }
 
-  let query = supabase.from("matches").select("*").order("match_date", { ascending: false });
-  if (c3AccountId) query = query.eq("c3_account_id", c3AccountId);
-  else if (effectiveZoneId) query = query.eq("zone_id", effectiveZoneId);
+  // C3 voit ses propres matchs + tous les matchs communaux is_direct (créés par les SA)
+  let c3AllMatchIds: string[] | null = null;
+  if (c3AccountId) {
+    const [ownRes, communalRes] = await Promise.all([
+      adminClient.from("matches").select("id").eq("c3_account_id", c3AccountId),
+      adminClient.from("matches").select("id").eq("is_direct", true).eq("match_type", "Match Communal"),
+    ]);
+    c3AllMatchIds = [...new Set([
+      ...(ownRes.data || []).map((m: any) => m.id as string),
+      ...(communalRes.data || []).map((m: any) => m.id as string),
+    ])];
+  }
+
+  let query: any = supabase.from("matches").select("*").order("match_date", { ascending: false });
+  if (c3AllMatchIds !== null) {
+    if (c3AllMatchIds.length > 0) query = query.in("id", c3AllMatchIds);
+    else query = query.eq("id", "00000000-0000-0000-0000-000000000000");
+  } else if (effectiveZoneId) {
+    query = query.eq("zone_id", effectiveZoneId);
+  }
 
   const { data: matches } = await query;
 

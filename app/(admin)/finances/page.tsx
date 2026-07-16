@@ -55,6 +55,19 @@ export default async function FinancesPage({
   const adminSupabase = await createAdminClient();
   const zoneId = effectiveZoneId;
 
+  // C3 voit ses propres matchs + tous les matchs communaux is_direct (créés par les SA)
+  let c3AllMatchIds: string[] | null = null;
+  if (c3AccountId) {
+    const [ownRes, communalRes] = await Promise.all([
+      adminSupabase.from("matches").select("id").eq("c3_account_id", c3AccountId),
+      adminSupabase.from("matches").select("id").eq("is_direct", true).eq("match_type", "Match Communal"),
+    ]);
+    c3AllMatchIds = [...new Set([
+      ...(ownRes.data || []).map((m: any) => m.id as string),
+      ...(communalRes.data || []).map((m: any) => m.id as string),
+    ])];
+  }
+
   const today = new Date().toISOString().split("T")[0];
   const period = (params.period as Period) || "jour";
   const filterMatchId = params.match || null;
@@ -115,8 +128,10 @@ export default async function FinancesPage({
       .gte("match_date", dateStart.toISOString())
       .lte("match_date", dateEnd.toISOString());
   }
-  if (c3AccountId) matchesPeriodQuery = (matchesPeriodQuery as any).eq("c3_account_id", c3AccountId);
-  else if (zoneId) matchesPeriodQuery = matchesPeriodQuery.eq("zone_id", zoneId);
+  if (c3AllMatchIds !== null) {
+    if (c3AllMatchIds.length > 0) matchesPeriodQuery = (matchesPeriodQuery as any).in("id", c3AllMatchIds);
+    else matchesPeriodQuery = (matchesPeriodQuery as any).eq("id", "00000000-0000-0000-0000-000000000000");
+  } else if (zoneId) matchesPeriodQuery = matchesPeriodQuery.eq("zone_id", zoneId);
 
   const { data: matchesInPeriod } = await matchesPeriodQuery;
   const matchIdsInPeriod = (matchesInPeriod || []).map((m: any) => m.id as string);
@@ -254,8 +269,10 @@ export default async function FinancesPage({
     .from("matches")
     .select("id, home_team, away_team")
     .order("match_date", { ascending: false });
-  if (c3AccountId) matchesListQuery = matchesListQuery.eq("c3_account_id", c3AccountId);
-  else if (zoneId) matchesListQuery = matchesListQuery.eq("zone_id", zoneId);
+  if (c3AllMatchIds !== null) {
+    if (c3AllMatchIds.length > 0) matchesListQuery = (matchesListQuery as any).in("id", c3AllMatchIds);
+    else matchesListQuery = (matchesListQuery as any).eq("id", "00000000-0000-0000-0000-000000000000");
+  } else if (zoneId) matchesListQuery = matchesListQuery.eq("zone_id", zoneId);
   const { data: matchesList } = await matchesListQuery;
   const filterMatches = (matchesList || []).map((m: any) => ({
     id: m.id,
