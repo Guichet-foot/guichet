@@ -48,48 +48,19 @@ export async function GET(
   const body = renderTicketBlock(ticket, qrDataUrl, matchDateFmt, soldAtFmt, fmt, logoDataUrl);
 
   const html = `<!DOCTYPE html>
-<html lang="fr" style="margin:0;padding:0;">
+<html lang="fr">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>${ticket.serial_number}</title>
 <style>${getPrintStyles(fmt)}</style>
-<style>
-@media print {
-  /* Single-ticket isolation: hide everything, show only .print-ticket.
-     position:absolute at (0,0) lets the browser compute page height from
-     the ticket content only — prevents trailing whitespace on thermal printers. */
-  body * { visibility: hidden; }
-  .print-ticket, .print-ticket * { visibility: visible; }
-  .print-ticket {
-    position: absolute !important;
-    left: 0 !important;
-    top: 0 !important;
-  }
-}
-</style>
 </head>
-<body style="margin:0;padding:0;">
+<body>
 ${body}
 <button class="no-print" onclick="window.print()" style="display:block;margin:5mm auto;padding:2mm 5mm;font-size:10pt;cursor:pointer;">Imprimer</button>
 <script>
 window.onload = function() {
-  var ticket = document.querySelector('.print-ticket');
-  var pageW = '${fmt === "58" ? "58mm" : "72mm"}';
-  if (ticket) {
-    var rect = ticket.getBoundingClientRect();
-    // Convert px→mm (96dpi reference pixel)
-    var hMm = Math.ceil(rect.height * 25.4 / 96) + 3;
-    // Measure top offset: any space above the ticket (body padding, etc.)
-    var topOffsetMm = Math.ceil(rect.top * 25.4 / 96);
-    // Negative margin-top cancels the hardware top margin the XPRINTER driver adds.
-    // We negate the measured top offset so content starts at the very top of the paper.
-    var topMarginMm = topOffsetMm > 0 ? -topOffsetMm : 0;
-    var s = document.createElement('style');
-    s.textContent = '@page { size: ' + pageW + ' ' + hMm + 'mm; margin-top: ' + topMarginMm + 'mm; margin-right: 0mm; margin-bottom: 0mm; margin-left: 0mm; }';
-    document.head.appendChild(s);
-  }
-  setTimeout(function() { window.print(); }, 500);
+  setTimeout(function() { window.print(); }, 300);
   window.addEventListener('afterprint', function() {
     if (window.opener) window.close();
   });

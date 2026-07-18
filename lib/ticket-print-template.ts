@@ -8,8 +8,10 @@ function trunc(s: string, max: number): string {
 export function getPrintStyles(fmt: PrintFormat): string {
   const is58 = fmt === "58";
 
-  // 72mm = printable area of an 80mm thermal roll (XP-80T and similar)
-  const width    = is58 ? "58mm"  : "72mm";
+  // 72mm = printable area of an 80mm thermal roll (Epson TM-T20II and similar)
+  const width      = is58 ? "58mm"  : "72mm";
+  // Ajuster pageHeight si le bas est coupé (monter) ou s'il reste trop de vide (descendre)
+  const pageHeight = is58 ? "115mm" : "105mm";
   const padV     = is58 ? "1.5mm" : "2mm";
   const padH     = is58 ? "1.5mm" : "2mm";
   const basePt   = is58 ? "7.5"   : "8.5";
@@ -87,32 +89,33 @@ export function getPrintStyles(fmt: PrintFormat): string {
   .bon-match { font-size: ${bonPt}pt; font-weight: 900; letter-spacing: 1.5px; margin-top: 0.5mm; }
 
   @page {
-    size: ${width} auto;
+    size: ${width} ${pageHeight};
     margin: 0;
   }
 
   @media print {
     html,
     body {
-      width: ${width};
+      width: ${width} !important;
       margin: 0 !important;
       padding: 0 !important;
-      height: auto !important;
-      min-height: 0 !important;
-      overflow: visible !important;
     }
     .print-ticket {
       width: ${width} !important;
-      height: auto !important;
-      min-height: 0 !important;
-      max-height: none !important;
-      overflow: visible !important;
-      padding: ${padV} ${padH} !important;
+      height: ${pageHeight} !important;
+      min-height: ${pageHeight} !important;
+      max-height: ${pageHeight} !important;
       margin: 0 !important;
-      page-break-after: avoid !important;
-      break-after: avoid !important;
-      page-break-inside: avoid !important;
+      padding: ${padV} ${padH} !important;
+      overflow: hidden !important;
       break-inside: avoid !important;
+      page-break-inside: avoid !important;
+      break-after: page !important;
+      page-break-after: always !important;
+    }
+    .print-ticket:last-child {
+      break-after: auto !important;
+      page-break-after: auto !important;
     }
     .no-print {
       display: none !important;
@@ -121,8 +124,7 @@ export function getPrintStyles(fmt: PrintFormat): string {
 
   @media screen {
     body { max-width: ${width}; margin: 10px auto; border: 1px solid #ccc; }
-    .print-ticket { padding: ${padV} ${padH}; }
-    .ticket-wrap { border: 1px solid #ddd; margin-bottom: 12px; }
+    .print-ticket { padding: ${padV} ${padH}; border-bottom: 1px dashed #aaa; margin-bottom: 8px; }
     .no-print { display: block !important; }
   }`;
 }

@@ -54,24 +54,20 @@ export async function GET(request: Request) {
     tickets.reduce((s: number, t: any) => s + t.price, 0)
   );
 
-  /* Inject a page-break div between tickets (never after the last one) */
-  const pageBreak = `<div style="break-after:page;page-break-after:always;height:0;"></div>`;
-  const blocksHtml = ticketBlocks
-    .map((b, i) => (i < ticketBlocks.length - 1 ? `<div class="ticket-wrap">${b}</div>${pageBreak}` : `<div class="ticket-wrap">${b}</div>`))
-    .join("\n");
+  // Les billets sont des blocs directs dans <body> — le CSS gère les sauts de page
+  const blocksHtml = ticketBlocks.join("\n");
 
   const html = `<!DOCTYPE html>
-<html lang="fr" style="margin:0;padding:0;">
+<html lang="fr">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Billets — ${tickets[0].match.home_team} vs ${tickets[0].match.away_team}</title>
 <style>
 ${getPrintStyles(fmt)}
-.ticket-wrap { page-break-inside: avoid; }
 </style>
 </head>
-<body style="margin:0;padding:0;">
+<body>
 ${blocksHtml}
 <div class="no-print" style="padding:5mm 3mm;border-top:2px solid #000;text-align:center;margin-top:5mm;">
   <p style="font-size:11pt;font-weight:bold;margin-bottom:3mm;">
@@ -83,25 +79,7 @@ ${blocksHtml}
 </div>
 <script>
 window.onload = function() {
-  var tickets = document.querySelectorAll('.print-ticket');
-  var pageW = '${fmt === "58" ? "58mm" : "72mm"}';
-  if (tickets.length > 0) {
-    var maxH = 0;
-    var firstTop = tickets[0].getBoundingClientRect().top;
-    tickets.forEach(function(t) {
-      var h = t.getBoundingClientRect().height;
-      if (h > maxH) maxH = h;
-    });
-    var hMm = Math.ceil(maxH * 25.4 / 96) + 3;
-    // Measure top offset: any space above the first ticket
-    var topOffsetMm = Math.ceil(firstTop * 25.4 / 96);
-    // Negative margin-top cancels the hardware top margin the XPRINTER driver adds.
-    var topMarginMm = topOffsetMm > 0 ? -topOffsetMm : 0;
-    var s = document.createElement('style');
-    s.textContent = '@page { size: ' + pageW + ' ' + hMm + 'mm; margin-top: ' + topMarginMm + 'mm; margin-right: 0mm; margin-bottom: 0mm; margin-left: 0mm; }';
-    document.head.appendChild(s);
-  }
-  setTimeout(function() { window.print(); }, 500);
+  setTimeout(function() { window.print(); }, 300);
   window.addEventListener('afterprint', function() {
     if (window.opener) window.close();
   });
