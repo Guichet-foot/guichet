@@ -17,7 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, PackageX, ArrowRightLeft } from "lucide-react";
+import { Loader2, PackageX, ArrowRightLeft, PackageCheck } from "lucide-react";
 import { toast } from "sonner";
 import { formatFCFA, formatDateShort } from "@/lib/format";
 import {
@@ -158,9 +158,28 @@ export function UnsoldModal({ matchId, matchName, open, onClose }: Props) {
           <form onSubmit={handleSave} className="space-y-5">
             {/* Catégories */}
             <div className="space-y-3">
-              <p className="text-xs text-muted-foreground">
-                Saisir le nombre de billets invendus par catégorie. Les billets scannés à l&apos;entrée ne peuvent pas être déclarés invendus.
-              </p>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs text-muted-foreground">
+                  Saisir le nombre de billets invendus par catégorie. Les billets scannés ne peuvent pas être déclarés invendus.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0 text-xs"
+                  onClick={() => {
+                    const all: Record<string, string> = {};
+                    categories.forEach((c) => {
+                      const max = c.vendu_count + c.annule_count;
+                      all[c.id] = max > 0 ? String(max) : "0";
+                    });
+                    setUnsoldCounts(all);
+                  }}
+                >
+                  <PackageCheck className="h-3.5 w-3.5 mr-1" />
+                  Tout invendu
+                </Button>
+              </div>
               {categories.map((cat) => {
                 const totalPrinted = cat.vendu_count + cat.scanne_count + cat.annule_count;
                 const maxUnsold = cat.vendu_count + cat.annule_count;
