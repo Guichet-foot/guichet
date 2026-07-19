@@ -92,7 +92,7 @@ export default async function EquipesPage({
           </Link>
         </div>
 
-        {allTeams.length === 0 ? (
+        {allTeams.length === 0 && zonesData.length === 0 ? (
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-12 text-muted-foreground">
               <Shield className="h-12 w-12 mb-4" />
@@ -110,6 +110,7 @@ export default async function EquipesPage({
                     <Badge variant="secondary" className="ml-auto text-xs font-normal">
                       {zoneTeams.length} équipe{zoneTeams.length !== 1 ? "s" : ""}
                     </Badge>
+                    <TeamFormDialog zoneId={zone.id} userRole={profile.role} />
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
@@ -122,6 +123,7 @@ export default async function EquipesPage({
                           <TableHead>Nom ASC</TableHead>
                           <TableHead className="hidden sm:table-cell">Président</TableHead>
                           <TableHead>Couleurs</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -131,6 +133,13 @@ export default async function EquipesPage({
                             <TableCell className="hidden sm:table-cell text-sm">{team.president || "—"}</TableCell>
                             <TableCell>
                               {team.colors ? <TeamColorSwatches colors={team.colors} /> : "—"}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <TeamActions
+                                team={{ id: team.id, name: team.name, president: team.president, delegates: team.delegates || [], colors: team.colors, zone_id: team.zone_id }}
+                                zoneId={zone.id}
+                                userRole={profile.role}
+                              />
                             </TableCell>
                           </TableRow>
                         ))}
