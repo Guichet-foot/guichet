@@ -4,6 +4,7 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
+import { fetchAll } from "@/lib/supabase/paginate";
 
 // Lecture seule pour president_odcav / tresorier : matchs terminés d'une zone spécifique
 export async function getFinishedMatchesForZone(zoneId: string): Promise<any[]> {
@@ -213,37 +214,39 @@ export async function declareUnsoldByCategory(
   const adminClient = await createAdminClient();
 
   // Étape 1 : remettre tous les billets annulés de ce match en "vendu"
-  const { data: currentAnnule } = await adminClient
-    .from("tickets")
-    .select("id")
-    .eq("match_id", matchId)
-    .eq("status", "annule");
+  const currentAnnule = await fetchAll<{ id: string }>((from, to) =>
+    adminClient.from("tickets").select("id").eq("match_id", matchId).eq("status", "annule").range(from, to)
+  );
 
-  if (currentAnnule && currentAnnule.length > 0) {
+  if (currentAnnule.length > 0) {
     await adminClient
       .from("tickets")
       .update({ status: "vendu" })
-      .in("id", currentAnnule.map((t: any) => t.id));
+      .in("id", currentAnnule.map((t) => t.id));
   }
 
   // Étape 2 : annuler le nombre déclaré par catégorie
+  // Utilise fetchAll pour contourner la limite 1000 lignes de Supabase/PostgREST
   let totalUnsold = 0;
   for (const { categoryId, count } of categoryUnsolds) {
     if (count <= 0) continue;
-    const { data: vendus } = await adminClient
-      .from("tickets")
-      .select("id")
-      .eq("match_id", matchId)
-      .eq("category_id", categoryId)
-      .eq("status", "vendu")
-      .limit(count);
+    const allVendus = await fetchAll<{ id: string }>((from, to) =>
+      adminClient
+        .from("tickets")
+        .select("id")
+        .eq("match_id", matchId)
+        .eq("category_id", categoryId)
+        .eq("status", "vendu")
+        .range(from, to)
+    );
+    const vendusToAnnul = allVendus.slice(0, count);
 
-    if (!vendus || vendus.length === 0) continue;
+    if (vendusToAnnul.length === 0) continue;
     await adminClient
       .from("tickets")
       .update({ status: "annule" })
-      .in("id", vendus.map((t: any) => t.id));
-    totalUnsold += vendus.length;
+      .in("id", vendusToAnnul.map((t) => t.id));
+    totalUnsold += vendusToAnnul.length;
   }
 
   // Étape 3 : mettre à jour match_unsold

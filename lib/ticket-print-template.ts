@@ -10,8 +10,8 @@ export function getPrintStyles(fmt: PrintFormat): string {
 
   // 72mm = printable area of an 80mm thermal roll (Epson TM-T20II and similar)
   const width      = is58 ? "58mm"  : "72mm";
-  // Ajuster pageHeight si le bas est coupé (monter) ou s'il reste trop de vide (descendre)
-  const pageHeight = is58 ? "115mm" : "105mm";
+  // Ajuster pageHeight si le bas est coupé (augmenter) ou s'il reste trop de vide (diminuer)
+  const pageHeight = is58 ? "135mm" : "120mm";
   const padV     = is58 ? "1.5mm" : "2mm";
   const padH     = is58 ? "1.5mm" : "2mm";
   const basePt   = is58 ? "7.5"   : "8.5";
@@ -107,7 +107,7 @@ export function getPrintStyles(fmt: PrintFormat): string {
       max-height: ${pageHeight} !important;
       margin: 0 !important;
       padding: ${padV} ${padH} !important;
-      overflow: hidden !important;
+      overflow: visible !important;
       break-inside: avoid !important;
       page-break-inside: avoid !important;
       break-after: page !important;
