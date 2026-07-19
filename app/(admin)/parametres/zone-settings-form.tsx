@@ -2,7 +2,6 @@
 
 import { useRef, useState } from "react";
 import { updateZoneSettings } from "@/lib/actions/zone-actions";
-import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -57,21 +56,19 @@ export function ZoneSettingsForm({ zoneId, initialData }: ZoneSettingsFormProps)
 
     setUploading(true);
     try {
-      const supabase = createClient();
-      const ext = file.name.split(".").pop() || "png";
-      const path = `zone-logos/zone-${zoneId}.${ext}`;
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("zoneId", zoneId);
 
-      const { error: uploadError } = await supabase.storage
-        .from("odcav-assets")
-        .upload(path, file, { upsert: true, contentType: file.type });
+      const res = await fetch("/api/zones/logo", { method: "POST", body: fd });
+      const json = await res.json();
 
-      if (uploadError) {
-        toast.error(`Erreur upload : ${uploadError.message}`);
+      if (!res.ok) {
+        toast.error(`Erreur upload : ${json.error}`);
         return;
       }
 
-      const { data: { publicUrl } } = supabase.storage.from("odcav-assets").getPublicUrl(path);
-      setLogo(`${publicUrl}?t=${Date.now()}`);
+      setLogo(`${json.url}?t=${Date.now()}`);
       toast.success("Logo uploadé avec succès");
     } catch {
       toast.error("Erreur lors de l'upload");
