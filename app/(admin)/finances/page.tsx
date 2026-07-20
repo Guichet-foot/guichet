@@ -150,79 +150,89 @@ export default async function FinancesPage({
   let bilScanned = 0;
   let bilRevenue = 0;
 
-  if (matchIdsInPeriod.length > 0) {
-    const matchIdSet = new Set(matchIdsInPeriod);
-    const { data: allBils } = await adminSupabase.from("billeterie").select("id, price, match_ids");
+  {
+    // Pour les scans : utiliser TOUS les matchs C3 (pas seulement ceux de la période)
+    // car le scan peut être attribué à un match antérieur encore en_cours via la chaîne.
+    const scanMatchIds = c3AllMatchIds !== null ? c3AllMatchIds : matchIdsInPeriod;
+    if (scanMatchIds.length > 0) {
+      const scanMatchIdSet = new Set(scanMatchIds);
+      const { data: allBils } = await adminSupabase.from("billeterie").select("id, price, match_ids");
 
-    const bilsInPeriod = (allBils || []).filter((b: any) =>
-      (b.match_ids || []).some((id: string) => matchIdSet.has(id))
-    );
-    const bilIds = bilsInPeriod.map((b: any) => b.id as string);
-    const bilPriceMap: Record<string, number> = {};
-    bilsInPeriod.forEach((b: any) => { bilPriceMap[b.id] = b.price || 0; });
+      const allC3Bils = (allBils || []).filter((b: any) =>
+        (b.match_ids || []).some((id: string) => scanMatchIdSet.has(id))
+      );
+      const allC3BilIds = allC3Bils.map((b: any) => b.id as string);
+      const bilPriceMap: Record<string, number> = {};
+      allC3Bils.forEach((b: any) => { bilPriceMap[b.id] = b.price || 0; });
 
-    if (bilIds.length > 0) {
-      const allBilMatchIds = [...new Set(
-        bilsInPeriod.flatMap((b: any) => (b.match_ids || []) as string[])
-      )];
+      const periodMatchSet = new Set(matchIdsInPeriod);
+      const bilsInPeriod = allC3Bils.filter((b: any) =>
+        (b.match_ids || []).some((id: string) => periodMatchSet.has(id))
+      );
+      const periodBilIdSet = new Set(bilsInPeriod.map((b: any) => b.id as string));
 
-      const [bilAllTickets, allBilScans] = await Promise.all([
-        fetchAll<any>((from, to) =>
-          adminSupabase.from("billeterie_tickets")
-            .select("id, billeterie_id, withdrawn")
-            .in("billeterie_id", bilIds)
-            .range(from, to)
-        ),
-        // Requête par match_id (liste courte) → pas de limite URL ; scanned_at pour dater
-        fetchAll<any>((from, to) =>
-          adminSupabase.from("billeterie_scans").select("ticket_id, scanned_at")
-            .in("match_id", allBilMatchIds).range(from, to)
-        ),
-      ]);
+      if (allC3BilIds.length > 0) {
+        const allBilMatchIds = [...new Set(
+          allC3Bils.flatMap((b: any) => (b.match_ids || []) as string[])
+        )];
 
-      const nonWithdrawnByBil: Record<string, number> = {};
-      const ticketIdToBilId: Record<string, string> = {};
-      bilAllTickets.forEach((t: any) => {
-        ticketIdToBilId[t.id as string] = t.billeterie_id as string;
-        if (!t.withdrawn) {
-          nonWithdrawnByBil[t.billeterie_id] = (nonWithdrawnByBil[t.billeterie_id] || 0) + 1;
-        }
-      });
+        const [bilAllTickets, allBilScans] = await Promise.all([
+          fetchAll<any>((from, to) =>
+            adminSupabase.from("billeterie_tickets")
+              .select("id, billeterie_id, withdrawn")
+              .in("billeterie_id", allC3BilIds)
+              .range(from, to)
+          ),
+          fetchAll<any>((from, to) =>
+            adminSupabase.from("billeterie_scans").select("ticket_id, scanned_at")
+              .in("match_id", allBilMatchIds).range(from, to)
+          ),
+        ]);
 
-      const bilTicketIdSet = new Set(Object.keys(ticketIdToBilId));
-      const relevantScans = allBilScans.filter((s: any) => bilTicketIdSet.has(s.ticket_id as string));
+        const nonWithdrawnByBil: Record<string, number> = {};
+        const ticketIdToBilId: Record<string, string> = {};
+        bilAllTickets.forEach((t: any) => {
+          ticketIdToBilId[t.id as string] = t.billeterie_id as string;
+          if (!t.withdrawn) {
+            nonWithdrawnByBil[t.billeterie_id] = (nonWithdrawnByBil[t.billeterie_id] || 0) + 1;
+          }
+        });
 
-      const dateStartMs = dateStart.getTime();
-      const dateEndMs = dateEnd.getTime();
+        const bilTicketIdSet = new Set(Object.keys(ticketIdToBilId));
+        const relevantScans = allBilScans.filter((s: any) => bilTicketIdSet.has(s.ticket_id as string));
 
-      const totalScansByBil: Record<string, number> = {};
-      const periodScansByBil: Record<string, number> = {};
-      relevantScans.forEach((s: any) => {
-        const bilId = ticketIdToBilId[s.ticket_id as string];
-        if (!bilId) return;
-        totalScansByBil[bilId] = (totalScansByBil[bilId] || 0) + 1;
-        const scannedAtMs = new Date(s.scanned_at as string).getTime();
-        if (scannedAtMs >= dateStartMs && scannedAtMs <= dateEndMs) {
-          periodScansByBil[bilId] = (periodScansByBil[bilId] || 0) + 1;
-        }
-      });
+        const dateStartMs = dateStart.getTime();
+        const dateEndMs = dateEnd.getTime();
 
-      bilPrinted = bilIds.reduce((sum: number, bilId: string) => {
-        const nonWithdrawn = nonWithdrawnByBil[bilId] || 0;
-        const totalScans = totalScansByBil[bilId] || 0;
-        const periodScansCount = periodScansByBil[bilId] || 0;
-        return sum + Math.max(0, nonWithdrawn - (totalScans - periodScansCount));
-      }, 0);
+        const totalScansByBil: Record<string, number> = {};
+        const periodScansByBil: Record<string, number> = {};
+        relevantScans.forEach((s: any) => {
+          const bilId = ticketIdToBilId[s.ticket_id as string];
+          if (!bilId) return;
+          totalScansByBil[bilId] = (totalScansByBil[bilId] || 0) + 1;
+          const scannedAtMs = new Date(s.scanned_at as string).getTime();
+          if (scannedAtMs >= dateStartMs && scannedAtMs <= dateEndMs) {
+            periodScansByBil[bilId] = (periodScansByBil[bilId] || 0) + 1;
+          }
+        });
 
-      const periodScans = relevantScans.filter((s: any) => {
-        const scannedAtMs = new Date(s.scanned_at as string).getTime();
-        return scannedAtMs >= dateStartMs && scannedAtMs <= dateEndMs;
-      });
-      bilScanned = periodScans.length;
-      bilRevenue = periodScans.reduce((s: number, scan: any) => {
-        const bilId = ticketIdToBilId[scan.ticket_id as string];
-        return s + (bilId ? (bilPriceMap[bilId] || 0) : 0);
-      }, 0);
+        bilPrinted = [...periodBilIdSet].reduce((sum: number, bilId: string) => {
+          const nonWithdrawn = nonWithdrawnByBil[bilId] || 0;
+          const totalScans = totalScansByBil[bilId] || 0;
+          const periodScansCount = periodScansByBil[bilId] || 0;
+          return sum + Math.max(0, nonWithdrawn - (totalScans - periodScansCount));
+        }, 0);
+
+        const periodScans = relevantScans.filter((s: any) => {
+          const scannedAtMs = new Date(s.scanned_at as string).getTime();
+          return scannedAtMs >= dateStartMs && scannedAtMs <= dateEndMs;
+        });
+        bilScanned = periodScans.length;
+        bilRevenue = periodScans.reduce((s: number, scan: any) => {
+          const bilId = ticketIdToBilId[scan.ticket_id as string];
+          return s + (bilId ? (bilPriceMap[bilId] || 0) : 0);
+        }, 0);
+      }
     }
   }
 
