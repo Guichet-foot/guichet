@@ -42,7 +42,7 @@ export function DashboardFilters({
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  const currentPeriod  = searchParams.get("period") || "30d";
+  const currentPeriod  = searchParams.get("period") || "today";
   const currentStart   = searchParams.get("start") || "";
   const currentEnd     = searchParams.get("end") || "";
   const currentMatch   = searchParams.get("match") || "";
@@ -77,7 +77,7 @@ export function DashboardFilters({
   }
 
   function handlePeriodChange(v: string | null) {
-    const val = v || "30d";
+    const val = v || "today";
     setPeriod(val);
     if (val !== "custom") push({ period: val });
   }
@@ -93,15 +93,15 @@ export function DashboardFilters({
   }
 
   function reset() {
-    setPeriod("30d");
+    setPeriod("today");
     setZone("");
     setStart("");
     setEnd("");
     setMatchId("");
-    router.push(`${pathname}?period=30d`);
+    router.push(`${pathname}?period=today`);
   }
 
-  const hasFilters = !!(zone || period !== "30d" || (isCustom && (start || end)) || matchId);
+  const hasFilters = !!(zone || period !== "today" || (isCustom && (start || end)) || matchId);
 
   return (
     <div className="space-y-3">

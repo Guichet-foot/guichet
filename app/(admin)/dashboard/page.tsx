@@ -440,12 +440,10 @@ export default async function DashboardPage({
     dateEnd2     = p.dateEnd;
     periodLabel2 = p.periodLabel;
   } else {
-    // Use end-of-today so that matches scheduled later today are included
-    // (billets must be printed before the match, so the match is always in the future)
     const n = new Date();
-    dateEnd2   = new Date(n.getFullYear(), n.getMonth(), n.getDate(), 23, 59, 59, 999);
-    dateStart2 = new Date(n.getTime() - 24 * 60 * 60 * 1000);
-    periodLabel2 = "Dernières 24h";
+    dateStart2   = new Date(n.getFullYear(), n.getMonth(), n.getDate(), 0, 0, 0, 0);
+    dateEnd2     = new Date(n.getFullYear(), n.getMonth(), n.getDate(), 23, 59, 59, 999);
+    periodLabel2 = "Aujourd'hui";
   }
 
   let matchesPeriodQuery = adminClient.from("matches").select("id");
