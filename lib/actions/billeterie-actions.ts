@@ -543,7 +543,9 @@ export async function getBilleterieInvendusList(): Promise<BilleterieInvendusIte
     // Si la billeterie est attribuée, ses invendus sont "consommés" → on n'additionne pas les autres
     const attributed = isAttributed ? 0 : (attributedByBil[b.id] || 0);
     const totalTickets = ownTickets + attributed;
-    const totalScanned = attendanceByBil[b.id] || 0;
+    // totalScansByBil = scans des tickets appartenant à CETTE billeterie (quel que soit le match
+    // où le scan a été enregistré via la chaîne d'attribution) → cohérent avec le tableau de bord
+    const totalScanned = totalScansByBil[b.id] || 0;
     // Si attribuée : 0 invendus restants (les tickets ont été affectés à une autre billetterie)
     const unscannedCount = isAttributed ? 0 : Math.max(0, totalTickets - totalScanned);
     return {
@@ -741,20 +743,31 @@ export async function validateBilleterieTicket(rawToken: string): Promise<ScanRe
     };
   }
 
-  // 2. Trouver un match disponible dans toute la chaîne (en_cours en priorité, sinon programme).
-  const { data: availableMatches } = await adminClient
+  // 2. Trouver un match dans toute la chaîne : en_cours en priorité, sinon programme,
+  //    sinon le plus récent même terminé (billet valable même après la fin du match).
+  const { data: activeMatches } = await adminClient
     .from("matches")
     .select("id, home_team, away_team, status")
     .in("id", allMatchIds)
     .in("status", ["en_cours", "programme"])
     .order("match_date", { ascending: true });
 
-  if (!availableMatches || availableMatches.length === 0) {
-    return { status: "invalid", message: "Tous les matchs de ce billet sont terminés" };
+  let match: any;
+  if (activeMatches && activeMatches.length > 0) {
+    match = (activeMatches as any[]).find((m: any) => m.status === "en_cours") || activeMatches[0];
+  } else {
+    // Tous les matchs sont terminés → on autorise quand même le scan sur le plus récent.
+    // scanned_at = aujourd'hui → comptabilisé dans les stats du jour du scan.
+    const { data: lastMatch } = await adminClient
+      .from("matches")
+      .select("id, home_team, away_team, status")
+      .in("id", allMatchIds)
+      .order("match_date", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!lastMatch) return { status: "invalid", message: "Aucun match trouvé pour ce billet" };
+    match = lastMatch;
   }
-
-  // Priorité au match en cours ; sinon premier match programmé
-  const match = (availableMatches as any[]).find((m: any) => m.status === "en_cours") || availableMatches[0];
 
   // 3. Enregistrer l'entrée.
   const { error } = await adminClient.from("billeterie_scans").insert({
