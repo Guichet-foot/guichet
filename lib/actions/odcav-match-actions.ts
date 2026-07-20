@@ -226,11 +226,11 @@ export async function getOdcavInterMatches(matchType: "Match Communal" | "Match 
     results = [...(odcavData || [])];
 
     if (matchType === "Match Communal") {
+      // Tous les super_admin voient tous les matchs C3 (même organisation)
       const { data: c3Accounts } = await adminClient
         .from("profiles")
         .select("id, full_name")
-        .eq("role", "c3")
-        .eq("created_by_admin", ownerId);
+        .eq("role", "c3");
 
       if (c3Accounts && c3Accounts.length > 0) {
         const c3Ids = c3Accounts.map((p: any) => p.id as string);
