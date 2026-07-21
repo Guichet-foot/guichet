@@ -172,30 +172,45 @@ export default async function DashboardPage({
         : Promise.resolve([]),
     ]);
 
-    // 5. Billeterie (global contribution only, no per-zone breakdown)
+    // 5. Billeterie — tous matchs (zone + C3) pour découverte, scanned_at pour période
     let bilPrinted = 0, bilScanned = 0, bilRevenue = 0;
-    if (matchIds.length > 0) {
+    {
+      const { data: allBilsData } = await adminClient.from("billeterie").select("id, price, match_ids");
+      const allBils = (allBilsData || []) as any[];
+
+      // Tous les IDs C3 sans restriction created_by_admin
+      const allC3MatchIdSet = new Set<string>();
+      {
+        const { data: c3Profiles } = await adminClient.from("profiles").select("id").eq("role", "c3");
+        const c3Ids = ((c3Profiles || []) as any[]).map((p: any) => p.id as string);
+        if (c3Ids.length > 0) {
+          const { data: c3MatchData } = await adminClient.from("matches").select("id").in("c3_account_id", c3Ids);
+          for (const m of (c3MatchData || []) as any[]) allC3MatchIdSet.add(m.id as string);
+        }
+      }
+
+      // Billeteries liées aux matchs de la période OU aux matchs C3 (historiques compris)
       const matchIdSet = new Set(matchIds);
-      const { data: allBils } = await adminClient.from("billeterie").select("id, price, match_ids");
-      const bilsInPeriod = (allBils || []).filter((b: any) =>
-        (b.match_ids || []).some((id: string) => matchIdSet.has(id))
+      const relevantBils = allBils.filter((b: any) =>
+        (b.match_ids || []).some((id: string) => matchIdSet.has(id) || allC3MatchIdSet.has(id))
       );
-      const bilIds = bilsInPeriod.map((b: any) => b.id as string);
-      const bilPriceMap: Record<string, number> = {};
-      bilsInPeriod.forEach((b: any) => { bilPriceMap[b.id] = b.price || 0; });
-      if (bilIds.length > 0) {
+
+      if (relevantBils.length > 0) {
+        const relevantBilIds = relevantBils.map((b: any) => b.id as string);
+        const bilPriceMap: Record<string, number> = {};
+        relevantBils.forEach((b: any) => { bilPriceMap[b.id] = b.price || 0; });
+
         const allBilMatchIds = [...new Set(
-          bilsInPeriod.flatMap((b: any) => (b.match_ids || []) as string[])
+          relevantBils.flatMap((b: any) => (b.match_ids || []) as string[])
         )];
-        const periodMatchSet = new Set(matchIds);
 
         const [bilAllTickets, allBilScans] = await Promise.all([
           fetchAll<any>((from, to) =>
             adminClient.from("billeterie_tickets").select("id, billeterie_id, withdrawn")
-              .in("billeterie_id", bilIds).range(from, to)
+              .in("billeterie_id", relevantBilIds).range(from, to)
           ),
           fetchAll<any>((from, to) =>
-            adminClient.from("billeterie_scans").select("ticket_id, match_id")
+            adminClient.from("billeterie_scans").select("ticket_id, scanned_at")
               .in("match_id", allBilMatchIds).range(from, to)
           ),
         ]);
@@ -209,25 +224,35 @@ export default async function DashboardPage({
           }
         });
 
+        const bilTicketIdSet = new Set(Object.keys(bilTicketIdMap));
+        const relevantScans = allBilScans.filter((s: any) => bilTicketIdSet.has(s.ticket_id as string));
+
+        const dateStartMs = dateStart.getTime();
+        const dateEndMs   = dateEnd.getTime();
+
         const totalScansByBil: Record<string, number> = {};
         const periodScansByBil: Record<string, number> = {};
-        allBilScans.forEach((s: any) => {
+        relevantScans.forEach((s: any) => {
           const bId = bilTicketIdMap[s.ticket_id as string];
           if (!bId) return;
           totalScansByBil[bId] = (totalScansByBil[bId] || 0) + 1;
-          if (periodMatchSet.has(s.match_id)) {
+          const scannedAtMs = new Date(s.scanned_at as string).getTime();
+          if (scannedAtMs >= dateStartMs && scannedAtMs <= dateEndMs) {
             periodScansByBil[bId] = (periodScansByBil[bId] || 0) + 1;
           }
         });
 
-        bilPrinted = bilIds.reduce((sum: number, bId: string) => {
+        bilPrinted = relevantBilIds.reduce((sum: number, bId: string) => {
           const nw = nonWithdrawnByBil[bId] || 0;
           const ts = totalScansByBil[bId] || 0;
           const ps = periodScansByBil[bId] || 0;
           return sum + Math.max(0, nw - (ts - ps));
         }, 0);
 
-        const periodBilScans = allBilScans.filter((s: any) => periodMatchSet.has(s.match_id));
+        const periodBilScans = relevantScans.filter((s: any) => {
+          const scannedAtMs = new Date(s.scanned_at as string).getTime();
+          return scannedAtMs >= dateStartMs && scannedAtMs <= dateEndMs;
+        });
         bilScanned = periodBilScans.length;
         bilRevenue = periodBilScans.reduce((s: number, sc: any) => {
           const bId = bilTicketIdMap[sc.ticket_id as string];
@@ -321,8 +346,8 @@ export default async function DashboardPage({
           showZoneFilter
         />
 
-        {/* Stat cards — 3 cols on desktop, 2 on tablet, 1 on mobile */}
-        <div className="grid grid-cols-1 min-[480px]:grid-cols-2 xl:grid-cols-3 gap-4">
+        {/* Stat cards — 2 cols tablet, 4 cols desktop */}
+        <div className="grid grid-cols-1 min-[480px]:grid-cols-2 xl:grid-cols-4 gap-4">
           <StatCard
             title="Billets imprimés"
             value={totalPrinted.toLocaleString("fr-FR")}
@@ -330,6 +355,13 @@ export default async function DashboardPage({
             icon={<Layers className="h-5 w-5 text-blue-600" />}
             iconBg="bg-blue-50"
             trend={trendPrinted}
+          />
+          <StatCard
+            title="Validés par scan"
+            value={totalScanned.toLocaleString("fr-FR")}
+            subtitle={totalPrinted > 0 ? `${((totalScanned / totalPrinted) * 100).toFixed(1)}% des imprimés` : "0% des imprimés"}
+            icon={<ScanLine className="h-5 w-5 text-green-600" />}
+            iconBg="bg-green-50"
           />
           <StatCard
             title="Billets invendus"
