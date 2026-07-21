@@ -25,7 +25,7 @@ export const metadata = { title: "Tableau de bord" };
 // ── Period helpers ────────────────────────────────────────────────────────────
 
 function parsePeriod(params: Record<string, string | undefined>) {
-  const p = params.period || "30d";
+  const p = params.period || "today";
   const now = new Date();
   // End-of-today: ensures matches scheduled later today are counted in Billets imprimés
   const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
