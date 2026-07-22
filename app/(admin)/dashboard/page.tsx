@@ -172,42 +172,27 @@ export default async function DashboardPage({
         : Promise.resolve([]),
     ]);
 
-    // 5. Billeterie — tous matchs (zone + C3) pour découverte, scanned_at pour période
+    // 5. Billeterie — matchs de la période uniquement, scanned_at pour filtre scan
     let bilPrinted = 0, bilScanned = 0, bilRevenue = 0;
-    {
-      const { data: allBilsData } = await adminClient.from("billeterie").select("id, price, match_ids");
-      const allBils = (allBilsData || []) as any[];
-
-      // Tous les IDs C3 sans restriction created_by_admin
-      const allC3MatchIdSet = new Set<string>();
-      {
-        const { data: c3Profiles } = await adminClient.from("profiles").select("id").eq("role", "c3");
-        const c3Ids = ((c3Profiles || []) as any[]).map((p: any) => p.id as string);
-        if (c3Ids.length > 0) {
-          const { data: c3MatchData } = await adminClient.from("matches").select("id").in("c3_account_id", c3Ids);
-          for (const m of (c3MatchData || []) as any[]) allC3MatchIdSet.add(m.id as string);
-        }
-      }
-
-      // Billeteries liées aux matchs de la période OU aux matchs C3 (historiques compris)
+    if (matchIds.length > 0) {
       const matchIdSet = new Set(matchIds);
-      const relevantBils = allBils.filter((b: any) =>
-        (b.match_ids || []).some((id: string) => matchIdSet.has(id) || allC3MatchIdSet.has(id))
+      const { data: allBilsData } = await adminClient.from("billeterie").select("id, price, match_ids");
+      const bilsInPeriod = ((allBilsData || []) as any[]).filter((b: any) =>
+        (b.match_ids || []).some((id: string) => matchIdSet.has(id))
       );
+      const bilIds = bilsInPeriod.map((b: any) => b.id as string);
+      const bilPriceMap: Record<string, number> = {};
+      bilsInPeriod.forEach((b: any) => { bilPriceMap[b.id] = b.price || 0; });
 
-      if (relevantBils.length > 0) {
-        const relevantBilIds = relevantBils.map((b: any) => b.id as string);
-        const bilPriceMap: Record<string, number> = {};
-        relevantBils.forEach((b: any) => { bilPriceMap[b.id] = b.price || 0; });
-
+      if (bilIds.length > 0) {
         const allBilMatchIds = [...new Set(
-          relevantBils.flatMap((b: any) => (b.match_ids || []) as string[])
+          bilsInPeriod.flatMap((b: any) => (b.match_ids || []) as string[])
         )];
 
         const [bilAllTickets, allBilScans] = await Promise.all([
           fetchAll<any>((from, to) =>
             adminClient.from("billeterie_tickets").select("id, billeterie_id, withdrawn")
-              .in("billeterie_id", relevantBilIds).range(from, to)
+              .in("billeterie_id", bilIds).range(from, to)
           ),
           fetchAll<any>((from, to) =>
             adminClient.from("billeterie_scans").select("ticket_id, scanned_at")
@@ -242,7 +227,7 @@ export default async function DashboardPage({
           }
         });
 
-        bilPrinted = relevantBilIds.reduce((sum: number, bId: string) => {
+        bilPrinted = bilIds.reduce((sum: number, bId: string) => {
           const nw = nonWithdrawnByBil[bId] || 0;
           const ts = totalScansByBil[bId] || 0;
           const ps = periodScansByBil[bId] || 0;
@@ -419,15 +404,39 @@ export default async function DashboardPage({
           </CardContent>
         </Card>
 
-        {/* Zone performance table — full width */}
-        <Card className="rounded-2xl shadow-sm border-border/40">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base sm:text-lg">Performances par zone</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ZonePerformanceTable zones={zonePerformance} />
-          </CardContent>
-        </Card>
+        {/* Matchs du jour */}
+        {(matchesPeriod || []).length > 0 && (
+          <Card className="rounded-2xl shadow-sm border-border/40">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base sm:text-lg">
+                Matchs du jour
+                <span className="ml-2 text-sm font-normal text-muted-foreground">
+                  ({(matchesPeriod || []).length})
+                </span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="divide-y divide-border/40">
+                {(matchesPeriod as any[]).map((m: any) => {
+                  const zoneName = allZones.find((z) => z.id === m.zone_id)?.name;
+                  return (
+                    <div key={m.id} className="flex items-center justify-between px-5 py-3 text-sm">
+                      <div>
+                        <span className="font-medium">{m.home_team} vs {m.away_team}</span>
+                        {zoneName && (
+                          <span className="ml-2 text-xs text-muted-foreground">{zoneName}</span>
+                        )}
+                      </div>
+                      <Badge className={MATCH_STATUS_COLORS[m.status as keyof typeof MATCH_STATUS_COLORS] || "bg-gray-100 text-gray-700"}>
+                        {MATCH_STATUS_LABELS[m.status as keyof typeof MATCH_STATUS_LABELS] || m.status}
+                      </Badge>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
     );
   }
