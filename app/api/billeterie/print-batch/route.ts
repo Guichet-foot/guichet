@@ -30,6 +30,11 @@ function renderBilleterieTicket(
   const priceFmt = new Intl.NumberFormat("fr-FR").format(price);
   const createdAtFmt = format(new Date(ticket.created_at), "dd/MM/yyyy HH:mm", { locale: fr });
 
+  // Date commune à tous les matchs (affichée une seule fois)
+  const matchDateFmt = matches.length > 0
+    ? format(new Date(matches[0].match_date), "dd/MM/yyyy", { locale: fr })
+    : "";
+
   const matchLines = matches
     .map((m) => {
       const home = m.home_team_zone ? `${trunc(m.home_team, 12)} (${fmtZone(m.home_team_zone)})` : trunc(m.home_team, 14);
@@ -40,6 +45,9 @@ function renderBilleterieTicket(
 
   const namePt = is58 ? "9" : "11";
   const matchPt = is58 ? "6" : "7";
+  const passLine = matchDateFmt
+    ? `PASS MULTI-MATCHS &middot; ${matchDateFmt}`
+    : "PASS MULTI-MATCHS";
 
   return `
 <div class="print-ticket">
@@ -48,9 +56,9 @@ function renderBilleterieTicket(
 </div>
 <div class="sep"></div>
 <div class="c" style="font-size:${namePt}pt;font-weight:900;line-height:1.3;letter-spacing:0.5px;">${bilName}</div>
-<div class="c tiny" style="font-style:italic;margin-top:0.5mm;">PASS MULTI-MATCHS</div>
+<div class="c tiny" style="font-style:italic;margin-top:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${passLine}</div>
 <div class="sep"></div>
-<div class="c" style="font-size:${matchPt}pt;font-weight:600;line-height:1.45;">${matchLines}</div>
+<div class="c" style="font-size:${matchPt}pt;font-weight:600;line-height:1.3;">${matchLines}</div>
 <div class="sep"></div>
 <div class="c cat-prix">${priceFmt}&nbsp;FCFA</div>
 <div class="sep"></div>
@@ -126,6 +134,25 @@ export async function GET(request: Request) {
 
   const totalPriceFmt = new Intl.NumberFormat("fr-FR").format(tickets.length * bil.price);
 
+  // Surcharges CSS compactes propres aux billets billeterie (n'affecte pas les billets réguliers)
+  const is58bck = fmt === "58";
+  const bilCompactCss = `
+  /* Compact billeterie overrides */
+  .sep { margin: 0.4mm 0; }
+  .qr { margin: 0.3mm auto 0.2mm; }
+  .bon-match { margin-top: 0 !important; }
+  .logo-wrap { height: ${is58bck ? "10mm" : "13mm"} !important; }
+  .logo-img  { height: ${is58bck ? "17mm" : "22mm"} !important; }
+  @page { size: ${is58bck ? "58mm 112mm" : "72mm 108mm"}; }
+  @media print {
+    .print-ticket {
+      height:     ${is58bck ? "112mm" : "108mm"} !important;
+      min-height: ${is58bck ? "112mm" : "108mm"} !important;
+      max-height: ${is58bck ? "112mm" : "108mm"} !important;
+      padding:    ${is58bck ? "1mm 1.5mm" : "1.5mm 2mm"} !important;
+    }
+  }`;
+
   const html = `<!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -134,6 +161,7 @@ export async function GET(request: Request) {
 <title>Billetterie — ${bil.name}</title>
 <style>
 ${getPrintStyles(fmt)}
+${bilCompactCss}
 </style>
 </head>
 <body>
