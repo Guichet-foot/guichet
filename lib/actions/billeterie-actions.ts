@@ -483,6 +483,8 @@ export async function getBilleterieInvendusList(): Promise<BilleterieInvendusIte
   // Pour chaque billeterie B : fréquentation + billets attribués depuis billeteries partenaires
   const attendanceByBil: Record<string, number> = {};
   const attributedByBil: Record<string, number> = {};
+  // Scans des tickets partenaires aux matchs partagés avec B (crédités à B pour l'affichage)
+  const partnerScannedByBil: Record<string, number> = {};
 
   for (const B of bilList) {
     const Bset = bilMatchSet[B.id];
@@ -494,6 +496,7 @@ export async function getBilleterieInvendusList(): Promise<BilleterieInvendusIte
 
     // Billets attribués depuis billeteries partageant au moins un match avec B
     let attributed = 0;
+    let partnerScanned = 0;
     for (const X of bilList) {
       if (X.id === B.id) continue;
       const Xset = bilMatchSet[X.id];
@@ -506,8 +509,10 @@ export async function getBilleterieInvendusList(): Promise<BilleterieInvendusIte
       const xByMatch = scansByBilAndMatch[X.id] || {};
       for (const mId of Bset) { if (Xset.has(mId)) ss_X += xByMatch[mId] || 0; }
       attributed += Math.max(0, nw_X - (ts_X - ss_X));
+      partnerScanned += ss_X;
     }
     attributedByBil[B.id] = attributed;
+    partnerScannedByBil[B.id] = partnerScanned;
   }
 
   // Détection des billeteries dont les invendus ont été attribués à une billeterie plus récente.
@@ -543,9 +548,9 @@ export async function getBilleterieInvendusList(): Promise<BilleterieInvendusIte
     // Si la billeterie est attribuée, ses invendus sont "consommés" → on n'additionne pas les autres
     const attributed = isAttributed ? 0 : (attributedByBil[b.id] || 0);
     const totalTickets = ownTickets + attributed;
-    // totalScansByBil = scans des tickets appartenant à CETTE billeterie (quel que soit le match
-    // où le scan a été enregistré via la chaîne d'attribution) → cohérent avec le tableau de bord
-    const totalScanned = totalScansByBil[b.id] || 0;
+    // totalScanned = propres scans + scans des tickets partenaires aux matchs partagés
+    // (les tickets attribués sont scannés sous leur billeterie d'origine mais comptent ici)
+    const totalScanned = (totalScansByBil[b.id] || 0) + (partnerScannedByBil[b.id] || 0);
     // Si attribuée : 0 invendus restants (les tickets ont été affectés à une autre billetterie)
     const unscannedCount = isAttributed ? 0 : Math.max(0, totalTickets - totalScanned);
     return {
