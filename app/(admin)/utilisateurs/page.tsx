@@ -178,7 +178,22 @@ export default async function UsersPage({
     query.eq("zone_id", effectiveZoneId);
   }
 
-  const { data: users } = await query;
+  const { data: usersRaw } = await query;
+  let users: typeof usersRaw = usersRaw;
+
+  // Pour C3 : ajouter son propre compte en tête pour lui permettre de le modifier
+  if (profile.role === "c3") {
+    const alreadyIn = (usersRaw || []).some((u: any) => u.id === profile.id);
+    if (!alreadyIn) {
+      const { data: selfProfile } = await supabase
+        .from("profiles")
+        .select("*, zone:zones!profiles_zone_id_fkey(name)")
+        .eq("id", profile.id)
+        .single();
+      if (selfProfile) users = [selfProfile, ...(usersRaw || [])];
+    }
+  }
+
   const currentUserIsPresident = profile.is_president ?? false;
 
   const adminClientForEmails = await createAdminClient();
