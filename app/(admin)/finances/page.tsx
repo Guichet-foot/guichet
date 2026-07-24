@@ -173,16 +173,42 @@ export default async function FinancesPage({
       );
       const periodBilIdSet = new Set(bilsInPeriod.map((b: any) => b.id as string));
 
-      if (allC3BilIds.length > 0) {
-        const allBilMatchIds = [...new Set(
-          allC3Bils.flatMap((b: any) => (b.match_ids || []) as string[])
-        )];
+      // Partenaires indirects : billeteries partageant des matchs avec bilsInPeriod
+      const periodBilMatchIdsF = new Set<string>(
+        bilsInPeriod.flatMap((b: any) => (b.match_ids || []) as string[])
+      );
+      const allC3BilIdSetF = new Set(allC3BilIds);
+      const indirectFromC3F = allC3Bils.filter((b: any) => {
+        if (periodBilIdSet.has(b.id)) return false;
+        const bm: string[] = b.match_ids || [];
+        if (bm.some((id: string) => periodMatchSet.has(id))) return false;
+        return bm.some((id: string) => periodBilMatchIdsF.has(id));
+      });
+      const indirectOutsideF = ((allBils || []) as any[]).filter((b: any) => {
+        if (allC3BilIdSetF.has(b.id)) return false;
+        const bm: string[] = b.match_ids || [];
+        if (bm.some((id: string) => scanMatchIdSet.has(id))) return false;
+        return bm.some((id: string) => periodBilMatchIdsF.has(id));
+      });
+      const indirectBilIdsF = [
+        ...indirectFromC3F.map((b: any) => b.id as string),
+        ...indirectOutsideF.map((b: any) => b.id as string),
+      ];
+      indirectOutsideF.forEach((b: any) => { bilPriceMap[b.id] = b.price || 0; });
+      const outsideIdsF = indirectOutsideF.map((b: any) => b.id as string);
+      const allFetchBilIdsF = [...allC3BilIds, ...outsideIdsF];
+
+      if (allFetchBilIdsF.length > 0) {
+        const allBilMatchIds = [...new Set([
+          ...allC3Bils.flatMap((b: any) => (b.match_ids || []) as string[]),
+          ...indirectOutsideF.flatMap((b: any) => (b.match_ids || []) as string[]),
+        ])];
 
         const [bilAllTickets, allBilScans] = await Promise.all([
           fetchAll<any>((from, to) =>
             adminSupabase.from("billeterie_tickets")
               .select("id, billeterie_id, withdrawn")
-              .in("billeterie_id", allC3BilIds)
+              .in("billeterie_id", allFetchBilIdsF)
               .range(from, to)
           ),
           fetchAll<any>((from, to) =>
@@ -218,7 +244,7 @@ export default async function FinancesPage({
           }
         });
 
-        bilPrinted = [...periodBilIdSet].reduce((sum: number, bilId: string) => {
+        bilPrinted = [...periodBilIdSet, ...indirectBilIdsF].reduce((sum: number, bilId: string) => {
           const nonWithdrawn = nonWithdrawnByBil[bilId] || 0;
           const totalScans = totalScansByBil[bilId] || 0;
           const periodScansCount = periodScansByBil[bilId] || 0;

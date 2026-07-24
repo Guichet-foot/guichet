@@ -184,15 +184,31 @@ export default async function DashboardPage({
       const bilPriceMap: Record<string, number> = {};
       bilsInPeriod.forEach((b: any) => { bilPriceMap[b.id] = b.price || 0; });
 
-      if (bilIds.length > 0) {
-        const allBilMatchIds = [...new Set(
-          bilsInPeriod.flatMap((b: any) => (b.match_ids || []) as string[])
-        )];
+      // Partenaires indirects : billeteries plus anciennes partageant des matchs avec
+      // bilsInPeriod mais pas avec les matchs de la période directement.
+      const directBilMatchIds1 = new Set<string>(
+        bilsInPeriod.flatMap((b: any) => (b.match_ids || []) as string[])
+      );
+      const indirectBils1 = ((allBilsData || []) as any[]).filter((b: any) => {
+        if (bilIds.includes(b.id)) return false;
+        const bm: string[] = b.match_ids || [];
+        if (bm.some((id) => matchIdSet.has(id))) return false;
+        return bm.some((id) => directBilMatchIds1.has(id));
+      });
+      const indirectBilIds1 = indirectBils1.map((b: any) => b.id as string);
+      indirectBils1.forEach((b: any) => { bilPriceMap[b.id] = b.price || 0; });
+      const allFetchBilIds1 = [...bilIds, ...indirectBilIds1];
+
+      if (allFetchBilIds1.length > 0) {
+        const allBilMatchIds = [...new Set([
+          ...bilsInPeriod.flatMap((b: any) => (b.match_ids || []) as string[]),
+          ...indirectBils1.flatMap((b: any) => (b.match_ids || []) as string[]),
+        ])];
 
         const [bilAllTickets, allBilScans] = await Promise.all([
           fetchAll<any>((from, to) =>
             adminClient.from("billeterie_tickets").select("id, billeterie_id, withdrawn")
-              .in("billeterie_id", bilIds).range(from, to)
+              .in("billeterie_id", allFetchBilIds1).range(from, to)
           ),
           fetchAll<any>((from, to) =>
             adminClient.from("billeterie_scans").select("ticket_id, scanned_at")
@@ -227,7 +243,7 @@ export default async function DashboardPage({
           }
         });
 
-        bilPrinted = bilIds.reduce((sum: number, bId: string) => {
+        bilPrinted = allFetchBilIds1.reduce((sum: number, bId: string) => {
           const nw = nonWithdrawnByBil[bId] || 0;
           const ts = totalScansByBil[bId] || 0;
           const ps = periodScansByBil[bId] || 0;
@@ -537,16 +553,43 @@ export default async function DashboardPage({
       );
       const periodBilIdSet = new Set(bilsInPeriod.map((b: any) => b.id as string));
 
-      if (allC3BilIds.length > 0) {
-        // Tous les match_ids de toutes les billeteries C3 → liste courte (~50 IDs max)
-        const allBilMatchIds = [...new Set(
-          allC3Bils.flatMap((b: any) => (b.match_ids || []) as string[])
-        )];
+      // Partenaires indirects : billeteries partageant des matchs avec bilsInPeriod
+      const periodBilMatchIds2 = new Set<string>(
+        bilsInPeriod.flatMap((b: any) => (b.match_ids || []) as string[])
+      );
+      const allC3BilIdSet2 = new Set(allC3BilIds);
+      // a) dans allC3Bils mais pas dans periodBilIdSet
+      const indirectFromC3 = allC3Bils.filter((b: any) => {
+        if (periodBilIdSet.has(b.id)) return false;
+        const bm: string[] = b.match_ids || [];
+        if (bm.some((id: string) => periodMatchSet.has(id))) return false;
+        return bm.some((id: string) => periodBilMatchIds2.has(id));
+      });
+      // b) hors de allC3Bils, partageant des matchs avec bilsInPeriod
+      const indirectOutside2 = ((allBils || []) as any[]).filter((b: any) => {
+        if (allC3BilIdSet2.has(b.id)) return false;
+        const bm: string[] = b.match_ids || [];
+        if (bm.some((id: string) => scanMatchIdSet.has(id))) return false;
+        return bm.some((id: string) => periodBilMatchIds2.has(id));
+      });
+      const indirectBilIds2 = [
+        ...indirectFromC3.map((b: any) => b.id as string),
+        ...indirectOutside2.map((b: any) => b.id as string),
+      ];
+      indirectOutside2.forEach((b: any) => { bilPriceMap[b.id] = b.price || 0; });
+      const outsideIds2 = indirectOutside2.map((b: any) => b.id as string);
+      const allFetchBilIds2 = [...allC3BilIds, ...outsideIds2];
+
+      if (allFetchBilIds2.length > 0) {
+        const allBilMatchIds = [...new Set([
+          ...allC3Bils.flatMap((b: any) => (b.match_ids || []) as string[]),
+          ...indirectOutside2.flatMap((b: any) => (b.match_ids || []) as string[]),
+        ])];
 
         const [bilAllTickets, allBilScans] = await Promise.all([
           fetchAll<any>((from, to) =>
             adminClient.from("billeterie_tickets").select("id, billeterie_id, withdrawn")
-              .in("billeterie_id", allC3BilIds).range(from, to)
+              .in("billeterie_id", allFetchBilIds2).range(from, to)
           ),
           fetchAll<any>((from, to) =>
             adminClient.from("billeterie_scans").select("ticket_id, scanned_at")
@@ -582,8 +625,8 @@ export default async function DashboardPage({
           }
         });
 
-        // bilPrinted = billets disponibles pour les billeteries de la période seulement
-        bilPrinted = [...periodBilIdSet].reduce((sum: number, bId: string) => {
+        // bilPrinted = billets disponibles pour période + partenaires indirects
+        bilPrinted = [...periodBilIdSet, ...indirectBilIds2].reduce((sum: number, bId: string) => {
           const nw = nonWithdrawnByBil[bId] || 0;
           const ts = totalScansByBil[bId] || 0;
           const ps = periodScansByBil[bId] || 0;
