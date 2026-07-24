@@ -83,7 +83,7 @@ export async function GET(request: Request) {
   const tickets = await fetchAll<any>((from, to) =>
     adminClient
       .from("billeterie_tickets")
-      .select("id, qr_token, serial_number, created_at, billeterie_id, sold_by, seller:profiles!billeterie_tickets_sold_by_fkey(full_name)")
+      .select("id, qr_token, serial_number, created_at, billeterie_id, sold_by, category_name, seller:profiles!billeterie_tickets_sold_by_fkey(full_name)")
       .eq("sale_batch_id", batchId)
       .order("serial_number")
       .range(from, to)
