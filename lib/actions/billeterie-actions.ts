@@ -365,6 +365,69 @@ export async function getBilleterieDetails(id: string): Promise<{
         attributedBillets += Math.max(0, nw - (ts - ss));
         attributedScans += ss;
       });
+
+      // Partenaires indirects (2e niveau) : billeteries partageant des matchs avec relatedBils
+      // mais pas avec cette billeterie directement (ex. Bil_A → "21/07" → "24/07").
+      const relatedBilMatchIdSet = new Set<string>(allRelatedMatchIds);
+      const relatedBilIdSet = new Set(relatedBilIds);
+      const indirectBilsDet = (otherBils || []).filter((b: any) => {
+        if (relatedBilIdSet.has(b.id)) return false;
+        const bm: string[] = b.match_ids || [];
+        if (bm.some((mid: string) => thisMatchSet.has(mid))) return false;
+        return bm.some((mid: string) => relatedBilMatchIdSet.has(mid));
+      });
+
+      if (indirectBilsDet.length > 0) {
+        const indirectBilDetIds = indirectBilsDet.map((b: any) => b.id as string);
+        const allIndirectMatchIds = [...new Set(
+          indirectBilsDet.flatMap((b: any) => (b.match_ids || []) as string[])
+        )];
+        // Inclure aussi les matchs de cette billeterie pour détecter les ss (scans partagés)
+        const indirectScanMatchIds = [...new Set([...allIndirectMatchIds, ...matchIds])];
+
+        const [indirectTickets, indirectScans] = await Promise.all([
+          fetchAll<any>((from, to) =>
+            adminClient.from("billeterie_tickets")
+              .select("id, billeterie_id, withdrawn")
+              .in("billeterie_id", indirectBilDetIds)
+              .range(from, to)
+          ),
+          fetchAll<any>((from, to) =>
+            adminClient.from("billeterie_scans")
+              .select("ticket_id, match_id")
+              .in("match_id", indirectScanMatchIds)
+              .range(from, to)
+          ),
+        ]);
+
+        const indirectNWByBil: Record<string, number> = {};
+        const indirectTicketIdToBilId: Record<string, string> = {};
+        indirectTickets.forEach((t: any) => {
+          indirectTicketIdToBilId[t.id] = t.billeterie_id;
+          if (!t.withdrawn) {
+            indirectNWByBil[t.billeterie_id] = (indirectNWByBil[t.billeterie_id] || 0) + 1;
+          }
+        });
+
+        const indirectTotalScansByBil: Record<string, number> = {};
+        const indirectSharedScansByBil: Record<string, number> = {};
+        indirectScans.forEach((s: any) => {
+          const bilId = indirectTicketIdToBilId[s.ticket_id];
+          if (!bilId) return;
+          indirectTotalScansByBil[bilId] = (indirectTotalScansByBil[bilId] || 0) + 1;
+          if (thisMatchSet.has(s.match_id)) {
+            indirectSharedScansByBil[bilId] = (indirectSharedScansByBil[bilId] || 0) + 1;
+          }
+        });
+
+        indirectBilDetIds.forEach((bilId: string) => {
+          const nw = indirectNWByBil[bilId] || 0;
+          const ts = indirectTotalScansByBil[bilId] || 0;
+          const ss = indirectSharedScansByBil[bilId] || 0;
+          attributedBillets += Math.max(0, nw - (ts - ss));
+          attributedScans += ss;
+        });
+      }
     }
   }
 
