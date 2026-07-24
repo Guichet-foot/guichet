@@ -3,8 +3,6 @@ import { NextResponse } from "next/server";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import QRCode from "qrcode";
-import { readFileSync } from "fs";
-import { join } from "path";
 import { getPrintStyles, renderTicketBlock, type PrintFormat } from "@/lib/ticket-print-template";
 
 export async function GET(
@@ -29,15 +27,10 @@ export async function GET(
 
   if (!ticket) return new NextResponse("Billet introuvable", { status: 404 });
 
-  /* Logo: embed as base64 so it works in any print context (no external HTTP) */
-  const logoBase64 = readFileSync(join(process.cwd(), "public", "logoticket.png")).toString("base64");
-  const logoDataUrl = `data:image/png;base64,${logoBase64}`;
-
-  /* QR: level M (15% recovery) — more robust on thermal ink imperfections */
-  const qrPx = fmt === "58" ? 300 : 380;
+  const qrPx = fmt === "58" ? 180 : 220;
   const qrDataUrl = await QRCode.toDataURL(ticket.qr_token, {
     width: qrPx,
-    margin: 2,
+    margin: 1,
     errorCorrectionLevel: "M",
     color: { dark: "#000000", light: "#FFFFFF" },
   });
@@ -45,7 +38,7 @@ export async function GET(
   const matchDateFmt = format(new Date(ticket.match.match_date), "EEE d MMM yyyy — HH'h'mm", { locale: fr });
   const soldAtFmt    = format(new Date(ticket.sold_at), "dd/MM/yyyy HH:mm", { locale: fr });
 
-  const body = renderTicketBlock(ticket, qrDataUrl, matchDateFmt, soldAtFmt, fmt, logoDataUrl);
+  const body = renderTicketBlock(ticket, qrDataUrl, matchDateFmt, soldAtFmt, fmt);
 
   const html = `<!DOCTYPE html>
 <html lang="fr">

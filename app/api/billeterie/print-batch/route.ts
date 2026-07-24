@@ -3,8 +3,6 @@ import { NextResponse } from "next/server";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import QRCode from "qrcode";
-import { readFileSync } from "fs";
-import { join } from "path";
 import { getPrintStyles } from "@/lib/ticket-print-template";
 import type { PrintFormat } from "@/lib/ticket-print-template";
 import { fmtZone } from "@/lib/format";
@@ -23,8 +21,7 @@ function renderBilleterieTicket(
   matches: Array<{ home_team: string; away_team: string; match_date: string; home_team_zone?: string | null; away_team_zone?: string | null }>,
   sellerName: string,
   qrDataUrl: string,
-  fmt: PrintFormat,
-  logoDataUrl: string
+  fmt: PrintFormat
 ): string {
   const is58 = fmt === "58";
   const priceFmt = new Intl.NumberFormat("fr-FR").format(price);
@@ -49,11 +46,10 @@ function renderBilleterieTicket(
     ? `PASS MULTI-MATCHS &middot; ${matchDateFmt}`
     : "PASS MULTI-MATCHS";
 
+  const logoFontPt = is58 ? "10" : "12";
   return `
 <div class="print-ticket">
-<div class="logo-wrap c">
-  <img src="${logoDataUrl}" class="logo-img" alt="Guichet Foot" />
-</div>
+<div class="c" style="font-weight:900;font-size:${logoFontPt}pt;letter-spacing:1px;padding:1mm 0;">Guichet Foot</div>
 <div class="sep"></div>
 <div class="c" style="font-size:${namePt}pt;font-weight:900;line-height:1.3;letter-spacing:0.5px;">${bilName}</div>
 <div class="c tiny" style="font-style:italic;margin-top:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${passLine}</div>
@@ -110,9 +106,7 @@ export async function GET(request: Request) {
     ? await adminClient.from("matches").select("id, home_team, away_team, match_date, home_team_zone, away_team_zone").in("id", matchIds).order("match_date")
     : { data: [] as any[] };
 
-  const logoBase64 = readFileSync(join(process.cwd(), "public", "logoticket.png")).toString("base64");
-  const logoDataUrl = `data:image/png;base64,${logoBase64}`;
-  const qrPx = fmt === "58" ? 300 : 380;
+  const qrPx = fmt === "58" ? 180 : 220;
 
   const sellerName = (tickets[0] as any).seller?.full_name || "—";
 
@@ -121,11 +115,11 @@ export async function GET(request: Request) {
       const qrContent = `BIL-${ticket.qr_token}`;
       const qrDataUrl = await QRCode.toDataURL(qrContent, {
         width: qrPx,
-        margin: 2,
+        margin: 1,
         errorCorrectionLevel: "M",
         color: { dark: "#000000", light: "#FFFFFF" },
       });
-      return renderBilleterieTicket(ticket, bil.name, bil.price, matches || [], sellerName, qrDataUrl, fmt, logoDataUrl);
+      return renderBilleterieTicket(ticket, bil.name, bil.price, matches || [], sellerName, qrDataUrl, fmt);
     })
   );
 

@@ -24,11 +24,6 @@ export function getPrintStyles(fmt: PrintFormat): string {
   const bonPt    = is58 ? "8"     : "9";
   const qrMM     = is58 ? "30"    : "38";
 
-  /* Logo crop: image is displayed taller than the container so
-     overflow:hidden clips the whitespace top/bottom symmetrically. */
-  const logoContH = is58 ? "12mm"  : "16mm";
-  const logoImgH  = is58 ? "20mm"  : "27mm";
-
   return `
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body {
@@ -41,17 +36,11 @@ export function getPrintStyles(fmt: PrintFormat): string {
   }
   .c { text-align: center; }
   .sep { border-top: 1px dashed #000; margin: 1mm 0; }
-  .logo-wrap {
-    overflow: hidden;
-    height: ${logoContH};
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .logo-img {
-    height: ${logoImgH};
-    width: auto;
-    max-width: 98%;
+  .logo-text {
+    font-size: ${is58 ? "10" : "12"}pt;
+    font-weight: 900;
+    letter-spacing: 1px;
+    padding: 1mm 0;
   }
   .teams {
     font-size: ${teamsPt}pt;
@@ -147,8 +136,7 @@ export function renderTicketBlock(
   qrDataUrl: string,
   matchDateFmt: string,
   soldAtFmt: string,
-  fmt: PrintFormat,
-  logoDataUrl: string
+  fmt: PrintFormat
 ): string {
   const is58 = fmt === "58";
   const priceFmt = new Intl.NumberFormat("fr-FR").format(ticket.price);
@@ -172,9 +160,7 @@ export function renderTicketBlock(
 
   return `
 <div class="print-ticket">
-<div class="logo-wrap c">
-  <img src="${logoDataUrl}" class="logo-img" alt="Guichet Foot" />
-</div>
+<div class="c logo-text">Guichet Foot</div>
 <div class="sep"></div>
 ${teamsHtml}
 <div class="c info">${ticket.match.venue}</div>
