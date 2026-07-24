@@ -217,7 +217,7 @@ export async function updateUserInfo(userId: string, formData: {
 }
 
 // ── resetUserPassword ─────────────────────────────────────────────
-export async function resetUserPassword(userId: string) {
+export async function resetUserPassword(userId: string, newDurationMinutes?: number | null) {
   const check = await canManage(userId);
   if ("error" in check) return { error: check.error };
 
@@ -226,20 +226,26 @@ export async function resetUserPassword(userId: string) {
   const { error } = await adminClient.auth.admin.updateUserById(userId, { password: newPassword });
   if (error) return { error: error.message };
 
-  // Reset expiration clock from stored duration
-  const { data: prof } = await adminClient
-    .from("profiles")
-    .select("password_duration_minutes")
-    .eq("id", userId)
-    .single();
-  const duration = prof?.password_duration_minutes ?? null;
+  let duration: number | null;
+  if (newDurationMinutes !== undefined) {
+    duration = newDurationMinutes;
+  } else {
+    const { data: prof } = await adminClient
+      .from("profiles")
+      .select("password_duration_minutes")
+      .eq("id", userId)
+      .single();
+    duration = prof?.password_duration_minutes ?? null;
+  }
+
   const newExpiresAt = duration
     ? new Date(Date.now() + duration * 60 * 1000).toISOString()
     : null;
-  await adminClient
-    .from("profiles")
-    .update({ password_expires_at: newExpiresAt })
-    .eq("id", userId);
+
+  const profileUpdate: Record<string, unknown> = { password_expires_at: newExpiresAt };
+  if (newDurationMinutes !== undefined) profileUpdate.password_duration_minutes = duration;
+
+  await adminClient.from("profiles").update(profileUpdate).eq("id", userId);
 
   return { password: newPassword };
 }

@@ -45,6 +45,29 @@ import {
 import { toast } from "sonner";
 import { ROLE_LABELS } from "@/lib/constants";
 
+type PwUnit = "jamais" | "minutes" | "heures" | "24h";
+
+function initPwUnit(minutes: number | null | undefined): PwUnit {
+  if (!minutes) return "jamais";
+  if (minutes === 1440) return "24h";
+  if (minutes % 60 === 0) return "heures";
+  return "minutes";
+}
+
+function initPwValue(minutes: number | null | undefined): number {
+  if (!minutes) return 30;
+  if (minutes === 1440) return 24;
+  if (minutes % 60 === 0) return minutes / 60;
+  return minutes;
+}
+
+function getDurationMinutes(unit: PwUnit, value: number): number | null {
+  if (unit === "jamais") return null;
+  if (unit === "24h") return 1440;
+  if (unit === "heures") return Math.max(1, value) * 60;
+  return Math.max(1, value);
+}
+
 interface UserActionsProps {
   user: {
     id: string;
@@ -56,6 +79,7 @@ interface UserActionsProps {
     is_president: boolean;
     permitted_modules?: string[] | null;
     c3ZoneIds?: string[];
+    password_duration_minutes?: number | null;
   };
   currentUserId: string;
   currentUserRole: string;
@@ -74,6 +98,9 @@ export function UserActions({
   const [passwordOpen, setPasswordOpen] = useState(false);
   const [loading, setLoading] = useState<string | null>(null);
   const [newPassword, setNewPassword] = useState<string | null>(null);
+
+  const [pwUnit, setPwUnit] = useState<PwUnit>(() => initPwUnit(user.password_duration_minutes));
+  const [pwValue, setPwValue] = useState<number>(() => initPwValue(user.password_duration_minutes));
 
   const [fullName, setFullName] = useState(user.full_name);
   const [phone, setPhone] = useState(user.phone || "");
@@ -168,7 +195,9 @@ export function UserActions({
 
   async function handleResetPassword() {
     setLoading("password");
-    const result = await resetUserPassword(user.id);
+    const showDuration = user.role === "portier" || user.role === "caissier";
+    const durationArg = showDuration ? getDurationMinutes(pwUnit, pwValue) : undefined;
+    const result = await resetUserPassword(user.id, durationArg);
     if (result.error) toast.error(result.error);
     else setNewPassword(result.password!);
     setLoading(null);
@@ -488,6 +517,50 @@ export function UserActions({
                 <p className="text-sm text-muted-foreground">
                   Un nouveau mot de passe sera généré pour <strong>{user.full_name}</strong>. Transmettez-le à l&apos;utilisateur.
                 </p>
+
+                {(user.role === "portier" || user.role === "caissier") && (
+                  <div className="space-y-2 border rounded-lg p-3 bg-muted/40">
+                    <Label className="text-sm font-semibold">Durée de validité du mot de passe</Label>
+                    <div className="flex items-center gap-2">
+                      {(pwUnit === "minutes" || pwUnit === "heures") && (
+                        <input
+                          type="number"
+                          min={1}
+                          max={pwUnit === "minutes" ? 1440 : 72}
+                          value={pwValue}
+                          onChange={(e) => setPwValue(Number(e.target.value))}
+                          className="w-20 h-9 rounded-md border border-input bg-background px-3 text-sm"
+                        />
+                      )}
+                      <Select
+                        value={pwUnit}
+                        onValueChange={(v) => {
+                          const u = v as PwUnit;
+                          setPwUnit(u);
+                          if (u === "minutes") setPwValue(30);
+                          if (u === "heures") setPwValue(8);
+                        }}
+                      >
+                        <SelectTrigger className="h-9 flex-1">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="jamais">Jamais (pas d&apos;expiration)</SelectItem>
+                          <SelectItem value="minutes">Minutes</SelectItem>
+                          <SelectItem value="heures">Heures</SelectItem>
+                          <SelectItem value="24h">24 heures</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {pwUnit === "jamais" && "Le mot de passe n'expirera pas."}
+                      {pwUnit === "minutes" && `Le mot de passe expirera ${pwValue} minute${pwValue > 1 ? "s" : ""} après la génération.`}
+                      {pwUnit === "heures" && `Le mot de passe expirera ${pwValue} heure${pwValue > 1 ? "s" : ""} après la génération.`}
+                      {pwUnit === "24h" && "Le mot de passe expirera 24 heures après la génération."}
+                    </p>
+                  </div>
+                )}
+
                 <Button
                   type="button"
                   onClick={handleResetPassword}
@@ -508,6 +581,15 @@ export function UserActions({
                     <Copy className="h-4 w-4" />
                   </Button>
                 </div>
+                {pwUnit !== "jamais" && (user.role === "portier" || user.role === "caissier") && (
+                  <p className="text-xs text-muted-foreground">
+                    Valable{" "}
+                    {pwUnit === "24h" && "24 heures"}
+                    {pwUnit === "heures" && `${pwValue} heure${pwValue > 1 ? "s" : ""}`}
+                    {pwUnit === "minutes" && `${pwValue} minute${pwValue > 1 ? "s" : ""}`}
+                    {" "}à partir de maintenant.
+                  </p>
+                )}
                 <p className="text-xs text-danger">Ce mot de passe ne sera plus affiché.</p>
               </>
             )}
