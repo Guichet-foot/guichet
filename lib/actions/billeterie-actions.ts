@@ -527,6 +527,55 @@ export async function getBilleterieInvendusList(): Promise<BilleterieInvendusIte
     partnerScannedByBil[B.id] = partnerScanned;
   }
 
+  // Partenaires indirects (2e niveau) : billeteries qui partagent des matchs avec un partenaire
+  // direct de B mais pas avec B lui-même. Leurs tickets peuvent atteindre B via la chaîne
+  // d'attribution (ex. Bil_A → "21/07" → "24/07").
+  const indirectAttributedByBil: Record<string, number> = {};
+  const indirectPartnerScannedByBil: Record<string, number> = {};
+
+  for (const B of bilList) {
+    const Bset = bilMatchSet[B.id];
+    const Btime = new Date(B.created_at).getTime();
+
+    // Union des matchs ET des IDs de tous les partenaires directs de B
+    const directPartnerIds = new Set<string>();
+    const directPartnerMatchIds = new Set<string>();
+    for (const Y of bilList) {
+      if (Y.id === B.id) continue;
+      const Yset = bilMatchSet[Y.id];
+      let overlap = false;
+      for (const mId of Yset) { if (Bset.has(mId)) { overlap = true; break; } }
+      if (!overlap) continue;
+      directPartnerIds.add(Y.id);
+      for (const mId of Yset) directPartnerMatchIds.add(mId);
+    }
+
+    let indirect = 0;
+    let indirectScanned = 0;
+    for (const X of bilList) {
+      if (X.id === B.id) continue;
+      if (directPartnerIds.has(X.id)) continue; // déjà compté en direct
+      if (new Date(X.created_at).getTime() >= Btime) continue; // X doit être plus ancien que B
+      const Xset = bilMatchSet[X.id];
+      // X doit partager au moins un match avec un partenaire direct (mais pas avec B)
+      let hasIndirectLink = false;
+      for (const mId of Xset) {
+        if (directPartnerMatchIds.has(mId) && !Bset.has(mId)) { hasIndirectLink = true; break; }
+      }
+      if (!hasIndirectLink) continue;
+      // Même formule que pour les partenaires directs
+      const nw_X = nonWithdrawnByBil[X.id] || 0;
+      const ts_X = totalScansByBil[X.id] || 0;
+      const xByMatch = scansByBilAndMatch[X.id] || {};
+      let ss_X = 0;
+      for (const mId of Bset) ss_X += xByMatch[mId] || 0;
+      indirect += Math.max(0, nw_X - (ts_X - ss_X));
+      indirectScanned += ss_X;
+    }
+    indirectAttributedByBil[B.id] = indirect;
+    indirectPartnerScannedByBil[B.id] = indirectScanned;
+  }
+
   // Détection des billeteries dont les invendus ont été attribués à une billeterie plus récente.
   // Heuristique : une billeterie X est "attribuée" si une billeterie créée APRÈS X partage ses matchs.
   // La plus récente est la billeterie principale (ex. Phases Dép.) ; l'ancienne est celle redistribuée.
@@ -558,11 +607,10 @@ export async function getBilleterieInvendusList(): Promise<BilleterieInvendusIte
     const isAttributed = isAttributedByBil[b.id] || false;
     const ownTickets = nonWithdrawnByBil[b.id] || 0;
     // Si la billeterie est attribuée, ses invendus sont "consommés" → on n'additionne pas les autres
-    const attributed = isAttributed ? 0 : (attributedByBil[b.id] || 0);
+    const attributed = isAttributed ? 0 : (attributedByBil[b.id] || 0) + (indirectAttributedByBil[b.id] || 0);
     const totalTickets = ownTickets + attributed;
-    // totalScanned = propres scans + scans des tickets partenaires aux matchs partagés
-    // (les tickets attribués sont scannés sous leur billeterie d'origine mais comptent ici)
-    const totalScanned = (totalScansByBil[b.id] || 0) + (partnerScannedByBil[b.id] || 0);
+    // totalScanned = propres scans + scans des partenaires directs + scans des partenaires indirects
+    const totalScanned = (totalScansByBil[b.id] || 0) + (partnerScannedByBil[b.id] || 0) + (indirectPartnerScannedByBil[b.id] || 0);
     // Si attribuée : 0 invendus restants (les tickets ont été affectés à une autre billetterie)
     const unscannedCount = isAttributed ? 0 : Math.max(0, totalTickets - totalScanned);
     return {
