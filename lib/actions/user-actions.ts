@@ -290,6 +290,44 @@ export async function updateUserPermittedModules(userId: string, modules: string
   return { success: true };
 }
 
+// ── getAllZonesForC3Selection ─────────────────────────────────────
+export async function getAllZonesForC3Selection(): Promise<{ id: string; name: string }[]> {
+  const supabase = await createClient();
+  const { data: caller } = await supabase.auth.getUser();
+  if (!caller.user) return [];
+  const { data: zones } = await (await createAdminClient())
+    .from("zones")
+    .select("id, name")
+    .order("name");
+  return (zones || []).map((z: any) => ({ id: z.id as string, name: z.name as string }));
+}
+
+// ── updateC3ZoneIds ──────────────────────────────────────────────
+export async function updateC3ZoneIds(userId: string, zoneIds: string[]) {
+  const check = await canManage(userId);
+  if ("error" in check) return { error: check.error };
+
+  const adminClient = await createAdminClient();
+  const { data: target } = await adminClient
+    .from("profiles")
+    .select("role")
+    .eq("id", userId)
+    .single();
+
+  if (!target || target.role !== "c3") {
+    return { error: "Les zones ne s'appliquent qu'aux comptes C3" };
+  }
+
+  const { error } = await adminClient
+    .from("profiles")
+    .update({ c3_zone_ids: zoneIds.length > 0 ? zoneIds : [] })
+    .eq("id", userId);
+
+  if (error) return { error: error.message };
+  revalidatePath("/utilisateurs");
+  return { success: true };
+}
+
 // ── deleteUser ────────────────────────────────────────────────────
 export async function deleteUser(userId: string) {
   const check = await canManage(userId);

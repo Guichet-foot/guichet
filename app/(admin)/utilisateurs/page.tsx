@@ -139,6 +139,7 @@ export default async function UsersPage({
                           currentUserId={profile.id}
                           currentUserRole={profile.role}
                           currentUserIsPresident={profile.is_president ?? false}
+                          c3ZoneIds={(user as any).c3_zone_ids || []}
                         />
                       </TableCell>
                     </TableRow>

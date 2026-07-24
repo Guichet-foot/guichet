@@ -416,8 +416,20 @@ export async function getBilleterieInvendusList(): Promise<BilleterieInvendusIte
     matchIdFilter = (zoneMatches || []).map((m: any) => m.id as string);
     if (matchIdFilter.length === 0) return [];
   } else if (profile.role === "c3") {
-    const { data: c3Matches } = await adminClient.from("matches").select("id").eq("c3_account_id", user.id);
-    matchIdFilter = (c3Matches || []).map((m: any) => m.id as string);
+    // Matchs avec c3_account_id + matchs des zones affiliées au C3
+    const { data: c3Profile } = await adminClient
+      .from("profiles").select("c3_zone_ids").eq("id", user.id).single();
+    const c3ZoneIds: string[] = (c3Profile as any)?.c3_zone_ids || [];
+    const queries: any[] = [
+      adminClient.from("matches").select("id").eq("c3_account_id", user.id),
+    ];
+    if (c3ZoneIds.length > 0) {
+      queries.push(adminClient.from("matches").select("id").in("zone_id", c3ZoneIds));
+    }
+    const results: any[] = await Promise.all(queries);
+    matchIdFilter = [...new Set(
+      results.flatMap((r) => (r.data || []).map((m: any) => m.id as string))
+    )];
     if (matchIdFilter.length === 0) return [];
   }
 

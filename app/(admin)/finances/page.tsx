@@ -37,7 +37,7 @@ export default async function FinancesPage({
     profile.role === "president_odcav" ||
     profile.role === "tresorier";
 
-  const { effectiveZoneId, selectedZone, ownedZones, needsZoneSelection, c3AccountId } =
+  const { effectiveZoneId, selectedZone, ownedZones, needsZoneSelection, c3AccountId, c3ZoneIds } =
     await getEffectiveZone(profile, params.zone);
 
   if (needsZoneSelection) {
@@ -56,17 +56,19 @@ export default async function FinancesPage({
   const adminSupabase = await createAdminClient();
   const zoneId = effectiveZoneId;
 
-  // C3 voit ses propres matchs + tous les matchs communaux is_direct (créés par les SA)
+  // C3 voit ses propres matchs + matchs des zones affiliées
   let c3AllMatchIds: string[] | null = null;
   if (c3AccountId) {
-    const [ownRes, communalRes] = await Promise.all([
+    const queries: any[] = [
       adminSupabase.from("matches").select("id").eq("c3_account_id", c3AccountId),
-      adminSupabase.from("matches").select("id").eq("is_direct", true).eq("match_type", "Match Communal").is("c3_account_id", null),
-    ]);
-    c3AllMatchIds = [...new Set([
-      ...(ownRes.data || []).map((m: any) => m.id as string),
-      ...(communalRes.data || []).map((m: any) => m.id as string),
-    ])];
+    ];
+    if (c3ZoneIds.length > 0) {
+      queries.push(adminSupabase.from("matches").select("id").in("zone_id", c3ZoneIds));
+    }
+    const results: any[] = await Promise.all(queries);
+    c3AllMatchIds = [...new Set(
+      results.flatMap((r) => (r.data || []).map((m: any) => m.id as string))
+    )];
   }
 
   const today = new Date().toISOString().split("T")[0];

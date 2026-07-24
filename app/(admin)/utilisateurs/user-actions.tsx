@@ -8,6 +8,8 @@ import {
   resetUserPassword,
   deleteUser,
   updateUserPermittedModules,
+  updateC3ZoneIds,
+  getAllZonesForC3Selection,
 } from "@/lib/actions/user-actions";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ADMIN_MODULES } from "@/lib/constants";
@@ -53,10 +55,12 @@ interface UserActionsProps {
     active: boolean;
     is_president: boolean;
     permitted_modules?: string[] | null;
+    c3ZoneIds?: string[];
   };
   currentUserId: string;
   currentUserRole: string;
   currentUserIsPresident: boolean;
+  c3ZoneIds?: string[];
 }
 
 export function UserActions({
@@ -64,6 +68,7 @@ export function UserActions({
   currentUserId,
   currentUserRole,
   currentUserIsPresident,
+  c3ZoneIds: initialC3ZoneIds = [],
 }: UserActionsProps) {
   const [editOpen, setEditOpen] = useState(false);
   const [passwordOpen, setPasswordOpen] = useState(false);
@@ -74,6 +79,10 @@ export function UserActions({
   const [phone, setPhone] = useState(user.phone || "");
   const [role, setRole] = useState(user.role);
   const [selectedModules, setSelectedModules] = useState<string[]>(user.permitted_modules || []);
+
+  // Zones pour les comptes C3
+  const [availableZones, setAvailableZones] = useState<{ id: string; name: string }[]>([]);
+  const [selectedC3ZoneIds, setSelectedC3ZoneIds] = useState<string[]>(initialC3ZoneIds);
 
   // Self password change fields
   const [selfPassword, setSelfPassword] = useState("");
@@ -114,9 +123,23 @@ export function UserActions({
       if (modResult.error) { toast.error(modResult.error); setLoading(null); return; }
     }
 
+    // Save zone affiliations when editing a C3 account
+    if (user.role === "c3" || role === "c3") {
+      const zonesResult = await updateC3ZoneIds(user.id, selectedC3ZoneIds);
+      if (zonesResult.error) { toast.error(zonesResult.error); setLoading(null); return; }
+    }
+
     toast.success("Informations modifiées");
     setEditOpen(false);
     setLoading(null);
+  }
+
+  function handleOpenEdit() {
+    // Charger les zones disponibles quand on édite un compte C3
+    if (user.role === "c3" && availableZones.length === 0) {
+      getAllZonesForC3Selection().then(setAvailableZones);
+    }
+    setEditOpen(true);
   }
 
   async function handleUpdateSelf() {
@@ -307,7 +330,7 @@ export function UserActions({
       <div className="flex gap-1 justify-end">
         <Button
           type="button" variant="ghost" size="sm"
-          onClick={() => setEditOpen(true)}
+          onClick={handleOpenEdit}
           title="Modifier"
           className="h-7 w-7 p-0"
         >
@@ -382,6 +405,38 @@ export function UserActions({
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Zones affiliées — uniquement pour les comptes C3 */}
+            {(user.role === "c3" || role === "c3") && (
+              <div className="space-y-2">
+                <Label>Zones affiliées au C3</Label>
+                <p className="text-xs text-muted-foreground">
+                  Les matchs de ces zones seront comptabilisés sur ce compte C3.
+                </p>
+                {availableZones.length === 0 ? (
+                  <p className="text-xs text-muted-foreground italic">Chargement des zones…</p>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2 border rounded-lg p-3 max-h-48 overflow-y-auto">
+                    {availableZones.map((zone) => (
+                      <div key={zone.id} className="flex items-center gap-2">
+                        <Checkbox
+                          id={`zone-${zone.id}`}
+                          checked={selectedC3ZoneIds.includes(zone.id)}
+                          onCheckedChange={(checked) => {
+                            setSelectedC3ZoneIds((prev) =>
+                              checked ? [...prev, zone.id] : prev.filter((id) => id !== zone.id)
+                            );
+                          }}
+                        />
+                        <label htmlFor={`zone-${zone.id}`} className="text-sm cursor-pointer leading-tight">
+                          {zone.name}
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Module permissions — only when president_odcav edits a super_admin */}
             {currentUserRole === "president_odcav" && (user.role === "super_admin" || role === "super_admin") && (

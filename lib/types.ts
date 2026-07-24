@@ -47,6 +47,7 @@ export interface Profile {
   city?: string | null;
   permitted_modules?: string[] | null;
   allowed_zones?: string[] | null;
+  c3_zone_ids?: string[] | null;
   password_duration_minutes?: number | null;
   password_expires_at?: string | null;
 }

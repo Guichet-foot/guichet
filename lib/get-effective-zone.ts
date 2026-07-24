@@ -8,6 +8,8 @@ export interface EffectiveZone {
   needsZoneSelection: boolean;
   /** Non-null only for C3 users — identifies their own C3 account */
   c3AccountId: string | null;
+  /** Zone IDs affiliated to this C3 account (empty for non-C3) */
+  c3ZoneIds: string[];
 }
 
 export async function getEffectiveZone(
@@ -22,6 +24,7 @@ export async function getEffectiveZone(
       ownedZones: [],
       needsZoneSelection: false,
       c3AccountId: profile.id,
+      c3ZoneIds: (profile as any).c3_zone_ids || [],
     };
   }
 
@@ -32,6 +35,7 @@ export async function getEffectiveZone(
       ownedZones: [],
       needsZoneSelection: false,
       c3AccountId: null,
+      c3ZoneIds: [],
     };
   }
 
@@ -62,6 +66,7 @@ export async function getEffectiveZone(
         ownedZones,
         needsZoneSelection: false,
         c3AccountId: null,
+        c3ZoneIds: [],
       };
     }
   }
@@ -72,5 +77,6 @@ export async function getEffectiveZone(
     ownedZones,
     needsZoneSelection: true,
     c3AccountId: null,
+    c3ZoneIds: [],
   };
 }
