@@ -89,7 +89,15 @@ export function WithdrawTicketsDialog({ billeterieId, totalActive }: { billeteri
   );
 }
 
-export function AddTicketsDialog({ billeterieId }: { billeterieId: string }) {
+export function AddTicketsDialog({
+  billeterieId,
+  categoryName,
+  label,
+}: {
+  billeterieId: string;
+  categoryName?: string;
+  label?: string;
+}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -101,7 +109,7 @@ export function AddTicketsDialog({ billeterieId }: { billeterieId: string }) {
     if (isNaN(qty) || qty < 1) { toast.error("Quantité invalide"); return; }
 
     setLoading(true);
-    const result = await addTicketsToBilleterie(billeterieId, qty);
+    const result = await addTicketsToBilleterie(billeterieId, qty, categoryName);
     setLoading(false);
 
     if (result.error) { toast.error(result.error); return; }
@@ -117,13 +125,15 @@ export function AddTicketsDialog({ billeterieId }: { billeterieId: string }) {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button variant="outline" />}>
+      <DialogTrigger render={<Button variant="outline" size="sm" />}>
         <Plus className="h-4 w-4 mr-2" />
-        Ajouter des billets
+        {label ?? "Ajouter des billets"}
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Ajouter des billets</DialogTitle>
+          <DialogTitle>
+            {categoryName ? `Ajouter des billets — ${categoryName}` : "Ajouter des billets"}
+          </DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">

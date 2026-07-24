@@ -95,11 +95,22 @@ export async function GET(request: Request) {
   const billeterieId = tickets[0].billeterie_id;
   const { data: bil } = await adminClient
     .from("billeterie")
-    .select("name, price, match_ids")
+    .select("name, price, match_ids, categories")
     .eq("id", billeterieId)
     .single();
 
   if (!bil) return new NextResponse("Billetterie introuvable", { status: 404 });
+
+  // For multi-category billeteries, resolve price from category_name on the ticket
+  const categoryName: string | null = (tickets[0] as any).category_name ?? null;
+  const bilCategories: Array<{ name: string; price: number }> | null = bil.categories ?? null;
+  const effectivePrice: number = (() => {
+    if (bilCategories && categoryName) {
+      const cat = bilCategories.find((c: { name: string; price: number }) => c.name === categoryName);
+      if (cat) return cat.price;
+    }
+    return bil.price as number;
+  })();
 
   const matchIds: string[] = bil.match_ids || [];
   const { data: matches } = matchIds.length > 0
@@ -110,6 +121,9 @@ export async function GET(request: Request) {
 
   const sellerName = (tickets[0] as any).seller?.full_name || "—";
 
+  // Displayed name: append category if multi-cat
+  const displayName = categoryName ? `${bil.name} — ${categoryName}` : (bil.name as string);
+
   const ticketBlocks = await Promise.all(
     tickets.map(async (ticket: any) => {
       const qrContent = `BIL-${ticket.qr_token}`;
@@ -119,14 +133,14 @@ export async function GET(request: Request) {
         errorCorrectionLevel: "M",
         color: { dark: "#000000", light: "#FFFFFF" },
       });
-      return renderBilleterieTicket(ticket, bil.name, bil.price, matches || [], sellerName, qrDataUrl, fmt);
+      return renderBilleterieTicket(ticket, displayName, effectivePrice, matches || [], sellerName, qrDataUrl, fmt);
     })
   );
 
   // Les billets sont des blocs directs dans <body> — le CSS gère les sauts de page
   const blocksHtml = ticketBlocks.join("\n");
 
-  const totalPriceFmt = new Intl.NumberFormat("fr-FR").format(tickets.length * bil.price);
+  const totalPriceFmt = new Intl.NumberFormat("fr-FR").format(tickets.length * effectivePrice);
 
   // Surcharges CSS compactes propres aux billets billeterie (n'affecte pas les billets réguliers)
   const is58bck = fmt === "58";

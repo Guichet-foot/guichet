@@ -80,11 +80,14 @@ export async function getAllMatchesForBilleterie(): Promise<MatchOption[]> {
 }
 
 // ── Créer un billetterie + générer les billets ─────────────────────────────────
+export type BilCategory = { name: string; price: number };
+
 export async function createBilleterie(formData: {
   name: string;
   matchIds: string[];
   price: number;
   quantity?: number;
+  categories?: BilCategory[];
 }): Promise<{ error?: string; billeterieId?: string; batchId?: string }> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -102,11 +105,25 @@ export async function createBilleterie(formData: {
 
   if (!formData.name.trim()) return { error: "Nom obligatoire" };
   if (formData.matchIds.length < 1) return { error: "Sélectionnez au moins un match" };
-  if (formData.price < 0) return { error: "Prix invalide" };
+
+  const isMultiCat = formData.categories && formData.categories.length > 0;
+  if (isMultiCat) {
+    if (formData.categories!.some((c) => !c.name.trim() || c.price < 0)) return { error: "Catégorie invalide" };
+  } else {
+    if (formData.price < 0) return { error: "Prix invalide" };
+  }
+
+  const insertData: Record<string, unknown> = {
+    name: formData.name.trim(),
+    match_ids: formData.matchIds,
+    price: isMultiCat ? 0 : formData.price,
+    created_by: user.id,
+  };
+  if (isMultiCat) insertData.categories = formData.categories;
 
   const { data: bil, error: bilErr } = await adminClient
     .from("billeterie")
-    .insert({ name: formData.name.trim(), match_ids: formData.matchIds, price: formData.price, created_by: user.id })
+    .insert(insertData)
     .select("id")
     .single();
 
@@ -147,7 +164,8 @@ export async function createBilleterie(formData: {
 // ── Ajouter des billets à un billetterie existant ─────────────────────────────
 export async function addTicketsToBilleterie(
   billeterieId: string,
-  quantity: number
+  quantity: number,
+  categoryName?: string
 ): Promise<{ error?: string; batchId?: string; count?: number }> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -175,6 +193,7 @@ export async function addTicketsToBilleterie(
     sale_batch_id: batchId,
     sold_by: user.id,
     status: "actif",
+    ...(categoryName ? { category_name: categoryName } : {}),
   }));
 
   for (let i = 0; i < tickets.length; i += 100) {
@@ -248,9 +267,10 @@ export async function getBilleterieDetails(id: string): Promise<{
   name: string;
   matchIds: string[];
   price: number;
+  categories: BilCategory[] | null;
   createdAt: string;
   matches: MatchOption[];
-  batches: { batchId: string; createdAt: string; count: number; withdrawnCount: number }[];
+  batches: { batchId: string; createdAt: string; count: number; withdrawnCount: number; categoryName: string | null }[];
   totalTickets: number;
   totalScans: number;
   attributedBillets: number;
@@ -260,7 +280,7 @@ export async function getBilleterieDetails(id: string): Promise<{
 
   const { data: bil } = await adminClient
     .from("billeterie")
-    .select("id, name, match_ids, price, created_at")
+    .select("id, name, match_ids, price, categories, created_at")
     .eq("id", id)
     .single();
 
@@ -273,16 +293,16 @@ export async function getBilleterieDetails(id: string): Promise<{
       ? adminClient.from("matches").select("id, home_team, away_team, venue, match_date, match_type, status, home_team_zone, away_team_zone").in("id", matchIds)
       : Promise.resolve({ data: [] as any[] }),
     fetchAll<any>((from, to) =>
-      adminClient.from("billeterie_tickets").select("id, sale_batch_id, created_at, withdrawn").eq("billeterie_id", id).order("created_at").range(from, to)
+      adminClient.from("billeterie_tickets").select("id, sale_batch_id, created_at, withdrawn, category_name").eq("billeterie_id", id).order("created_at").range(from, to)
     ),
   ]);
 
-  // Batch grouping with withdrawn count
-  const batchMap: Record<string, { batchId: string; createdAt: string; count: number; withdrawnCount: number }> = {};
+  // Batch grouping with withdrawn count + category_name
+  const batchMap: Record<string, { batchId: string; createdAt: string; count: number; withdrawnCount: number; categoryName: string | null }> = {};
   allTicketRows.forEach((t: any) => {
     if (!t.sale_batch_id) return;
     if (!batchMap[t.sale_batch_id]) {
-      batchMap[t.sale_batch_id] = { batchId: t.sale_batch_id, createdAt: t.created_at, count: 0, withdrawnCount: 0 };
+      batchMap[t.sale_batch_id] = { batchId: t.sale_batch_id, createdAt: t.created_at, count: 0, withdrawnCount: 0, categoryName: t.category_name ?? null };
     }
     batchMap[t.sale_batch_id].count++;
     if (t.withdrawn) batchMap[t.sale_batch_id].withdrawnCount++;
@@ -436,6 +456,7 @@ export async function getBilleterieDetails(id: string): Promise<{
     name: bil.name,
     matchIds,
     price: bil.price,
+    categories: (bil.categories as BilCategory[] | null) ?? null,
     createdAt: bil.created_at,
     matches: ((matches || []) as MatchOption[]).sort((a, b) => new Date(a.match_date).getTime() - new Date(b.match_date).getTime()),
     batches,

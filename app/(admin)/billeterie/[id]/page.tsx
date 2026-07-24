@@ -3,13 +3,13 @@ import { getBilleterieDetails } from "@/lib/actions/billeterie-actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Trophy, Ticket, ScanLine } from "lucide-react";
+import { ArrowLeft, Trophy, Ticket, ScanLine, Layers, Printer } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { formatFCFA, fmtZone } from "@/lib/format";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
-import { AddTicketsDialog, WithdrawTicketsDialog } from "./billeterie-actions-client";
+import { AddTicketsDialog, WithdrawTicketsDialog, PrintBatchButton } from "./billeterie-actions-client";
 import { AutoRefresh } from "@/components/auto-refresh";
 
 export const metadata = { title: "Détail Billetterie" };
@@ -32,6 +32,8 @@ export default async function BilleterieDetailPage({
   const bil = await getBilleterieDetails(id);
   if (!bil) notFound();
 
+  const isMultiCat = bil.categories && bil.categories.length > 0;
+
   return (
     <div className="space-y-6 max-w-2xl mx-auto">
       <AutoRefresh intervalMs={30_000} />
@@ -46,12 +48,18 @@ export default async function BilleterieDetailPage({
           <h1 className="text-2xl font-bold font-heading">{bil.name}</h1>
           <p className="text-sm text-muted-foreground">
             Créé le {format(new Date(bil.createdAt), "d MMMM yyyy", { locale: fr })}
+            {isMultiCat && (
+              <span className="ml-2 inline-flex items-center gap-1 text-brand">
+                <Layers className="h-3 w-3" />
+                Multi-catégories
+              </span>
+            )}
           </p>
         </div>
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className={`grid grid-cols-1 gap-4 ${isMultiCat ? "sm:grid-cols-2" : "sm:grid-cols-3"}`}>
         <Card>
           <CardContent className="pt-4 pb-4">
             <div className="flex items-center gap-2">
@@ -77,14 +85,16 @@ export default async function BilleterieDetailPage({
             </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="pt-4 pb-4">
-            <div>
-              <p className="text-2xl font-bold text-brand">{formatFCFA(bil.price)}</p>
-              <p className="text-xs text-muted-foreground">Prix / billet</p>
-            </div>
-          </CardContent>
-        </Card>
+        {!isMultiCat && (
+          <Card>
+            <CardContent className="pt-4 pb-4">
+              <div>
+                <p className="text-2xl font-bold text-brand">{formatFCFA(bil.price)}</p>
+                <p className="text-xs text-muted-foreground">Prix / billet</p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {/* Matchs inclus */}
@@ -119,35 +129,89 @@ export default async function BilleterieDetailPage({
         </CardContent>
       </Card>
 
-      {/* Lots d'impression — fondateur uniquement */}
-      {profile.role === "fondateur" && <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between gap-2">
-            <div>
-              <CardTitle className="text-base">Imprimer</CardTitle>
-              <p className="text-xs text-muted-foreground mt-0.5">{bil.totalTickets} billet{bil.totalTickets !== 1 ? "s" : ""} imprimé{bil.totalTickets !== 1 ? "s" : ""}</p>
-            </div>
-            <div className="flex gap-2">
-              <WithdrawTicketsDialog billeterieId={bil.id} totalActive={bil.totalTickets} />
-              <AddTicketsDialog billeterieId={bil.id} />
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {bil.batches.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Aucun lot généré</p>
+      {/* Impression — fondateur uniquement */}
+      {profile.role === "fondateur" && (
+        <>
+          {isMultiCat ? (
+            /* ── Mode multi-catégories : une carte par catégorie ── */
+            bil.categories!.map((cat) => {
+              const catBatches = bil.batches.filter((b: any) => b.categoryName === cat.name);
+              const catTotal = catBatches.reduce((s: number, b: any) => s + (b.count - b.withdrawnCount), 0);
+              return (
+                <Card key={cat.name}>
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div>
+                        <CardTitle className="text-base">{cat.name}</CardTitle>
+                        <p className="text-sm font-bold text-brand mt-0.5">{formatFCFA(cat.price)}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {catTotal} billet{catTotal !== 1 ? "s" : ""} imprimé{catTotal !== 1 ? "s" : ""}
+                        </p>
+                      </div>
+                      <div className="flex gap-2">
+                        <WithdrawTicketsDialog billeterieId={bil.id} totalActive={catTotal} />
+                        <AddTicketsDialog
+                          billeterieId={bil.id}
+                          categoryName={cat.name}
+                          label="Imprimer"
+                        />
+                      </div>
+                    </div>
+                  </CardHeader>
+                  {catBatches.length > 0 && (
+                    <CardContent className="space-y-2">
+                      {catBatches.map((batch: any) => (
+                        <div key={batch.batchId} className="flex items-center justify-between gap-2 rounded-lg border border-border p-3">
+                          <div>
+                            <p className="text-sm font-semibold">{batch.count - batch.withdrawnCount} billet{(batch.count - batch.withdrawnCount) !== 1 ? "s" : ""}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {format(new Date(batch.createdAt), "d MMM yyyy HH:mm", { locale: fr })}
+                            </p>
+                          </div>
+                          <PrintBatchButton batchId={batch.batchId} count={batch.count - batch.withdrawnCount} />
+                        </div>
+                      ))}
+                    </CardContent>
+                  )}
+                </Card>
+              );
+            })
           ) : (
-            bil.batches.map((batch: any) => (
-              <div key={batch.batchId} className="rounded-lg border border-border p-3">
-                <p className="text-sm font-semibold">{batch.count} billet{batch.count !== 1 ? "s" : ""}</p>
-                <p className="text-xs text-muted-foreground">
-                  {format(new Date(batch.createdAt), "d MMM yyyy HH:mm", { locale: fr })}
-                </p>
-              </div>
-            ))
+            /* ── Mode prix unique ── */
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <CardTitle className="text-base">Imprimer</CardTitle>
+                    <p className="text-xs text-muted-foreground mt-0.5">{bil.totalTickets} billet{bil.totalTickets !== 1 ? "s" : ""} imprimé{bil.totalTickets !== 1 ? "s" : ""}</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <WithdrawTicketsDialog billeterieId={bil.id} totalActive={bil.totalTickets} />
+                    <AddTicketsDialog billeterieId={bil.id} />
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {bil.batches.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Aucun lot généré</p>
+                ) : (
+                  bil.batches.map((batch: any) => (
+                    <div key={batch.batchId} className="flex items-center justify-between gap-2 rounded-lg border border-border p-3">
+                      <div>
+                        <p className="text-sm font-semibold">{batch.count - batch.withdrawnCount} billet{(batch.count - batch.withdrawnCount) !== 1 ? "s" : ""}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {format(new Date(batch.createdAt), "d MMM yyyy HH:mm", { locale: fr })}
+                        </p>
+                      </div>
+                      <PrintBatchButton batchId={batch.batchId} count={batch.count - batch.withdrawnCount} />
+                    </div>
+                  ))
+                )}
+              </CardContent>
+            </Card>
           )}
-        </CardContent>
-      </Card>}
+        </>
+      )}
     </div>
   );
 }
