@@ -176,13 +176,17 @@ export default async function DashboardPage({
     let bilPrinted = 0, bilScanned = 0, bilRevenue = 0;
     if (matchIds.length > 0) {
       const matchIdSet = new Set(matchIds);
-      const { data: allBilsData } = await adminClient.from("billeterie").select("id, price, match_ids");
+      const { data: allBilsData } = await adminClient.from("billeterie").select("id, price, match_ids, categories");
       const bilsInPeriod = ((allBilsData || []) as any[]).filter((b: any) =>
         (b.match_ids || []).some((id: string) => matchIdSet.has(id))
       );
       const bilIds = bilsInPeriod.map((b: any) => b.id as string);
       const bilPriceMap: Record<string, number> = {};
-      bilsInPeriod.forEach((b: any) => { bilPriceMap[b.id] = b.price || 0; });
+      const bilCatMap1: Record<string, Array<{name: string; price: number}>> = {};
+      bilsInPeriod.forEach((b: any) => {
+        bilPriceMap[b.id] = b.price || 0;
+        if (b.categories) bilCatMap1[b.id] = b.categories;
+      });
 
       // Partenaires indirects : billeteries plus anciennes partageant des matchs avec
       // bilsInPeriod mais pas avec les matchs de la période directement.
@@ -196,7 +200,10 @@ export default async function DashboardPage({
         return bm.some((id) => directBilMatchIds1.has(id));
       });
       const indirectBilIds1 = indirectBils1.map((b: any) => b.id as string);
-      indirectBils1.forEach((b: any) => { bilPriceMap[b.id] = b.price || 0; });
+      indirectBils1.forEach((b: any) => {
+        bilPriceMap[b.id] = b.price || 0;
+        if (b.categories) bilCatMap1[b.id] = b.categories;
+      });
       const allFetchBilIds1 = [...bilIds, ...indirectBilIds1];
 
       if (allFetchBilIds1.length > 0) {
@@ -207,7 +214,7 @@ export default async function DashboardPage({
 
         const [bilAllTickets, allBilScans] = await Promise.all([
           fetchAll<any>((from, to) =>
-            adminClient.from("billeterie_tickets").select("id, billeterie_id, withdrawn")
+            adminClient.from("billeterie_tickets").select("id, billeterie_id, withdrawn, category_name")
               .in("billeterie_id", allFetchBilIds1).range(from, to)
           ),
           fetchAll<any>((from, to) =>
@@ -218,8 +225,10 @@ export default async function DashboardPage({
 
         const nonWithdrawnByBil: Record<string, number> = {};
         const bilTicketIdMap: Record<string, string> = {};
+        const bilTicketCatMap1: Record<string, string | null> = {};
         bilAllTickets.forEach((t: any) => {
           bilTicketIdMap[t.id as string] = t.billeterie_id as string;
+          bilTicketCatMap1[t.id as string] = t.category_name ?? null;
           if (!t.withdrawn) {
             nonWithdrawnByBil[t.billeterie_id] = (nonWithdrawnByBil[t.billeterie_id] || 0) + 1;
           }
@@ -257,7 +266,14 @@ export default async function DashboardPage({
         bilScanned = periodBilScans.length;
         bilRevenue = periodBilScans.reduce((s: number, sc: any) => {
           const bId = bilTicketIdMap[sc.ticket_id as string];
-          return s + (bId ? bilPriceMap[bId] || 0 : 0);
+          if (!bId) return s;
+          const catName = bilTicketCatMap1[sc.ticket_id as string];
+          const cats = bilCatMap1[bId];
+          if (cats && catName) {
+            const cat = cats.find((c) => c.name === catName);
+            return s + (cat ? cat.price : 0);
+          }
+          return s + (bilPriceMap[bId] || 0);
         }, 0);
       }
     }
@@ -536,7 +552,7 @@ export default async function DashboardPage({
     const scanMatchIds = c3AllMatchIds !== null ? c3AllMatchIds : matchIdsInPeriod;
     if (scanMatchIds.length > 0) {
       const scanMatchIdSet = new Set(scanMatchIds);
-      const { data: allBils } = await adminClient.from("billeterie").select("id, price, match_ids");
+      const { data: allBils } = await adminClient.from("billeterie").select("id, price, match_ids, categories");
 
       // Toutes les billeteries C3 (pour la couverture des scans)
       const allC3Bils = (allBils || []).filter((b: any) =>
@@ -544,7 +560,11 @@ export default async function DashboardPage({
       );
       const allC3BilIds = allC3Bils.map((b: any) => b.id as string);
       const bilPriceMap: Record<string, number> = {};
-      allC3Bils.forEach((b: any) => { bilPriceMap[b.id] = b.price || 0; });
+      const bilCatMap2: Record<string, Array<{name: string; price: number}>> = {};
+      allC3Bils.forEach((b: any) => {
+        bilPriceMap[b.id] = b.price || 0;
+        if (b.categories) bilCatMap2[b.id] = b.categories;
+      });
 
       // Billeteries de la période uniquement → pour bilPrinted
       const periodMatchSet = new Set(matchIdsInPeriod);
@@ -576,7 +596,10 @@ export default async function DashboardPage({
         ...indirectFromC3.map((b: any) => b.id as string),
         ...indirectOutside2.map((b: any) => b.id as string),
       ];
-      indirectOutside2.forEach((b: any) => { bilPriceMap[b.id] = b.price || 0; });
+      indirectOutside2.forEach((b: any) => {
+        bilPriceMap[b.id] = b.price || 0;
+        if (b.categories) bilCatMap2[b.id] = b.categories;
+      });
       const outsideIds2 = indirectOutside2.map((b: any) => b.id as string);
       const allFetchBilIds2 = [...allC3BilIds, ...outsideIds2];
 
@@ -588,7 +611,7 @@ export default async function DashboardPage({
 
         const [bilAllTickets, allBilScans] = await Promise.all([
           fetchAll<any>((from, to) =>
-            adminClient.from("billeterie_tickets").select("id, billeterie_id, withdrawn")
+            adminClient.from("billeterie_tickets").select("id, billeterie_id, withdrawn, category_name")
               .in("billeterie_id", allFetchBilIds2).range(from, to)
           ),
           fetchAll<any>((from, to) =>
@@ -599,8 +622,10 @@ export default async function DashboardPage({
 
         const nonWithdrawnByBil: Record<string, number> = {};
         const bilTicketIdMap: Record<string, string> = {};
+        const bilTicketCatMap2: Record<string, string | null> = {};
         bilAllTickets.forEach((t: any) => {
           bilTicketIdMap[t.id as string] = t.billeterie_id as string;
+          bilTicketCatMap2[t.id as string] = t.category_name ?? null;
           if (!t.withdrawn) {
             nonWithdrawnByBil[t.billeterie_id] = (nonWithdrawnByBil[t.billeterie_id] || 0) + 1;
           }
@@ -641,7 +666,14 @@ export default async function DashboardPage({
         bilScanned = periodBilScans.length;
         bilRevenue = periodBilScans.reduce((s: number, sc: any) => {
           const bId = bilTicketIdMap[sc.ticket_id as string];
-          return s + (bId ? bilPriceMap[bId] || 0 : 0);
+          if (!bId) return s;
+          const catName = bilTicketCatMap2[sc.ticket_id as string];
+          const cats = bilCatMap2[bId];
+          if (cats && catName) {
+            const cat = cats.find((c) => c.name === catName);
+            return s + (cat ? cat.price : 0);
+          }
+          return s + (bilPriceMap[bId] || 0);
         }, 0);
       }
     }

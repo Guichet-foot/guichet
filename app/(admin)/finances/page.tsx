@@ -158,14 +158,18 @@ export default async function FinancesPage({
     const scanMatchIds = c3AllMatchIds !== null ? c3AllMatchIds : matchIdsInPeriod;
     if (scanMatchIds.length > 0) {
       const scanMatchIdSet = new Set(scanMatchIds);
-      const { data: allBils } = await adminSupabase.from("billeterie").select("id, price, match_ids");
+      const { data: allBils } = await adminSupabase.from("billeterie").select("id, price, match_ids, categories");
 
       const allC3Bils = (allBils || []).filter((b: any) =>
         (b.match_ids || []).some((id: string) => scanMatchIdSet.has(id))
       );
       const allC3BilIds = allC3Bils.map((b: any) => b.id as string);
       const bilPriceMap: Record<string, number> = {};
-      allC3Bils.forEach((b: any) => { bilPriceMap[b.id] = b.price || 0; });
+      const bilCatMapF: Record<string, Array<{name: string; price: number}>> = {};
+      allC3Bils.forEach((b: any) => {
+        bilPriceMap[b.id] = b.price || 0;
+        if (b.categories) bilCatMapF[b.id] = b.categories;
+      });
 
       const periodMatchSet = new Set(matchIdsInPeriod);
       const bilsInPeriod = allC3Bils.filter((b: any) =>
@@ -194,7 +198,10 @@ export default async function FinancesPage({
         ...indirectFromC3F.map((b: any) => b.id as string),
         ...indirectOutsideF.map((b: any) => b.id as string),
       ];
-      indirectOutsideF.forEach((b: any) => { bilPriceMap[b.id] = b.price || 0; });
+      indirectOutsideF.forEach((b: any) => {
+        bilPriceMap[b.id] = b.price || 0;
+        if (b.categories) bilCatMapF[b.id] = b.categories;
+      });
       const outsideIdsF = indirectOutsideF.map((b: any) => b.id as string);
       const allFetchBilIdsF = [...allC3BilIds, ...outsideIdsF];
 
@@ -207,7 +214,7 @@ export default async function FinancesPage({
         const [bilAllTickets, allBilScans] = await Promise.all([
           fetchAll<any>((from, to) =>
             adminSupabase.from("billeterie_tickets")
-              .select("id, billeterie_id, withdrawn")
+              .select("id, billeterie_id, withdrawn, category_name")
               .in("billeterie_id", allFetchBilIdsF)
               .range(from, to)
           ),
@@ -219,8 +226,10 @@ export default async function FinancesPage({
 
         const nonWithdrawnByBil: Record<string, number> = {};
         const ticketIdToBilId: Record<string, string> = {};
+        const ticketCatMapF: Record<string, string | null> = {};
         bilAllTickets.forEach((t: any) => {
           ticketIdToBilId[t.id as string] = t.billeterie_id as string;
+          ticketCatMapF[t.id as string] = t.category_name ?? null;
           if (!t.withdrawn) {
             nonWithdrawnByBil[t.billeterie_id] = (nonWithdrawnByBil[t.billeterie_id] || 0) + 1;
           }
@@ -258,7 +267,14 @@ export default async function FinancesPage({
         bilScanned = periodScans.length;
         bilRevenue = periodScans.reduce((s: number, scan: any) => {
           const bilId = ticketIdToBilId[scan.ticket_id as string];
-          return s + (bilId ? (bilPriceMap[bilId] || 0) : 0);
+          if (!bilId) return s;
+          const catName = ticketCatMapF[scan.ticket_id as string];
+          const cats = bilCatMapF[bilId];
+          if (cats && catName) {
+            const cat = cats.find((c) => c.name === catName);
+            return s + (cat ? cat.price : 0);
+          }
+          return s + (bilPriceMap[bilId] || 0);
         }, 0);
       }
     }
