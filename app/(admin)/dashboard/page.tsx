@@ -568,6 +568,36 @@ export default async function DashboardPage({
     );
   }
 
+  // Tickets scanned in the period from matches NOT in matchIdsInPeriod
+  // (e.g. ticket for a future match scanned today) — tracked by scanned_at
+  let extraScannedTickets: { price: number; counts_as_revenue: boolean }[] = [];
+  if (!filterMatchId) {
+    // Build the full set of match IDs the user can see
+    let allScopeMatchIds: string[];
+    if (c3AllMatchIds !== null) {
+      allScopeMatchIds = c3AllMatchIds;
+    } else if (zoneFilter) {
+      const { data: allZoneMatchData } = await adminClient
+        .from("matches").select("id").eq("zone_id", zoneFilter);
+      allScopeMatchIds = ((allZoneMatchData || []) as any[]).map((m: any) => m.id as string);
+    } else {
+      allScopeMatchIds = [];
+    }
+    const periodMatchSet = new Set(matchIdsInPeriod);
+    const nonPeriodIds = allScopeMatchIds.filter((id) => !periodMatchSet.has(id));
+    if (nonPeriodIds.length > 0) {
+      extraScannedTickets = await fetchAll<any>((from, to) =>
+        adminClient.from("tickets")
+          .select("price, counts_as_revenue")
+          .eq("status", "scanne")
+          .gte("scanned_at", dateStart2.toISOString())
+          .lte("scanned_at", dateEnd2.toISOString())
+          .in("match_id", nonPeriodIds)
+          .range(from, to)
+      );
+    }
+  }
+
   let bilPrinted = 0, bilScanned = 0, bilRevenue = 0;
   {
     // Pour les scans : utiliser TOUS les matchs C3 (pas seulement ceux de la période)
@@ -705,14 +735,19 @@ export default async function DashboardPage({
   const printedTickets  = periodTickets.filter((t: any) => t.bloc_printed === true);
   const totalPrinted    = printedTickets.length + bilPrinted;
   const totalBlocs      = Math.floor(totalPrinted / 100);
-  const totalScanned    = periodTickets.filter((t: any) => t.status === "scanne").length + bilScanned;
+  const totalScanned    = periodTickets.filter((t: any) => t.status === "scanne").length
+    + extraScannedTickets.length
+    + bilScanned;
   const totalUnsold     = Math.max(0, totalPrinted - totalScanned);
   const totalUnsoldValue = printedTickets
     .filter((t: any) => t.status !== "scanne")
     .reduce((s: number, t: any) => s + (t.price || 0), 0);
+  const extraScannedRevenue = extraScannedTickets
+    .filter((t: any) => t.counts_as_revenue)
+    .reduce((s: number, t: any) => s + (t.price || 0), 0);
   const grossRevenue    = periodTickets
     .filter((t: any) => t.counts_as_revenue && t.status === "scanne")
-    .reduce((s: number, t: any) => s + (t.price || 0), 0) + bilRevenue;
+    .reduce((s: number, t: any) => s + (t.price || 0), 0) + bilRevenue + extraScannedRevenue;
   const fraisODCAV      = Math.round(grossRevenue * 0.05);
   const fraisBilleterie = totalScanned * 10;
 
