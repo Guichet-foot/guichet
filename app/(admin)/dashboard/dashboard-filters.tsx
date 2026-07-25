@@ -7,7 +7,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { MapPin, CalendarDays, RotateCcw, Filter, X } from "lucide-react";
+import { MapPin, CalendarDays, RotateCcw, Filter, X, Building2 } from "lucide-react";
 import { useState } from "react";
 
 interface Zone { id: string; name: string; }
@@ -21,6 +21,10 @@ interface DashboardFiltersProps {
   matches?: { id: string; label: string }[];
   /** Whether to show the zone dropdown */
   showZoneFilter?: boolean;
+  /** C3 accounts list for C3 filter dropdown */
+  c3Accounts?: { id: string; name: string; city?: string | null }[];
+  /** Currently selected C3 account ID */
+  currentC3?: string;
 }
 
 const PERIOD_OPTIONS = [
@@ -37,6 +41,8 @@ export function DashboardFilters({
   currentZone = "",
   matches = [],
   showZoneFilter = false,
+  c3Accounts = [],
+  currentC3 = "",
 }: DashboardFiltersProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -53,6 +59,7 @@ export function DashboardFilters({
   const [start, setStart]     = useState(currentStart);
   const [end, setEnd]         = useState(currentEnd);
   const [zone, setZone]       = useState(currentZone);
+  const [c3Account, setC3Account] = useState(currentC3);
   const [matchId, setMatchId] = useState(currentMatch);
   const [showLegacy, setShowLegacy] = useState(!!(legacyDate || legacyYear || currentMatch));
 
@@ -62,6 +69,8 @@ export function DashboardFilters({
     const p = new URLSearchParams();
     const z = overrides.zone ?? zone;
     if (z) p.set("zone", z);
+    const c3v = overrides.c3 ?? c3Account;
+    if (c3v) p.set("c3", c3v);
     const per = overrides.period ?? period;
     p.set("period", per);
     if (per === "custom") {
@@ -85,7 +94,19 @@ export function DashboardFilters({
   function handleZoneChange(v: string | null) {
     const z = !v || v === "__all__" ? "" : v;
     setZone(z);
-    push({ zone: z });
+    setC3Account("");
+    push({ zone: z, c3: "" });
+  }
+
+  function handleC3Change(v: string | null) {
+    const c3v = !v || v === "__all__" ? "" : v;
+    setC3Account(c3v);
+    if (c3v) {
+      setZone("");
+      push({ c3: c3v, zone: "" });
+    } else {
+      push({ c3: "" });
+    }
   }
 
   function applyCustom() {
@@ -95,13 +116,14 @@ export function DashboardFilters({
   function reset() {
     setPeriod("today");
     setZone("");
+    setC3Account("");
     setStart("");
     setEnd("");
     setMatchId("");
     router.push(`${pathname}?period=today`);
   }
 
-  const hasFilters = !!(zone || period !== "today" || (isCustom && (start || end)) || matchId);
+  const hasFilters = !!(zone || c3Account || period !== "today" || (isCustom && (start || end)) || matchId);
 
   return (
     <div className="space-y-3">
@@ -121,6 +143,28 @@ export function DashboardFilters({
                 <SelectItem value="__all__">Toutes les zones</SelectItem>
                 {zones.map((z) => (
                   <SelectItem key={z.id} value={z.id}>{z.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
+        {/* C3 filter */}
+        {showZoneFilter && c3Accounts.length > 0 && (
+          <div className="space-y-1.5 w-full sm:w-auto">
+            <Label className="text-xs font-medium flex items-center gap-1 text-muted-foreground">
+              <Building2 className="h-3 w-3" /> Filtrer par C3
+            </Label>
+            <Select value={c3Account || "__all__"} onValueChange={handleC3Change}>
+              <SelectTrigger className="h-9 w-full sm:w-52 text-sm">
+                <SelectValue placeholder="Toutes les C3" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">Toutes les C3</SelectItem>
+                {c3Accounts.map((c3) => (
+                  <SelectItem key={c3.id} value={c3.id}>
+                    {c3.name}{c3.city ? ` — ${c3.city}` : ""}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>

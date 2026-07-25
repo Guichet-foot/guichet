@@ -16,6 +16,8 @@ interface InterFiltersProps {
   currentTo?: string;
   currentMatch?: string;
   matches?: { id: string; label: string }[];
+  c3Accounts?: { id: string; name: string; city?: string | null }[];
+  currentC3?: string;
 }
 
 export function InterFilters({
@@ -26,6 +28,8 @@ export function InterFilters({
   currentTo,
   currentMatch,
   matches = [],
+  c3Accounts = [],
+  currentC3 = "",
 }: InterFiltersProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -35,10 +39,12 @@ export function InterFilters({
   const [from, setFrom] = useState(currentFrom || "");
   const [to, setTo] = useState(currentTo || "");
   const [match, setMatch] = useState(currentMatch || "");
+  const [c3Account, setC3Account] = useState(currentC3);
 
-  function buildUrl(p: Period, d?: string, f?: string, t?: string, m?: string) {
+  function buildUrl(p: Period, d?: string, f?: string, t?: string, m?: string, c3?: string) {
     const params = new URLSearchParams();
     params.set("type", typeParam);
+    if (c3) params.set("c3", c3);
     if (m) {
       params.set("match", m);
     } else {
@@ -55,23 +61,29 @@ export function InterFilters({
   function handlePeriodChange(p: Period) {
     setMatch("");
     setPeriod(p);
-    if (p === "24h") router.push(buildUrl("24h"));
-    else if (p === "jour") router.push(buildUrl("jour", date));
-    else if (p === "mois") router.push(buildUrl("mois"));
+    if (p === "24h") router.push(buildUrl("24h", undefined, undefined, undefined, undefined, c3Account));
+    else if (p === "jour") router.push(buildUrl("jour", date, undefined, undefined, undefined, c3Account));
+    else if (p === "mois") router.push(buildUrl("mois", undefined, undefined, undefined, undefined, c3Account));
   }
 
   function handleDateChange(d: string) {
     setDate(d);
-    if (period === "jour") router.push(buildUrl("jour", d));
+    if (period === "jour") router.push(buildUrl("jour", d, undefined, undefined, undefined, c3Account));
   }
 
   function handleMatchChange(m: string) {
     setMatch(m);
-    router.push(buildUrl(period, date, from, to, m));
+    router.push(buildUrl(period, date, from, to, m, c3Account));
+  }
+
+  function handleC3Change(c3v: string) {
+    setC3Account(c3v);
+    setMatch("");
+    router.push(buildUrl(period, date, from, to, undefined, c3v));
   }
 
   function applyCustom() {
-    if (from && to) router.push(buildUrl("custom", undefined, from, to));
+    if (from && to) router.push(buildUrl("custom", undefined, from, to, undefined, c3Account));
   }
 
   const tabs: { key: Period; label: string }[] = [
@@ -140,6 +152,33 @@ export function InterFilters({
           >
             Appliquer
           </Button>
+        </div>
+      )}
+
+      {typeParam === "communal" && c3Accounts.length > 0 && (
+        <div className="flex items-center gap-2 pt-1 border-t border-border/50">
+          <Label className="text-xs text-muted-foreground whitespace-nowrap">C3 :</Label>
+          <select
+            value={c3Account}
+            onChange={(e) => handleC3Change(e.target.value)}
+            className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+          >
+            <option value="">— Toutes les C3 —</option>
+            {c3Accounts.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}{c.city ? ` — ${c.city}` : ""}
+              </option>
+            ))}
+          </select>
+          {c3Account && (
+            <button
+              type="button"
+              onClick={() => handleC3Change("")}
+              className="text-xs text-muted-foreground hover:text-foreground underline whitespace-nowrap"
+            >
+              Effacer
+            </button>
+          )}
         </div>
       )}
 

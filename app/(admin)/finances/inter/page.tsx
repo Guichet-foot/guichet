@@ -17,7 +17,7 @@ type Period = "24h" | "jour" | "mois" | "custom";
 export default async function FinancesInterPage({
   searchParams,
 }: {
-  searchParams: Promise<{ type?: string; period?: string; date?: string; from?: string; to?: string; match?: string }>;
+  searchParams: Promise<{ type?: string; period?: string; date?: string; from?: string; to?: string; match?: string; c3?: string }>;
 }) {
   const profile = await requireRole(["super_admin", "fondateur", "president_odcav", "tresorier"]);
   const params = await searchParams;
@@ -44,14 +44,20 @@ export default async function FinancesInterPage({
 
   // C3 accounts belonging to this ODCAV (used only for the Communal tab)
   let c3AccountIds: string[] = [];
+  let c3Profiles: { id: string; full_name: string; city: string | null }[] = [];
+  const c3AccountFilter = typeParam === "communal" ? (params.c3 || "") : "";
   if (typeParam === "communal") {
-    const c3Query = adminSupabase.from("profiles").select("id").eq("role", "c3");
+    const c3Query = adminSupabase.from("profiles").select("id, full_name, city").eq("role", "c3");
     // fondateur et super_admin voient tous les comptes C3 (même organisation)
     const { data: c3Accounts } =
       (profile.role === "fondateur" || profile.role === "super_admin")
         ? await c3Query
         : await c3Query.eq("created_by_admin", ownerId);
-    c3AccountIds = ((c3Accounts || []) as any[]).map((p: any) => p.id as string);
+    c3Profiles = (c3Accounts || []) as { id: string; full_name: string; city: string | null }[];
+    // If c3AccountFilter active, scope to only that account
+    c3AccountIds = c3AccountFilter
+      ? c3Profiles.filter((p) => p.id === c3AccountFilter).map((p) => p.id)
+      : c3Profiles.map((p) => p.id);
   }
 
   const today = new Date().toISOString().split("T")[0];
@@ -132,10 +138,11 @@ export default async function FinancesInterPage({
   const matchesInPeriod: any[] = [...(odcavMatchesData || [])];
 
   // 2. C3 matches (treated as communal — no match_type, identified by c3_account_id)
+  let savedC3Matches: any[] = [];
   if (typeParam === "communal" && c3AccountIds.length > 0) {
     let c3MatchQuery: any = adminSupabase
       .from("matches")
-      .select("id, home_team, away_team, match_date")
+      .select("id, home_team, away_team, match_date, c3_account_id")
       .in("c3_account_id", c3AccountIds);
     if (filterMatchId) {
       c3MatchQuery = c3MatchQuery.eq("id", filterMatchId);
@@ -145,8 +152,9 @@ export default async function FinancesInterPage({
         .lte("match_date", dateEnd.toISOString());
     }
     const { data: c3Matches } = await c3MatchQuery;
+    savedC3Matches = (c3Matches || []) as any[];
     const existingIds = new Set(matchesInPeriod.map((m: any) => m.id as string));
-    for (const m of (c3Matches || []) as any[]) {
+    for (const m of savedC3Matches) {
       if (!existingIds.has(m.id as string)) matchesInPeriod.push(m);
     }
   }
@@ -168,6 +176,7 @@ export default async function FinancesInterPage({
   let bilPrinted = 0;
   let bilScanned = 0;
   let bilRevenue = 0;
+  let c3StatsMapResult: Record<string, { printed: number; scanned: number; revenue: number }> = {};
   {
     // Tous les matchs C3 (toutes périodes confondues) pour découvrir les billeteries
     let allC3MatchIdsEver: string[] = [];
@@ -191,7 +200,7 @@ export default async function FinancesInterPage({
       const allInterMatchIdSet = new Set(allInterMatchIds);
 
       const { data: allBilsData } = await adminSupabase
-        .from("billeterie").select("id, price, match_ids");
+        .from("billeterie").select("id, price, match_ids, categories");
       const allInterBils = ((allBilsData || []) as any[]).filter((b: any) =>
         (b.match_ids || []).some((id: string) => allInterMatchIdSet.has(id))
       );
@@ -199,7 +208,21 @@ export default async function FinancesInterPage({
       if (allInterBils.length > 0) {
         const allBilIds = allInterBils.map((b: any) => b.id as string);
         const bilPriceMap: Record<string, number> = {};
-        allInterBils.forEach((b: any) => { bilPriceMap[b.id] = b.price || 0; });
+        const bilCatMapF: Record<string, Array<{name: string; price: number}>> = {};
+        allInterBils.forEach((b: any) => {
+          bilPriceMap[b.id] = b.price || 0;
+          if (b.categories) bilCatMapF[b.id] = b.categories;
+        });
+
+        // Map C3 match → c3_account_id for per-C3 stats
+        const matchToC3AccountId: Record<string, string> = {};
+        for (const m of savedC3Matches) matchToC3AccountId[m.id] = m.c3_account_id;
+        const bilToC3AccountId: Record<string, string> = {};
+        allInterBils.forEach((b: any) => {
+          for (const mid of (b.match_ids || []) as string[]) {
+            if (matchToC3AccountId[mid]) { bilToC3AccountId[b.id] = matchToC3AccountId[mid]; break; }
+          }
+        });
 
         const allBilMatchIds = [...new Set(
           allInterBils.flatMap((b: any) => (b.match_ids || []) as string[])
@@ -235,7 +258,7 @@ export default async function FinancesInterPage({
         const [bilAllTickets, allBilScans] = await Promise.all([
           fetchAll<any>((from, to) =>
             adminSupabase.from("billeterie_tickets")
-              .select("id, billeterie_id, withdrawn")
+              .select("id, billeterie_id, withdrawn, category_name")
               .in("billeterie_id", allBilIds)
               .range(from, to)
           ),
@@ -249,8 +272,10 @@ export default async function FinancesInterPage({
 
         const nonWithdrawnByBil: Record<string, number> = {};
         const ticketIdToBilId: Record<string, string> = {};
+        const ticketCatMapF: Record<string, string | null> = {};
         bilAllTickets.forEach((t: any) => {
           ticketIdToBilId[t.id] = t.billeterie_id;
+          ticketCatMapF[t.id] = t.category_name ?? null;
           if (!t.withdrawn) {
             nonWithdrawnByBil[t.billeterie_id] = (nonWithdrawnByBil[t.billeterie_id] || 0) + 1;
           }
@@ -290,9 +315,45 @@ export default async function FinancesInterPage({
         });
         bilScanned = periodBilScans.length;
         bilRevenue = periodBilScans.reduce((s: number, sc: any) => {
-          const bilId = ticketIdToBilId[sc.ticket_id as string];
-          return s + (bilId ? bilPriceMap[bilId] || 0 : 0);
+          const bId = ticketIdToBilId[sc.ticket_id as string];
+          if (!bId) return s;
+          const catName = ticketCatMapF[sc.ticket_id as string];
+          const cats = bilCatMapF[bId];
+          if (cats && catName) {
+            const cat = cats.find((c) => c.name === catName);
+            return s + (cat ? cat.price : 0);
+          }
+          return s + (bilPriceMap[bId] || 0);
         }, 0);
+
+        // Per-C3 stats for the split display
+        const c3StatsMap: Record<string, { printed: number; scanned: number; revenue: number }> = {};
+        [...periodBilIds].forEach((bilId: string) => {
+          const c3Id = bilToC3AccountId[bilId];
+          if (!c3Id) return;
+          if (!c3StatsMap[c3Id]) c3StatsMap[c3Id] = { printed: 0, scanned: 0, revenue: 0 };
+          const nw = nonWithdrawnByBil[bilId] || 0;
+          const ts = totalScansByBil[bilId] || 0;
+          const ps = periodScansByBil[bilId] || 0;
+          c3StatsMap[c3Id].printed += Math.max(0, nw - (ts - ps));
+        });
+        periodBilScans.forEach((sc: any) => {
+          const bId = ticketIdToBilId[sc.ticket_id as string];
+          if (!bId) return;
+          const c3Id = bilToC3AccountId[bId];
+          if (!c3Id) return;
+          if (!c3StatsMap[c3Id]) c3StatsMap[c3Id] = { printed: 0, scanned: 0, revenue: 0 };
+          c3StatsMap[c3Id].scanned += 1;
+          const catName = ticketCatMapF[sc.ticket_id as string];
+          const cats = bilCatMapF[bId];
+          if (cats && catName) {
+            const cat = cats.find((c) => c.name === catName);
+            c3StatsMap[c3Id].revenue += cat ? cat.price : 0;
+          } else {
+            c3StatsMap[c3Id].revenue += bilPriceMap[bId] || 0;
+          }
+        });
+        c3StatsMapResult = c3StatsMap;
       }
     }
   }
@@ -378,6 +439,8 @@ export default async function FinancesInterPage({
         currentTo={params.to}
         currentMatch={filterMatchId || undefined}
         matches={filterMatches}
+        c3Accounts={c3Profiles.map((p) => ({ id: p.id, name: p.full_name, city: p.city }))}
+        currentC3={c3AccountFilter}
       />
 
       {/* Blocs imprimés + Validés + Invendus */}
@@ -500,45 +563,145 @@ export default async function FinancesInterPage({
         </CardContent>
       </Card>
 
-      {/* Matchs de la période */}
-      <Card className="overflow-hidden">
-        <div className="bg-[#1a5c1a] text-white font-bold px-4 py-3 text-sm">
-          Matchs {tabLabel}
-        </div>
-        {!matchesInPeriod || matchesInPeriod.length === 0 ? (
-          <div className="text-center text-muted-foreground py-8 text-sm">
-            Aucun match {tabLabel.toLowerCase()} sur cette période
-          </div>
-        ) : (
-          <>
-            <div className="divide-y divide-border">
-              {matchesInPeriod.map((m: any) => (
-                <div key={m.id} className="px-4 py-3 text-sm">
-                  {m.home_team} vs {m.away_team}
+      {/* Matchs de la période — split par C3 pour Communal */}
+      {typeParam === "communal" ? (() => {
+        const odcavMatches = matchesInPeriod.filter((m: any) => !m.c3_account_id);
+        const c3MatchesByCId: Record<string, any[]> = {};
+        for (const m of matchesInPeriod) {
+          if (!m.c3_account_id) continue;
+          if (!c3MatchesByCId[m.c3_account_id]) c3MatchesByCId[m.c3_account_id] = [];
+          c3MatchesByCId[m.c3_account_id].push(m);
+        }
+        const c3Ids = Object.keys(c3MatchesByCId);
+        const odcavPrinted = periodTickets.filter((t: any) => t.bloc_printed === true).length;
+        const odcavScanned = periodTickets.filter((t: any) => t.status === "scanne").length;
+        const odcavRevenue = periodTickets
+          .filter((t: any) => t.counts_as_revenue && t.status === "scanne")
+          .reduce((s: number, t: any) => s + t.price, 0);
+
+        if (odcavMatches.length === 0 && c3Ids.length === 0) {
+          return (
+            <Card className="overflow-hidden">
+              <div className="bg-[#1a5c1a] text-white font-bold px-4 py-3 text-sm">Matchs Communal</div>
+              <div className="text-center text-muted-foreground py-8 text-sm">Aucun match communal sur cette période</div>
+            </Card>
+          );
+        }
+
+        return (
+          <div className="space-y-4">
+            {/* ODCAV communal matches */}
+            {odcavMatches.length > 0 && (
+              <Card className="overflow-hidden">
+                <div className="bg-[#1a5c1a] text-white font-bold px-4 py-3 text-sm">Matchs Communal ODCAV</div>
+                <div className="divide-y divide-border">
+                  {odcavMatches.map((m: any) => (
+                    <div key={m.id} className="px-4 py-3 text-sm">{m.home_team} vs {m.away_team}</div>
+                  ))}
                 </div>
-              ))}
+                <div className="grid grid-cols-2 sm:grid-cols-4 border-t-2 border-border">
+                  <div className="bg-green-100 dark:bg-green-950/40 px-3 py-3 border-r border-border">
+                    <p className="text-xs text-green-700 dark:text-green-400">Billets Imprimés</p>
+                    <p className="text-lg font-bold text-green-900 dark:text-green-200">{odcavPrinted}</p>
+                  </div>
+                  <div className="bg-blue-600 px-3 py-3 border-r border-blue-500">
+                    <p className="text-xs text-blue-200">Validé</p>
+                    <p className="text-lg font-bold text-white">{odcavScanned}</p>
+                  </div>
+                  <div className="bg-red-100 dark:bg-red-950/40 px-3 py-3 border-r border-border">
+                    <p className="text-xs text-red-600 dark:text-red-400">Invendus</p>
+                    <p className="text-lg font-bold text-red-700 dark:text-red-300">{Math.max(0, odcavPrinted - odcavScanned)}</p>
+                  </div>
+                  <div className="bg-yellow-50 dark:bg-yellow-950/30 px-3 py-3">
+                    <p className="text-xs text-yellow-700 dark:text-yellow-400">Recettes Brutes</p>
+                    <p className="text-lg font-bold text-yellow-900 dark:text-yellow-200 whitespace-nowrap">{formatFCFA(odcavRevenue)}</p>
+                  </div>
+                </div>
+              </Card>
+            )}
+
+            {/* C3 cards — one per C3 account */}
+            {c3Ids.map((c3Id) => {
+              const c3Profile = c3Profiles.find((p) => p.id === c3Id);
+              const c3Name = c3Profile?.full_name || "C3";
+              const c3City = c3Profile?.city;
+              const c3Matches = c3MatchesByCId[c3Id];
+              const stats = c3StatsMapResult[c3Id] || { printed: 0, scanned: 0, revenue: 0 };
+              const unsold = Math.max(0, stats.printed - stats.scanned);
+              return (
+                <Card key={c3Id} className="overflow-hidden">
+                  <div className="bg-[#1a5c1a] text-white font-bold px-4 py-3 text-sm flex items-center justify-between">
+                    <span>Matchs Communal — {c3Name}</span>
+                    {c3City && <span className="text-xs font-normal opacity-80">{c3City}</span>}
+                  </div>
+                  <div className="divide-y divide-border">
+                    {c3Matches.map((m: any) => (
+                      <div key={m.id} className="px-4 py-3 text-sm">{m.home_team} vs {m.away_team}</div>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 border-t-2 border-border">
+                    <div className="bg-green-100 dark:bg-green-950/40 px-3 py-3 border-r border-border">
+                      <p className="text-xs text-green-700 dark:text-green-400">Billets Imprimés</p>
+                      <p className="text-lg font-bold text-green-900 dark:text-green-200">{stats.printed}</p>
+                    </div>
+                    <div className="bg-blue-600 px-3 py-3 border-r border-blue-500">
+                      <p className="text-xs text-blue-200">Validé</p>
+                      <p className="text-lg font-bold text-white">{stats.scanned}</p>
+                    </div>
+                    <div className="bg-red-100 dark:bg-red-950/40 px-3 py-3 border-r border-border">
+                      <p className="text-xs text-red-600 dark:text-red-400">Invendus</p>
+                      <p className="text-lg font-bold text-red-700 dark:text-red-300">{unsold}</p>
+                    </div>
+                    <div className="bg-yellow-50 dark:bg-yellow-950/30 px-3 py-3">
+                      <p className="text-xs text-yellow-700 dark:text-yellow-400">Recettes Brutes</p>
+                      <p className="text-lg font-bold text-yellow-900 dark:text-yellow-200 whitespace-nowrap">{formatFCFA(stats.revenue)}</p>
+                    </div>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+        );
+      })() : (
+        <Card className="overflow-hidden">
+          <div className="bg-[#1a5c1a] text-white font-bold px-4 py-3 text-sm">
+            Matchs {tabLabel}
+          </div>
+          {!matchesInPeriod || matchesInPeriod.length === 0 ? (
+            <div className="text-center text-muted-foreground py-8 text-sm">
+              Aucun match {tabLabel.toLowerCase()} sur cette période
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 border-t-2 border-border">
-              <div className="bg-green-100 dark:bg-green-950/40 px-3 py-3 border-r border-border">
-                <p className="text-xs text-green-700 dark:text-green-400">Billets Imprimés</p>
-                <p className="text-lg font-bold text-green-900 dark:text-green-200">{totalPrinted}</p>
+          ) : (
+            <>
+              <div className="divide-y divide-border">
+                {matchesInPeriod.map((m: any) => (
+                  <div key={m.id} className="px-4 py-3 text-sm">
+                    {m.home_team} vs {m.away_team}
+                  </div>
+                ))}
               </div>
-              <div className="bg-blue-600 px-3 py-3 border-r border-blue-500">
-                <p className="text-xs text-blue-200">Validé</p>
-                <p className="text-lg font-bold text-white">{totalScanned}</p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 border-t-2 border-border">
+                <div className="bg-green-100 dark:bg-green-950/40 px-3 py-3 border-r border-border">
+                  <p className="text-xs text-green-700 dark:text-green-400">Billets Imprimés</p>
+                  <p className="text-lg font-bold text-green-900 dark:text-green-200">{totalPrinted}</p>
+                </div>
+                <div className="bg-blue-600 px-3 py-3 border-r border-blue-500">
+                  <p className="text-xs text-blue-200">Validé</p>
+                  <p className="text-lg font-bold text-white">{totalScanned}</p>
+                </div>
+                <div className="bg-red-100 dark:bg-red-950/40 px-3 py-3 border-r border-border">
+                  <p className="text-xs text-red-600 dark:text-red-400">Invendus</p>
+                  <p className="text-lg font-bold text-red-700 dark:text-red-300">{totalUnsold}</p>
+                </div>
+                <div className="bg-yellow-50 dark:bg-yellow-950/30 px-3 py-3">
+                  <p className="text-xs text-yellow-700 dark:text-yellow-400">Recettes Brutes</p>
+                  <p className="text-lg font-bold text-yellow-900 dark:text-yellow-200 whitespace-nowrap">{formatFCFA(totalRevenue)}</p>
+                </div>
               </div>
-              <div className="bg-red-100 dark:bg-red-950/40 px-3 py-3 border-r border-border">
-                <p className="text-xs text-red-600 dark:text-red-400">Invendus</p>
-                <p className="text-lg font-bold text-red-700 dark:text-red-300">{totalUnsold}</p>
-              </div>
-              <div className="bg-yellow-50 dark:bg-yellow-950/30 px-3 py-3">
-                <p className="text-xs text-yellow-700 dark:text-yellow-400">Recettes Brutes</p>
-                <p className="text-lg font-bold text-yellow-900 dark:text-yellow-200 whitespace-nowrap">{formatFCFA(totalRevenue)}</p>
-              </div>
-            </div>
-          </>
-        )}
-      </Card>
+            </>
+          )}
+        </Card>
+      )}
 
       {/* Dépenses liées aux matchs */}
       {expenses.length > 0 && (

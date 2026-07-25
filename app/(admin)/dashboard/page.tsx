@@ -124,31 +124,52 @@ export default async function DashboardPage({
     }
 
     // 1. All zones (global role sees all, restricted role filters by sub-admin zone assignments)
-    const { data: zonesData } = await adminClient.from("zones").select("id, name").order("name");
+    const [{ data: zonesData }, { data: c3ProfilesRaw }] = await Promise.all([
+      adminClient.from("zones").select("id, name").order("name"),
+      adminClient.from("profiles").select("id, full_name, city").eq("role", "c3"),
+    ]);
     const allZones = (zonesData || []) as { id: string; name: string }[];
+    const c3ProfilesList = (c3ProfilesRaw || []) as { id: string; full_name: string; city: string | null }[];
+    const c3FilterParam = params.c3 || "";
 
-    // 2. Matches in period
-    let matchQuery = adminClient
-      .from("matches")
-      .select("id, zone_id, home_team, away_team, match_date, status")
-      .gte("match_date", dateStart.toISOString())
-      .lte("match_date", dateEnd.toISOString())
-      .order("match_date", { ascending: false });
-    if (creatorIds) matchQuery = (matchQuery as any).in("created_by", creatorIds);
-    if (zoneFilter) matchQuery = matchQuery.eq("zone_id", zoneFilter);
-    const { data: matchesPeriod } = await matchQuery;
-    const matchIds = (matchesPeriod || []).map((m: any) => m.id as string);
+    // 2. Matches in period — zone matches OR C3 matches depending on filter
+    let matchesPeriod: any[];
+    if (c3FilterParam) {
+      const { data: c3Matches } = await adminClient
+        .from("matches")
+        .select("id, zone_id, home_team, away_team, match_date, status")
+        .eq("c3_account_id", c3FilterParam)
+        .gte("match_date", dateStart.toISOString())
+        .lte("match_date", dateEnd.toISOString())
+        .order("match_date", { ascending: false });
+      matchesPeriod = c3Matches || [];
+    } else {
+      let matchQuery = adminClient
+        .from("matches")
+        .select("id, zone_id, home_team, away_team, match_date, status")
+        .gte("match_date", dateStart.toISOString())
+        .lte("match_date", dateEnd.toISOString())
+        .order("match_date", { ascending: false });
+      if (creatorIds) matchQuery = (matchQuery as any).in("created_by", creatorIds);
+      if (zoneFilter) matchQuery = matchQuery.eq("zone_id", zoneFilter);
+      const { data: zoneMatchesData } = await matchQuery;
+      matchesPeriod = zoneMatchesData || [];
+    }
+    const matchIds = matchesPeriod.map((m: any) => m.id as string);
 
-    // 3. Prev period matches (for trends)
-    let prevMatchQuery = adminClient
-      .from("matches")
-      .select("id")
-      .gte("match_date", prevDateStart.toISOString())
-      .lte("match_date", prevDateEnd.toISOString());
-    if (creatorIds) prevMatchQuery = (prevMatchQuery as any).in("created_by", creatorIds);
-    if (zoneFilter) prevMatchQuery = prevMatchQuery.eq("zone_id", zoneFilter);
-    const { data: prevMatchesPeriod } = await prevMatchQuery;
-    const prevMatchIds = (prevMatchesPeriod || []).map((m: any) => m.id as string);
+    // 3. Prev period matches (for trends — skip when C3 filter active)
+    let prevMatchIds: string[] = [];
+    if (!c3FilterParam) {
+      let prevMatchQuery = adminClient
+        .from("matches")
+        .select("id")
+        .gte("match_date", prevDateStart.toISOString())
+        .lte("match_date", prevDateEnd.toISOString());
+      if (creatorIds) prevMatchQuery = (prevMatchQuery as any).in("created_by", creatorIds);
+      if (zoneFilter) prevMatchQuery = prevMatchQuery.eq("zone_id", zoneFilter);
+      const { data: prevMatchesPeriod } = await prevMatchQuery;
+      prevMatchIds = (prevMatchesPeriod || []).map((m: any) => m.id as string);
+    }
 
     // 4. Tickets — current and previous periods in parallel
     const [allTickets, prevTickets] = await Promise.all([
@@ -361,6 +382,8 @@ export default async function DashboardPage({
           zones={allZones}
           currentZone={zoneFilter || ""}
           showZoneFilter
+          c3Accounts={c3ProfilesList.map((c) => ({ id: c.id, name: c.full_name, city: c.city }))}
+          currentC3={c3FilterParam}
         />
 
         {/* Stat cards — 2 cols tablet, 4 cols desktop */}
