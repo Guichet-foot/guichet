@@ -66,7 +66,20 @@ export async function toggleSuperAdminActive(userId: string, active: boolean) {
 
 export async function deleteSuperAdmin(userId: string) {
   const adminClient = await createAdminClient();
-  await adminClient.from("profiles").delete().eq("id", userId);
+
+  // Nullify all FK references that point to this profile
+  await Promise.all([
+    adminClient.from("profiles").update({ created_by_admin: null }).eq("created_by_admin", userId),
+    adminClient.from("matches").update({ c3_account_id: null }).eq("c3_account_id", userId),
+    adminClient.from("billeterie_scans").update({ scanned_by: null }).eq("scanned_by", userId),
+    adminClient.from("billeterie_tickets").update({ sold_by: null }).eq("sold_by", userId),
+    adminClient.from("tickets").update({ sold_by: null }).eq("sold_by", userId),
+    adminClient.from("tickets").update({ scanned_by: null }).eq("scanned_by", userId),
+  ]);
+
+  const { error: profileError } = await adminClient.from("profiles").delete().eq("id", userId);
+  if (profileError) return { error: profileError.message };
+
   await adminClient.auth.admin.deleteUser(userId);
   revalidatePath("/fondateur/super-admins");
   return { success: true };
@@ -213,7 +226,20 @@ export async function fondateurDeleteUser(userId: string, odcavId: string) {
   if (caller?.role !== "fondateur") return { error: "Non autorisé" };
 
   const adminClient = await createAdminClient();
-  await adminClient.from("profiles").delete().eq("id", userId);
+
+  // Nullify all FK references that point to this profile
+  await Promise.all([
+    adminClient.from("profiles").update({ created_by_admin: null }).eq("created_by_admin", userId),
+    adminClient.from("matches").update({ c3_account_id: null }).eq("c3_account_id", userId),
+    adminClient.from("billeterie_scans").update({ scanned_by: null }).eq("scanned_by", userId),
+    adminClient.from("billeterie_tickets").update({ sold_by: null }).eq("sold_by", userId),
+    adminClient.from("tickets").update({ sold_by: null }).eq("sold_by", userId),
+    adminClient.from("tickets").update({ scanned_by: null }).eq("scanned_by", userId),
+  ]);
+
+  const { error: profileError } = await adminClient.from("profiles").delete().eq("id", userId);
+  if (profileError) return { error: profileError.message };
+
   await adminClient.auth.admin.deleteUser(userId);
   revalidatePath(`/fondateur/super-admins/${odcavId}`);
   return { success: true };

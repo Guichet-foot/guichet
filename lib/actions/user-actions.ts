@@ -346,8 +346,10 @@ export async function deleteUser(userId: string) {
 
   const adminClient = await createAdminClient();
 
-  // Nullify FK references before deleting the profile to avoid constraint violations
+  // Nullify all FK references that point to this profile
   await Promise.all([
+    adminClient.from("profiles").update({ created_by_admin: null }).eq("created_by_admin", userId),
+    adminClient.from("matches").update({ c3_account_id: null }).eq("c3_account_id", userId),
     adminClient.from("billeterie_scans").update({ scanned_by: null }).eq("scanned_by", userId),
     adminClient.from("billeterie_tickets").update({ sold_by: null }).eq("sold_by", userId),
     adminClient.from("tickets").update({ sold_by: null }).eq("sold_by", userId),
