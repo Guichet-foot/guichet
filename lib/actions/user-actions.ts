@@ -341,6 +341,14 @@ export async function deleteUser(userId: string) {
 
   const adminClient = await createAdminClient();
 
+  // Nullify FK references before deleting the profile to avoid constraint violations
+  await Promise.all([
+    adminClient.from("billeterie_scans").update({ scanned_by: null }).eq("scanned_by", userId),
+    adminClient.from("billeterie_tickets").update({ sold_by: null }).eq("sold_by", userId),
+    adminClient.from("tickets").update({ sold_by: null }).eq("sold_by", userId),
+    adminClient.from("tickets").update({ scanned_by: null }).eq("scanned_by", userId),
+  ]);
+
   const { error: profileError } = await adminClient.from("profiles").delete().eq("id", userId);
   if (profileError) return { error: profileError.message };
 
