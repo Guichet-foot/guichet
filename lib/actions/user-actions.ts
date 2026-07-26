@@ -28,6 +28,11 @@ async function canManage(targetUserId: string): Promise<
 
   if (!caller) return { error: "Profil introuvable" };
 
+  // Fondateur can manage ANY account without restriction
+  if (caller.role === "fondateur") {
+    return { caller: { id: currentUser.id, ...caller } };
+  }
+
   const adminClient = await createAdminClient();
   const { data: target } = await adminClient
     .from("profiles")
