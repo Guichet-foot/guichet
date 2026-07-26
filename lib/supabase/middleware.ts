@@ -131,9 +131,9 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  // Account explicitly deactivated by an admin — revoke session
+  // Account explicitly deactivated by an admin — revoke local session only
   if (!profile.active) {
-    await supabase.auth.signOut();
+    await supabase.auth.signOut({ scope: "local" });
     const signOutResponse = NextResponse.redirect(new URL("/login", request.url));
     request.cookies.getAll().forEach((cookie) => {
       if (cookie.name.includes("supabase") || cookie.name.includes("sb-")) {
@@ -143,9 +143,9 @@ export async function updateSession(request: NextRequest) {
     return signOutResponse;
   }
 
-  // Password expiration — revoke session and redirect with error param
+  // Password expiration — revoke local session and redirect with error param
   if (profile.password_expires_at && new Date(profile.password_expires_at) < new Date()) {
-    await supabase.auth.signOut();
+    await supabase.auth.signOut({ scope: "local" });
     const expiredResponse = NextResponse.redirect(new URL("/login?expired=1", request.url));
     request.cookies.getAll().forEach((cookie) => {
       if (cookie.name.includes("supabase") || cookie.name.includes("sb-")) {
