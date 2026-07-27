@@ -47,16 +47,17 @@ function renderBilleterieTicket(
     : "PASS MULTI-MATCHS";
 
   const logoFontPt = is58 ? "10" : "12";
+  const prixStyle = `font-weight:900;font-size:${is58 ? "9" : "10"}pt;letter-spacing:0.5px;`;
   return `
 <div class="print-ticket">
 <div class="c" style="font-weight:900;font-size:${logoFontPt}pt;letter-spacing:1px;padding:1mm 0;">Guichet Foot</div>
 <div class="sep"></div>
 <div class="c" style="font-size:${namePt}pt;font-weight:900;line-height:1.3;letter-spacing:0.5px;">${bilName}</div>
+<div class="c" style="${prixStyle}">${priceFmt}&nbsp;FCFA</div>
 <div class="c tiny" style="font-style:italic;margin-top:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${passLine}</div>
+<div class="c" style="${prixStyle}">${priceFmt}&nbsp;FCFA</div>
 <div class="sep"></div>
 <div class="c" style="font-size:${matchPt}pt;font-weight:600;line-height:1.3;">${matchLines}</div>
-<div class="sep"></div>
-<div class="c cat-prix">${priceFmt}&nbsp;FCFA</div>
 <div class="sep"></div>
 <div class="c qr"><img src="${qrDataUrl}" alt="QR Code" /></div>
 <div class="c small">${ticket.serial_number}</div>
