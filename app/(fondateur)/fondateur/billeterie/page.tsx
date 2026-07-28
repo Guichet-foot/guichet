@@ -1,6 +1,7 @@
 import { requireRole } from "@/lib/auth";
 import { getBilleterieList } from "@/lib/actions/billeterie-actions";
 import { BilleterieCardActions } from "@/app/(admin)/billeterie/billeterie-card-actions";
+import { BilleteriedonneToggle } from "./billeterie-done-toggle";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -48,11 +49,13 @@ export default async function FondateurBilletteriePage() {
           {items.map((item) => (
             <div key={item.id} className="relative group">
               <Link href={`/fondateur/billeterie/${item.id}`} className="block h-full">
-                <Card className="hover:border-brand/40 transition-colors cursor-pointer h-full">
+                <Card className={`hover:border-brand/40 transition-colors cursor-pointer h-full ${item.isDone ? "opacity-60 bg-muted/40" : ""}`}>
                   <CardContent className="pt-5 pb-5 space-y-3">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0 flex-1">
-                        <p className="font-bold text-base leading-tight pr-16">{item.name}</p>
+                        <p className={`font-bold text-base leading-tight pr-16 ${item.isDone ? "line-through text-muted-foreground" : ""}`}>
+                          {item.name}
+                        </p>
                         <p className="text-sm text-muted-foreground mt-0.5">
                           {format(new Date(item.createdAt), "d MMM yyyy", { locale: fr })}
                         </p>
@@ -73,6 +76,10 @@ export default async function FondateurBilletteriePage() {
                   </CardContent>
                 </Card>
               </Link>
+              {/* Toggle "terminée" — toujours visible */}
+              <div className="absolute top-3 left-3 z-10">
+                <BilleteriedonneToggle id={item.id} isDone={item.isDone} />
+              </div>
               <div className="absolute top-3 right-3 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
                 <BilleterieCardActions item={{ id: item.id, name: item.name, price: item.price }} />
               </div>

@@ -28,6 +28,7 @@ export interface BilleterieItem {
   price: number;
   createdAt: string;
   totalTickets: number;
+  isDone: boolean;
 }
 
 // ── Matches disponibles pour créer un billetterie ─────────────────────────────
@@ -233,7 +234,7 @@ export async function getBilleterieList(): Promise<BilleterieItem[]> {
     creatorIds = [ownerId, ...(subAdmins || []).map((p: any) => p.id as string)];
   }
 
-  let query = adminClient.from("billeterie").select("id, name, match_ids, price, created_at");
+  let query = adminClient.from("billeterie").select("id, name, match_ids, price, created_at, is_done");
   if (profile.role !== "fondateur") {
     query = query.in("created_by", creatorIds);
   }
@@ -258,7 +259,23 @@ export async function getBilleterieList(): Promise<BilleterieItem[]> {
     price: b.price as number,
     createdAt: b.created_at as string,
     totalTickets: ticketMap[b.id] || 0,
+    isDone: (b.is_done as boolean) ?? false,
   }));
+}
+
+// ── Marquer une billetterie comme terminée / non terminée ─────────────────────
+export async function toggleBilleterieIsDone(id: string, isDone: boolean) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Non authentifié" };
+
+  const adminClient = await createAdminClient();
+  const { error } = await adminClient.from("billeterie").update({ is_done: isDone }).eq("id", id);
+  if (error) return { error: error.message };
+
+  revalidatePath("/fondateur/billeterie");
+  revalidatePath("/billeterie");
+  return { success: true };
 }
 
 // ── Détails d'un billetterie ──────────────────────────────────────────────────
