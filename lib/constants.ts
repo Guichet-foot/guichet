@@ -66,6 +66,7 @@ export const ROLE_COLORS: Record<string, string> = {
 
 // Modules disponibles pour les sous-comptes Fondateur
 export const FONDATEUR_MODULES = [
+  { key: "dashboard",    label: "Dashboard" },
   { key: "super-admins", label: "Super Admins" },
   { key: "matchs",       label: "Matchs" },
   { key: "cartes",       label: "Cartes d'accès" },
