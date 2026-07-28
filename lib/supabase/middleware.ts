@@ -84,7 +84,7 @@ export async function updateSession(request: NextRequest) {
       let redirectUrl = "/dashboard";
       if (profile.role === "caissier") redirectUrl = "/vente";
       if (profile.role === "portier") redirectUrl = "/scanner";
-      if (profile.role === "fondateur") redirectUrl = "/fondateur/dashboard";
+      if (["fondateur", "assistant_fondateur", "billetterie_fondateur"].includes(profile.role)) redirectUrl = "/fondateur/dashboard";
       return NextResponse.redirect(new URL(redirectUrl, request.url));
     }
     return supabaseResponse;
@@ -157,7 +157,8 @@ export async function updateSession(request: NextRequest) {
 
   // Fondateur routes
   const isFondateurRoute = pathname.startsWith("/fondateur/");
-  if (isFondateurRoute && profile.role !== "fondateur") {
+  const isFondateurRole = ["fondateur", "assistant_fondateur", "billetterie_fondateur"].includes(profile.role);
+  if (isFondateurRoute && !isFondateurRole) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
@@ -167,17 +168,16 @@ export async function updateSession(request: NextRequest) {
     "/invendus", "/cartes", "/parametres-odcav", "/parametres-c3", "/billeterie",
   ];
 
-  // Fondateur has their own dashboard — redirect them away from the admin /dashboard
-  // (which would create a loop: page calls requireRole without fondateur → redirect /dashboard → repeat)
-  if (profile.role === "fondateur" && pathname === "/dashboard") {
+  // Fondateur roles have their own dashboard — redirect them away from admin /dashboard
+  if (isFondateurRole && pathname === "/dashboard") {
     return NextResponse.redirect(new URL("/fondateur/dashboard", request.url));
   }
 
-  // Fondateur may access their own routes (/fondateur/*) OR other admin routes (/matchs, etc.)
+  // Fondateur roles may access /fondateur/* OR shared admin routes (/matchs, etc.)
   // but NOT /dashboard (handled above)
   const fondateurAllowedAdminRoutes = adminRoutes.filter((r) => r !== "/dashboard");
   const isAdminRouteForFondateur = fondateurAllowedAdminRoutes.some((r) => pathname.startsWith(r));
-  if (profile.role === "fondateur" && !isFondateurRoute && !isAdminRouteForFondateur) {
+  if (isFondateurRole && !isFondateurRoute && !isAdminRouteForFondateur) {
     return NextResponse.redirect(new URL("/fondateur/dashboard", request.url));
   }
   const caissierRoutes = ["/vente", "/mes-ventes"];
@@ -220,7 +220,7 @@ export async function updateSession(request: NextRequest) {
   if (pathname === "/") {
     let redirectUrl = "/dashboard";
     if (profile.role === "caissier") redirectUrl = "/vente";
-    if (profile.role === "fondateur") redirectUrl = "/fondateur/dashboard";
+    if (isFondateurRole) redirectUrl = "/fondateur/dashboard";
     return NextResponse.redirect(new URL(redirectUrl, request.url));
   }
 
