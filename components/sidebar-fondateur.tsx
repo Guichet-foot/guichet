@@ -34,7 +34,7 @@ export function SidebarFondateur({ userName, userRole, permittedModules }: Sideb
 
   async function handleLogout() {
     const supabase = createClient();
-    await supabase.auth.signOut();
+    await supabase.auth.signOut({ scope: "local" });
     window.location.href = "/fondateur";
   }
 
