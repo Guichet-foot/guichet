@@ -17,7 +17,7 @@ const DEMO_ACCOUNT_ID = "aa984bd3-7493-41d3-bad0-7a9c733ba51e";
 export default async function FondateurDashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ sa?: string; date?: string; year?: string; chartFrom?: string; chartTo?: string }>;
+  searchParams: Promise<{ sa?: string; date?: string; year?: string; chartFrom?: string; chartTo?: string; zone?: string; c3?: string }>;
 }) {
   await requireRole(["fondateur"]);
   const params = await searchParams;
@@ -47,16 +47,18 @@ export default async function FondateurDashboardPage({
   const nextMonthStart = `${smMonth === 12 ? smYear + 1 : smYear}-${String(smMonth === 12 ? 1 : smMonth + 1).padStart(2, "0")}-01T00:00:00`;
 
   // ── Phase 1: profiles, zones, matches, platform settings ─────────────────
-  const [superAdminsRes, zonesRes, matchesRes, platformSettingsRes] = await Promise.all([
+  const [superAdminsRes, zonesRes, matchesRes, platformSettingsRes, c3ProfilesRes] = await Promise.all([
     supabase.from("profiles").select("id, full_name").in("role", ["super_admin", "president_odcav"]),
     supabase.from("zones").select("id, name, created_by"),
-    supabase.from("matches").select("id, match_date, zone_id, home_team_zone, away_team_zone, status, match_type, created_by"),
+    supabase.from("matches").select("id, match_date, zone_id, home_team_zone, away_team_zone, status, match_type, created_by, c3_account_id"),
     supabase.from("platform_settings").select("fee_per_block, effective_date").order("effective_date", { ascending: true }),
+    supabase.from("profiles").select("id, full_name").eq("role", "c3").order("full_name"),
   ]);
 
   const allSuperAdmins = (superAdminsRes.data || []) as { id: string; full_name: string }[];
   const superAdmins = allSuperAdmins.filter((sa) => sa.id !== DEMO_ACCOUNT_ID);
   const allZones = (zonesRes.data || []) as { id: string; name: string; created_by: string }[];
+  const allC3Profiles = (c3ProfilesRes.data || []) as { id: string; full_name: string }[];
   const allMatchesRaw = (matchesRes.data || []) as any[];
   const allMatches = allMatchesRaw.filter((m: any) => m.status !== "annule") as any[];
   const platformHistory = (platformSettingsRes.data || []) as { fee_per_block: number; effective_date: string }[];
@@ -79,24 +81,41 @@ export default async function FondateurDashboardPage({
     .filter((m) => m.zone_id && demoZoneIdsSet.has(m.zone_id as string))
     .map((m) => m.id as string);
 
-  // SA filter → compute match IDs for scoping all scan queries
-  const saZoneIds = params.sa
-    ? new Set(allZones.filter((z) => z.created_by === params.sa).map((z) => z.id))
-    : null;
-  let saMatchIds: string[] | null = null;
-  if (saZoneIds) {
-    saMatchIds = allMatches
-      .filter((m) => {
-        if (m.zone_id) return saZoneIds.has(m.zone_id as string);
-        return saZoneIds.has(m.home_team_zone as string) || saZoneIds.has(m.away_team_zone as string);
-      })
+  // ── Scope: combine SA / Zone / C3 filters into one match ID set ─────────
+  let scopeMatchIds: string[] | null = null;
+
+  if (params.sa) {
+    const saZoneIds = new Set(allZones.filter((z) => z.created_by === params.sa).map((z) => z.id));
+    const ids = allMatches
+      .filter((m) => m.zone_id ? saZoneIds.has(m.zone_id as string) : saZoneIds.has(m.home_team_zone as string) || saZoneIds.has(m.away_team_zone as string))
       .map((m) => m.id as string);
+    scopeMatchIds = ids;
   }
 
-  function withSAFilter(q: any): any {
-    if (saMatchIds === null) return q;
-    if (saMatchIds.length === 0) return q.eq("match_id", "00000000-0000-0000-0000-000000000000");
-    return q.in("match_id", saMatchIds);
+  if (params.zone) {
+    const zoneIds = new Set(
+      allMatches
+        .filter((m) => m.zone_id === params.zone || m.home_team_zone === params.zone || m.away_team_zone === params.zone)
+        .map((m) => m.id as string)
+    );
+    scopeMatchIds = scopeMatchIds !== null
+      ? scopeMatchIds.filter((id) => zoneIds.has(id))
+      : [...zoneIds];
+  }
+
+  if (params.c3) {
+    const c3Ids = new Set(
+      allMatches.filter((m) => m.c3_account_id === params.c3).map((m) => m.id as string)
+    );
+    scopeMatchIds = scopeMatchIds !== null
+      ? scopeMatchIds.filter((id) => c3Ids.has(id))
+      : [...c3Ids];
+  }
+
+  function withScopeFilter(q: any): any {
+    if (scopeMatchIds === null) return q;
+    if (scopeMatchIds.length === 0) return q.eq("match_id", "00000000-0000-0000-0000-000000000000");
+    return q.in("match_id", scopeMatchIds);
   }
 
   // ── Phase 2: scan counts (year-scoped + SA-scoped) ───────────────────────
@@ -111,18 +130,18 @@ export default async function FondateurDashboardPage({
     monthRegScansRes,
   ] = await Promise.all([
     supabase.from("tickets").select("*", { count: "exact", head: true }).neq("status", "annule"),
-    withSAFilter(supabase.from("tickets").select("id", { count: "exact", head: true }).eq("status", "scanne").eq("counts_as_revenue", true).gte("scanned_at", yearStart).lt("scanned_at", nextYearStart)),
+    withScopeFilter(supabase.from("tickets").select("id", { count: "exact", head: true }).eq("status", "scanne").eq("counts_as_revenue", true).gte("scanned_at", yearStart).lt("scanned_at", nextYearStart)),
     supabase.from("billeterie_tickets").select("*", { count: "exact", head: true }).eq("withdrawn", false),
-    withSAFilter(supabase.from("billeterie_scans").select("*", { count: "exact", head: true }).gte("scanned_at", yearStart).lt("scanned_at", nextYearStart)),
-    withSAFilter(supabase.from("billeterie_scans").select("*", { count: "exact", head: true }).gte("scanned_at", todayStart).lt("scanned_at", tomorrowStart)),
-    withSAFilter(supabase.from("tickets").select("id", { count: "exact", head: true }).eq("status", "scanne").eq("counts_as_revenue", true).gte("scanned_at", todayStart).lt("scanned_at", tomorrowStart)),
-    withSAFilter(supabase.from("billeterie_scans").select("*", { count: "exact", head: true }).gte("scanned_at", monthStart).lt("scanned_at", nextMonthStart)),
-    withSAFilter(supabase.from("tickets").select("id", { count: "exact", head: true }).eq("status", "scanne").eq("counts_as_revenue", true).gte("scanned_at", monthStart).lt("scanned_at", nextMonthStart)),
+    withScopeFilter(supabase.from("billeterie_scans").select("*", { count: "exact", head: true }).gte("scanned_at", yearStart).lt("scanned_at", nextYearStart)),
+    withScopeFilter(supabase.from("billeterie_scans").select("*", { count: "exact", head: true }).gte("scanned_at", todayStart).lt("scanned_at", tomorrowStart)),
+    withScopeFilter(supabase.from("tickets").select("id", { count: "exact", head: true }).eq("status", "scanne").eq("counts_as_revenue", true).gte("scanned_at", todayStart).lt("scanned_at", tomorrowStart)),
+    withScopeFilter(supabase.from("billeterie_scans").select("*", { count: "exact", head: true }).gte("scanned_at", monthStart).lt("scanned_at", nextMonthStart)),
+    withScopeFilter(supabase.from("tickets").select("id", { count: "exact", head: true }).eq("status", "scanne").eq("counts_as_revenue", true).gte("scanned_at", monthStart).lt("scanned_at", nextMonthStart)),
   ]);
   const totalBillets = (regularTicketsRes.count || 0) + (bileterieTicketsRes.count || 0);
   const totalBilScans = bilScansRes.count || 0;
 
-  // ── Matches filter : demo exclusion → year → SA ───────────────────────────
+  // ── Matches filter : demo exclusion → year → scope ───────────────────────
   // 1. Always strip demo account zones from billing
   let visibleMatches = allMatches.filter((m: any) =>
     !m.zone_id || !demoZoneIdsSet.has(m.zone_id as string)
@@ -135,12 +154,10 @@ export default async function FondateurDashboardPage({
     );
   }
 
-  // 3. SA filter
-  if (saZoneIds) {
-    visibleMatches = visibleMatches.filter((m: any) => {
-      if (m.zone_id) return saZoneIds!.has(m.zone_id as string);
-      return saZoneIds!.has(m.home_team_zone as string) || saZoneIds!.has(m.away_team_zone as string);
-    });
+  // 3. Entity scope filter (SA / Zone / C3 — unified)
+  if (scopeMatchIds !== null) {
+    const scopeSet = new Set(scopeMatchIds);
+    visibleMatches = visibleMatches.filter((m: any) => scopeSet.has(m.id as string));
   }
 
   // ── Core revenue engine ───────────────────────────────────────────────────
@@ -179,7 +196,7 @@ export default async function FondateurDashboardPage({
   let demoRegScanned = 0, demoBilScanned = 0;
   let demoDailyBil = 0, demoDailyReg = 0, demoMonthBil = 0, demoMonthReg = 0;
 
-  if (demoMatchIds.length > 0 && saMatchIds === null) {
+  if (demoMatchIds.length > 0 && scopeMatchIds === null) {
     const [dReg, dBil, dDayBil, dDayReg, dMonBil, dMonReg] = await Promise.all([
       supabase.from("tickets").select("id", { count: "exact", head: true }).eq("status", "scanne").eq("counts_as_revenue", true).in("match_id", demoMatchIds).gte("scanned_at", yearStart).lt("scanned_at", nextYearStart),
       supabase.from("billeterie_scans").select("id", { count: "exact", head: true }).in("match_id", demoMatchIds).gte("scanned_at", yearStart).lt("scanned_at", nextYearStart),
@@ -254,8 +271,10 @@ export default async function FondateurDashboardPage({
     chartCursor.setDate(chartCursor.getDate() + 1);
   }
 
-  // ── Super admin list (for filter UI) ────────────────────────────────────
+  // ── Filter lists for UI ──────────────────────────────────────────────────
   const filterSAList = superAdmins.map((s) => ({ id: s.id, name: s.full_name }));
+  const filterZoneList = allZones.map((z) => ({ id: z.id, name: z.name }));
+  const filterC3List = allC3Profiles.map((c) => ({ id: c.id, name: c.full_name }));
 
   const dateLabel = new Date(selectedDate + "T12:00:00").toLocaleDateString("fr-FR", { day: "2-digit", month: "short" });
   const monthLabel = `${monthNames[parseInt(selectedMonth.split("-")[1]) - 1]} ${selectedMonth.split("-")[0]}`;
@@ -265,7 +284,11 @@ export default async function FondateurDashboardPage({
       <h1 className="text-2xl font-bold font-heading">Dashboard Fondateur</h1>
 
       <Suspense>
-        <FondateurFilters superAdmins={filterSAList} />
+        <FondateurFilters
+          superAdmins={filterSAList}
+          zones={filterZoneList}
+          c3Accounts={filterC3List}
+        />
       </Suspense>
 
       {/* ── Stat cards ── */}
