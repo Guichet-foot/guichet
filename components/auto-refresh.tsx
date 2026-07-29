@@ -1,18 +1,26 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useTransition, useRef } from "react";
 import { useRouter } from "next/navigation";
 
-/**
- * Silently refreshes the current page every `intervalMs` milliseconds
- * so server-rendered stats (scans, billets…) stay up to date without
- * requiring the user to manually reload.
- */
 export function AutoRefresh({ intervalMs = 30_000 }: { intervalMs?: number }) {
   const router = useRouter();
+  const [, startTransition] = useTransition();
+  // Prevent overlapping refreshes if server is slow
+  const inFlight = useRef(false);
+
   useEffect(() => {
-    const id = setInterval(() => router.refresh(), intervalMs);
+    const id = setInterval(() => {
+      if (inFlight.current) return;
+      inFlight.current = true;
+      startTransition(() => {
+        router.refresh();
+      });
+      // Clear the flag after the interval so next tick can fire
+      setTimeout(() => { inFlight.current = false; }, intervalMs * 0.9);
+    }, intervalMs);
     return () => clearInterval(id);
-  }, [router, intervalMs]);
+  }, [router, intervalMs, startTransition]);
+
   return null;
 }
