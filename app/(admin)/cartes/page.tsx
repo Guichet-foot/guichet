@@ -16,13 +16,13 @@ export default async function CartesPage({
 }: {
   searchParams: Promise<{ zone?: string; view?: string }>;
 }) {
-  const profile = await requireRole(["super_admin", "admin_zone"]);
+  const profile = await requireRole(["super_admin", "admin_zone", "fondateur"]);
   const params = await searchParams;
 
   const { effectiveZoneId, selectedZone, ownedZones, needsZoneSelection } =
     await getEffectiveZone(profile, params.zone);
 
-  const isOdcavRole = profile.role === "super_admin" || profile.role === "president_odcav";
+  const isOdcavRole = ["super_admin", "fondateur", "assistant_fondateur", "billetterie_fondateur"].includes(profile.role) || profile.role === "president_odcav";
   const isReadOnly = profile.role === "tresorier";
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://guichet-pi.vercel.app";
 

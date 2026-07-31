@@ -12,7 +12,7 @@ export default async function CarteDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireRole(["super_admin", "admin_zone"]);
+  await requireRole(["super_admin", "admin_zone", "fondateur"]);
   const { id } = await params;
 
   const card = await getAccessCard(id);

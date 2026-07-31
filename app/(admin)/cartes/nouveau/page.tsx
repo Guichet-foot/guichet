@@ -14,12 +14,12 @@ export default async function NouvelleCartePage({
 }: {
   searchParams: Promise<{ zone?: string }>;
 }) {
-  const profile = await requireRole(["super_admin", "admin_zone"]);
+  const profile = await requireRole(["super_admin", "admin_zone", "fondateur"]);
   const params = await searchParams;
   const supabase = await createClient();
   const adminClient = await createAdminClient();
 
-  const isOdcavRole = profile.role === "super_admin" || profile.role === "president_odcav";
+  const isOdcavRole = ["super_admin", "fondateur", "assistant_fondateur", "billetterie_fondateur"].includes(profile.role) || profile.role === "president_odcav";
 
   let zones: { id: string; name: string }[] = [];
   let defaultZoneId = "";

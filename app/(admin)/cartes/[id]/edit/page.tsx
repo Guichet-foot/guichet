@@ -17,14 +17,14 @@ export default async function EditCartePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const profile = await requireRole(["super_admin", "admin_zone"]);
+  const profile = await requireRole(["super_admin", "admin_zone", "fondateur"]);
   const supabase = await createClient();
   const adminClient = await createAdminClient();
 
   const card = await getAccessCard(id);
   if (!card) notFound();
 
-  const isSuperAdmin = profile.role === "super_admin";
+  const isSuperAdmin = ["super_admin", "fondateur", "assistant_fondateur", "billetterie_fondateur"].includes(profile.role);
 
   let zones: { id: string; name: string }[] = [];
   let teams: { id: string; name: string }[] = [];
