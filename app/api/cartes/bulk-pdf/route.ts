@@ -23,21 +23,44 @@ function extractStoragePath(url: string): string | null {
   return null;
 }
 
-// Download a photo via admin SDK (no HTTP overhead, no CORS, no rate limit)
+async function fetchBase64WithRetry(url: string, retries = 2): Promise<string | null> {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 12_000);
+      const res = await fetch(url, { signal: controller.signal });
+      clearTimeout(timer);
+      if (!res.ok) return null;
+      const buf = await res.arrayBuffer();
+      const b64 = Buffer.from(buf).toString("base64");
+      const ct = res.headers.get("content-type") || "image/jpeg";
+      return `data:${ct};base64,${b64}`;
+    } catch {
+      if (attempt < retries) {
+        await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
+      }
+    }
+  }
+  return null;
+}
+
+// Download a photo: tries admin SDK first (fast, no CORS), falls back to HTTP fetch
 async function downloadPhoto(
   adminClient: SupabaseClient,
   photoUrl: string
 ): Promise<string | null> {
   const filePath = extractStoragePath(photoUrl);
-  if (!filePath) return null;
-
-  const { data, error } = await adminClient.storage.from(BUCKET).download(filePath);
-  if (error || !data) return null;
-
-  const buf = await data.arrayBuffer();
-  const b64 = Buffer.from(buf).toString("base64");
-  const ct = data.type || "image/jpeg";
-  return `data:${ct};base64,${b64}`;
+  if (filePath) {
+    const { data, error } = await adminClient.storage.from(BUCKET).download(filePath);
+    if (!error && data) {
+      const buf = await data.arrayBuffer();
+      const b64 = Buffer.from(buf).toString("base64");
+      const ct = data.type || "image/jpeg";
+      return `data:${ct};base64,${b64}`;
+    }
+  }
+  // Fallback: HTTP fetch with timeout + retry (covers URLs not matching expected prefix)
+  return fetchBase64WithRetry(photoUrl);
 }
 
 async function processInBatches<T, R>(
