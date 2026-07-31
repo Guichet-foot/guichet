@@ -12,7 +12,6 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 const BUCKET = "card-photos";
 
-// Extract the storage file path from a Supabase public URL
 function extractStoragePath(url: string): string | null {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   if (!supabaseUrl) return null;
@@ -23,44 +22,27 @@ function extractStoragePath(url: string): string | null {
   return null;
 }
 
-async function fetchBase64WithRetry(url: string, retries = 2): Promise<string | null> {
+async function fetchBase64(url: string, retries = 2): Promise<string | null> {
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 12_000);
+      const timer = setTimeout(() => controller.abort(), 10_000);
       const res = await fetch(url, { signal: controller.signal });
       clearTimeout(timer);
       if (!res.ok) return null;
       const buf = await res.arrayBuffer();
       const b64 = Buffer.from(buf).toString("base64");
-      const ct = res.headers.get("content-type") || "image/jpeg";
+      // Normalise content-type: PDF renderer only handles image/*
+      const rawCt = res.headers.get("content-type") || "";
+      const ct = rawCt.startsWith("image/") ? rawCt : "image/jpeg";
       return `data:${ct};base64,${b64}`;
     } catch {
       if (attempt < retries) {
-        await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
+        await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
       }
     }
   }
   return null;
-}
-
-// Download a photo: tries admin SDK first (fast, no CORS), falls back to HTTP fetch
-async function downloadPhoto(
-  adminClient: SupabaseClient,
-  photoUrl: string
-): Promise<string | null> {
-  const filePath = extractStoragePath(photoUrl);
-  if (filePath) {
-    const { data, error } = await adminClient.storage.from(BUCKET).download(filePath);
-    if (!error && data) {
-      const buf = await data.arrayBuffer();
-      const b64 = Buffer.from(buf).toString("base64");
-      const ct = data.type || "image/jpeg";
-      return `data:${ct};base64,${b64}`;
-    }
-  }
-  // Fallback: HTTP fetch with timeout + retry (covers URLs not matching expected prefix)
-  return fetchBase64WithRetry(photoUrl);
 }
 
 async function processInBatches<T, R>(
@@ -75,6 +57,40 @@ async function processInBatches<T, R>(
     results.push(...batchResults);
   }
   return results;
+}
+
+// Pre-sign all photo URLs in one API call, then fetch via HTTP
+async function buildSignedPhotoMap(
+  adminClient: SupabaseClient,
+  cards: any[]
+): Promise<Map<string, string>> {
+  // Extract storage paths for cards that have photos
+  const pathEntries: { cardId: string; filePath: string }[] = [];
+  for (const card of cards) {
+    if (card.photo_url) {
+      const filePath = extractStoragePath(card.photo_url);
+      if (filePath) pathEntries.push({ cardId: card.id, filePath });
+    }
+  }
+
+  if (pathEntries.length === 0) return new Map();
+
+  // One API call to sign all paths (valid 10 minutes)
+  const { data: signed } = await adminClient.storage
+    .from(BUCKET)
+    .createSignedUrls(pathEntries.map((e) => e.filePath), 600);
+
+  // Map cardId -> signedUrl
+  const signedMap = new Map<string, string>();
+  if (signed) {
+    for (let i = 0; i < pathEntries.length; i++) {
+      const entry = signed[i];
+      if (entry?.signedUrl) {
+        signedMap.set(pathEntries[i].cardId, entry.signedUrl);
+      }
+    }
+  }
+  return signedMap;
 }
 
 export async function POST(request: Request) {
@@ -115,14 +131,22 @@ export async function POST(request: Request) {
     })
   );
 
-  // Step 2: download photos in batches of 12 via admin SDK (reliable, no HTTP rate limit)
+  // Step 2: pre-sign all photo URLs in one API call
+  const signedPhotoMap = await buildSignedPhotoMap(adminClient, cards);
+
+  // Step 3: fetch photos in batches using signed URLs
   const cardData: CardPDFData[] = await processInBatches(
     cards,
-    12,
+    10,
     async (card: any) => {
-      const photoDataUrl = card.photo_url
-        ? await downloadPhoto(adminClient, card.photo_url)
-        : null;
+      let photoDataUrl: string | null = null;
+      if (card.photo_url) {
+        const signedUrl = signedPhotoMap.get(card.id);
+        // Try signed URL first, fall back to public URL
+        photoDataUrl = signedUrl
+          ? await fetchBase64(signedUrl)
+          : await fetchBase64(card.photo_url);
+      }
       return {
         ...card,
         qrDataUrl: qrMap.get(card.id) ?? "",
