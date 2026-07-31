@@ -66,7 +66,8 @@ export function CardEditForm({ card, zones, isSuperAdmin, initialTeams, returnUr
   const [deleting, setDeleting] = useState(false);
 
   const isPaidType = CARD_TYPES.find((t) => t.value === cardType)?.paid ?? false;
-  const hasPoste = !isPaidType;
+  const isPersonneRessource = cardType === "personne_ressource";
+  const hasPoste = !isPaidType && !isPersonneRessource;
 
   useEffect(() => {
     if (!isSuperAdmin || !zoneId) return;
@@ -76,8 +77,8 @@ export function CardEditForm({ card, zones, isSuperAdmin, initialTeams, returnUr
 
   useEffect(() => {
     if (!isPaidType) setPrice("");
-    if (isPaidType) setPoste("");
-  }, [isPaidType]);
+    if (isPaidType || isPersonneRessource) setPoste("");
+  }, [isPaidType, isPersonneRessource]);
 
   function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -102,7 +103,7 @@ export function CardEditForm({ card, zones, isSuperAdmin, initialTeams, returnUr
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!fullName.trim() || !phone.trim() || !zoneId) {
+    if (!fullName.trim() || !phone.trim() || (!isPersonneRessource && !zoneId)) {
       toast.error("Remplissez tous les champs obligatoires");
       return;
     }
@@ -270,7 +271,7 @@ export function CardEditForm({ card, zones, isSuperAdmin, initialTeams, returnUr
               <Input id="phone" value={phone} onChange={(e) => setPhone(e.target.value)} required />
             </div>
 
-            {isSuperAdmin && (
+            {isSuperAdmin && !isPersonneRessource && (
               <div className="space-y-1.5">
                 <Label htmlFor="zone">Zone *</Label>
                 <select id="zone" value={zoneId}

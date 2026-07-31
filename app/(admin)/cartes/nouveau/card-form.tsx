@@ -59,7 +59,8 @@ export function CardForm({
   const [done, setDone] = useState(false);
 
   const isPaidType = CARD_TYPES.find((t) => t.value === cardType)?.paid ?? false;
-  const hasPoste = !isPaidType; // Zone et Délégué ont un poste, pas les Vendeurs/Spectateurs
+  const isPersonneRessource = cardType === "personne_ressource";
+  const hasPoste = !isPaidType && !isPersonneRessource;
 
   useEffect(() => {
     if (!isSuperAdmin || !zoneId) return;
@@ -69,8 +70,8 @@ export function CardForm({
 
   useEffect(() => {
     if (!isPaidType) setPrice("");
-    if (isPaidType) setPoste(""); // pas de poste pour vendeur/spectateur
-  }, [isPaidType]);
+    if (isPaidType || isPersonneRessource) setPoste("");
+  }, [isPaidType, isPersonneRessource]);
 
   function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -93,7 +94,7 @@ export function CardForm({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!fullName.trim() || !phone.trim() || !zoneId) {
+    if (!fullName.trim() || !phone.trim() || (!isPersonneRessource && !zoneId)) {
       toast.error("Remplissez tous les champs obligatoires");
       return;
     }
@@ -251,8 +252,8 @@ export function CardForm({
               placeholder="+221 77 776 25 22" required />
           </div>
 
-          {/* Zone selector (super_admin only) */}
-          {isSuperAdmin && (
+          {/* Zone selector (super_admin only, hidden for personne_ressource) */}
+          {isSuperAdmin && !isPersonneRessource && (
             <div className="space-y-1.5">
               <Label htmlFor="zone">Zone *</Label>
               <select
