@@ -6,28 +6,38 @@ import QRCode from "qrcode";
 import { readFileSync } from "fs";
 import { join } from "path";
 import React from "react";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-async function fetchBase64(url: string, retries = 2): Promise<string | null> {
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 12_000);
-      const res = await fetch(url, { signal: controller.signal });
-      clearTimeout(timer);
-      if (!res.ok) return null;
-      const buf = await res.arrayBuffer();
-      const b64 = Buffer.from(buf).toString("base64");
-      const ct = res.headers.get("content-type") || "image/jpeg";
-      return `data:${ct};base64,${b64}`;
-    } catch {
-      if (attempt < retries) {
-        await new Promise((r) => setTimeout(r, 600 * (attempt + 1)));
-      }
-    }
+const BUCKET = "card-photos";
+
+// Extract the storage file path from a Supabase public URL
+function extractStoragePath(url: string): string | null {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!supabaseUrl) return null;
+  const prefix = `${supabaseUrl}/storage/v1/object/public/${BUCKET}/`;
+  if (url.startsWith(prefix)) {
+    return decodeURIComponent(url.slice(prefix.length).split("?")[0]);
   }
   return null;
+}
+
+// Download a photo via admin SDK (no HTTP overhead, no CORS, no rate limit)
+async function downloadPhoto(
+  adminClient: SupabaseClient,
+  photoUrl: string
+): Promise<string | null> {
+  const filePath = extractStoragePath(photoUrl);
+  if (!filePath) return null;
+
+  const { data, error } = await adminClient.storage.from(BUCKET).download(filePath);
+  if (error || !data) return null;
+
+  const buf = await data.arrayBuffer();
+  const b64 = Buffer.from(buf).toString("base64");
+  const ct = data.type || "image/jpeg";
+  return `data:${ct};base64,${b64}`;
 }
 
 async function processInBatches<T, R>(
@@ -70,19 +80,32 @@ export async function POST(request: Request) {
   const logoBuf = readFileSync(join(process.cwd(), "public", "logoodcavdes.png"));
   const logoDataUrl = `data:image/png;base64,${logoBuf.toString("base64")}`;
 
-  // Generate QR + photo per card, in batches to avoid saturating Supabase Storage
+  // Step 1: generate all QR codes in parallel (CPU-only, no network)
+  const qrMap = new Map<string, string>();
+  await Promise.all(
+    cards.map(async (card: any) => {
+      const qrDataUrl = await QRCode.toDataURL(`${appUrl}/carte/${card.qr_token}`, {
+        width: 200, margin: 2, errorCorrectionLevel: "M",
+        color: { dark: "#000000", light: "#ffffff" },
+      });
+      qrMap.set(card.id, qrDataUrl);
+    })
+  );
+
+  // Step 2: download photos in batches of 12 via admin SDK (reliable, no HTTP rate limit)
   const cardData: CardPDFData[] = await processInBatches(
     cards,
-    8,
+    12,
     async (card: any) => {
-      const [qrDataUrl, photoDataUrl] = await Promise.all([
-        QRCode.toDataURL(`${appUrl}/carte/${card.qr_token}`, {
-          width: 200, margin: 2, errorCorrectionLevel: "M",
-          color: { dark: "#000000", light: "#ffffff" },
-        }),
-        card.photo_url ? fetchBase64(card.photo_url) : Promise.resolve(null),
-      ]);
-      return { ...card, qrDataUrl, logoDataUrl, photoDataUrl };
+      const photoDataUrl = card.photo_url
+        ? await downloadPhoto(adminClient, card.photo_url)
+        : null;
+      return {
+        ...card,
+        qrDataUrl: qrMap.get(card.id) ?? "",
+        logoDataUrl,
+        photoDataUrl,
+      };
     }
   );
 
