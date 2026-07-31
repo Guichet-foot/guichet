@@ -7,8 +7,8 @@ import {
 // ── Units ──────────────────────────────────────────────────────────
 const MM = 72 / 25.4;
 
-export const CARD_W = 85.60 * MM;   // 242.65 pt
-export const CARD_H = 53.98 * MM;   // 153.00 pt
+export const CARD_W = 85.00 * MM;   // 240.94 pt
+export const CARD_H = 55.00 * MM;   // 155.91 pt
 
 const HEADER_H = CARD_H * 0.30;     // 45.90 pt  (30% like HTML)
 const BODY_H   = CARD_H * 0.70;     // 107.10 pt
