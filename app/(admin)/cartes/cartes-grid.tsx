@@ -1,13 +1,16 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Dialog,
   DialogContent,
+  DialogHeader,
+  DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   User,
   Phone,
@@ -24,6 +27,9 @@ import {
   Tag,
   FileDown,
   Loader2,
+  Search,
+  CheckSquare,
+  Square,
 } from "lucide-react";
 import type { AccessCard } from "@/lib/types";
 import { formatFCFA } from "@/lib/format";
@@ -234,6 +240,192 @@ function CardDesign({ card, qrDataUrl, zoneLogo }: { card: AccessCard; qrDataUrl
   );
 }
 
+// ── Bulk Download Modal ────────────────────────────────────────────────────────
+
+interface BulkDownloadModalProps {
+  open: boolean;
+  onClose: () => void;
+  items: CardWithQR[];
+  tabLabel: string;
+  onDownload: (selected: CardWithQR[]) => void;
+  downloading: boolean;
+}
+
+function BulkDownloadModal({ open, onClose, items, tabLabel, onDownload, downloading }: BulkDownloadModalProps) {
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [search, setSearch] = useState("");
+  const selectAllRef = useRef<HTMLInputElement>(null);
+
+  // Initialise avec tout sélectionné à chaque ouverture
+  useEffect(() => {
+    if (open) {
+      setSelectedIds(new Set(items.map((i) => i.card.id)));
+      setSearch("");
+    }
+  }, [open, items]);
+
+  const filtered = items.filter((i) =>
+    i.card.full_name.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const allFilteredSelected = filtered.length > 0 && filtered.every((i) => selectedIds.has(i.card.id));
+  const someFilteredSelected = filtered.some((i) => selectedIds.has(i.card.id));
+
+  // Indeterminate state on "select all" checkbox
+  useEffect(() => {
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate = someFilteredSelected && !allFilteredSelected;
+    }
+  }, [someFilteredSelected, allFilteredSelected]);
+
+  function toggleAll() {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allFilteredSelected) {
+        filtered.forEach((i) => next.delete(i.card.id));
+      } else {
+        filtered.forEach((i) => next.add(i.card.id));
+      }
+      return next;
+    });
+  }
+
+  function toggleOne(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  const selectedItems = items.filter((i) => selectedIds.has(i.card.id));
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md p-0 gap-0 flex flex-col" style={{ maxHeight: "82vh" }}>
+        {/* Header */}
+        <DialogHeader className="px-5 pt-5 pb-4 border-b shrink-0">
+          <DialogTitle className="text-base font-bold">Sélectionner les cartes à télécharger</DialogTitle>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            {tabLabel} · {items.length} carte{items.length > 1 ? "s" : ""}
+          </p>
+        </DialogHeader>
+
+        {/* Search */}
+        <div className="px-5 py-3 border-b shrink-0">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Rechercher un nom…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9 h-9 text-sm"
+            />
+          </div>
+        </div>
+
+        {/* Select all row */}
+        <div
+          className="px-5 py-2.5 border-b shrink-0 flex items-center gap-3 bg-muted/30 cursor-pointer hover:bg-muted/50 transition-colors"
+          onClick={toggleAll}
+        >
+          <input
+            ref={selectAllRef}
+            type="checkbox"
+            checked={allFilteredSelected}
+            onChange={toggleAll}
+            onClick={(e) => e.stopPropagation()}
+            className="h-4 w-4 accent-green-700 cursor-pointer"
+          />
+          {allFilteredSelected ? (
+            <CheckSquare className="h-4 w-4 text-green-700 -ml-7 pointer-events-none" style={{ display: "none" }} />
+          ) : null}
+          <span className="text-sm font-semibold text-foreground">
+            {allFilteredSelected ? "Tout désélectionner" : "Tout sélectionner"}
+          </span>
+          <span className="ml-auto text-xs text-muted-foreground">
+            {selectedIds.size} / {items.length} sélectionné{selectedIds.size > 1 ? "s" : ""}
+          </span>
+        </div>
+
+        {/* List */}
+        <div className="flex-1 overflow-y-auto px-3 py-2">
+          {filtered.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-8">Aucun résultat</p>
+          ) : (
+            <div className="space-y-0.5">
+              {filtered.map((item) => {
+                const type = item.card.card_type || "zone";
+                const color = TYPE_COLORS[type] || "#166534";
+                const bg = TYPE_BG[type] || "#f0fdf4";
+                const label = TYPE_LABELS[type] || "ZONE";
+                const isSelected = selectedIds.has(item.card.id);
+                return (
+                  <label
+                    key={item.card.id}
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer hover:bg-muted/40 transition-colors"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => toggleOne(item.card.id)}
+                      className="h-4 w-4 accent-green-700 shrink-0 cursor-pointer"
+                    />
+                    {/* Photo thumbnail */}
+                    <div
+                      className="w-8 h-8 rounded-full overflow-hidden shrink-0 flex items-center justify-center"
+                      style={{ border: `1.5px solid ${color}`, backgroundColor: bg }}
+                    >
+                      {item.card.photo_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={item.card.photo_url} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <User className="w-4 h-4" style={{ color }} />
+                      )}
+                    </div>
+                    {/* Name */}
+                    <span className="flex-1 text-sm font-medium text-foreground truncate">
+                      {item.card.full_name}
+                    </span>
+                    {/* Type badge */}
+                    <span
+                      className="text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0"
+                      style={{ backgroundColor: color, color: "white" }}
+                    >
+                      {label}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-5 py-4 border-t shrink-0 flex gap-3">
+          <Button variant="outline" className="flex-1" onClick={onClose} disabled={downloading}>
+            Annuler
+          </Button>
+          <Button
+            className="flex-1 bg-green-700 hover:bg-green-800 text-white"
+            onClick={() => onDownload(selectedItems)}
+            disabled={downloading || selectedIds.size === 0}
+          >
+            {downloading ? (
+              <><Loader2 className="h-4 w-4 animate-spin mr-2" />Génération…</>
+            ) : (
+              <><FileDown className="h-4 w-4 mr-2" />Télécharger ({selectedIds.size})</>
+            )}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── Card grid ──────────────────────────────────────────────────────────────────
+
 interface CartesGridProps {
   items: CardWithQR[];
   zoneLogo?: string;
@@ -290,33 +482,14 @@ function CartesGrid({ items, zoneLogo, readOnly }: CartesGridProps) {
   );
 }
 
-/** Main client component: stats cards + tabs + filtered grid */
+// ── Main client component ──────────────────────────────────────────────────────
+
 export function CartesClient({ items, zoneLogo, readOnly, odcavOnly }: { items: CardWithQR[]; zoneLogo?: string; readOnly?: boolean; odcavOnly?: boolean }) {
   const [activeTab, setActiveTab] = useState<Tab>("zone_delegue");
   const [downloading, setDownloading] = useState(false);
-
-  // Mode ODCAV : affichage direct sans stats/onglets zone
-  if (odcavOnly) {
-    return (
-      <div className="space-y-4">
-        <div className="flex justify-end">
-          <Button
-            variant="outline"
-            size="sm"
-            className="text-xs gap-1.5 border-purple-700 text-purple-700 hover:bg-purple-50"
-            onClick={() => downloadBulk(items)}
-            disabled={downloading || items.length === 0}
-          >
-            {downloading
-              ? <><Loader2 className="h-3.5 w-3.5 animate-spin" />Génération…</>
-              : <><FileDown className="h-3.5 w-3.5" />PDF A4 ({items.length})</>
-            }
-          </Button>
-        </div>
-        <CartesGrid items={items} zoneLogo={zoneLogo} readOnly={readOnly} />
-      </div>
-    );
-  }
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalItems, setModalItems] = useState<CardWithQR[]>([]);
+  const [modalLabel, setModalLabel] = useState("");
 
   async function downloadBulk(cardItems: CardWithQR[]) {
     if (cardItems.length === 0) return;
@@ -336,11 +509,46 @@ export function CartesClient({ items, zoneLogo, readOnly, odcavOnly }: { items: 
       a.download = "cartes-acces.pdf";
       a.click();
       URL.revokeObjectURL(url);
+      setModalOpen(false);
     } catch {
       alert("Erreur lors du téléchargement");
     } finally {
       setDownloading(false);
     }
+  }
+
+  function openModal(cardItems: CardWithQR[], label: string) {
+    setModalItems(cardItems);
+    setModalLabel(label);
+    setModalOpen(true);
+  }
+
+  // Mode ODCAV : affichage direct sans stats/onglets zone
+  if (odcavOnly) {
+    return (
+      <div className="space-y-4">
+        <div className="flex justify-end">
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-xs gap-1.5 border-purple-700 text-purple-700 hover:bg-purple-50"
+            onClick={() => openModal(items, "Toutes les cartes")}
+            disabled={items.length === 0}
+          >
+            <FileDown className="h-3.5 w-3.5" />PDF A4 ({items.length})
+          </Button>
+        </div>
+        <CartesGrid items={items} zoneLogo={zoneLogo} readOnly={readOnly} />
+        <BulkDownloadModal
+          open={modalOpen}
+          onClose={() => setModalOpen(false)}
+          items={modalItems}
+          tabLabel={modalLabel}
+          onDownload={downloadBulk}
+          downloading={downloading}
+        />
+      </div>
+    );
   }
 
   const vendeurItems = items.filter((i) => i.card.card_type === "vendeur");
@@ -360,6 +568,8 @@ export function CartesClient({ items, zoneLogo, readOnly, odcavOnly }: { items: 
       ? spectateurItems
       : personneRessourceItems;
 
+  const activeTabLabel = TABS.find((t) => t.id === activeTab)?.label ?? "";
+
   if (items.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
@@ -375,7 +585,6 @@ export function CartesClient({ items, zoneLogo, readOnly, odcavOnly }: { items: 
       {/* Stats Cards */}
       <div className="space-y-3">
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {/* Vendeurs count */}
           <div className="rounded-xl p-4 bg-green-100 border border-green-200 flex items-center justify-between">
             <div>
               <p className="text-green-800 font-bold text-sm sm:text-base leading-tight">Vendeurs</p>
@@ -386,7 +595,6 @@ export function CartesClient({ items, zoneLogo, readOnly, odcavOnly }: { items: 
             <ShoppingCart className="h-8 w-8 sm:h-10 sm:w-10 text-green-300 shrink-0" />
           </div>
 
-          {/* Spectateurs count */}
           <div className="rounded-xl p-4 bg-indigo-100 border border-indigo-200 flex items-center justify-between">
             <div>
               <p className="text-indigo-800 font-bold text-sm sm:text-base leading-tight">Spectateurs</p>
@@ -397,7 +605,6 @@ export function CartesClient({ items, zoneLogo, readOnly, odcavOnly }: { items: 
             <Users className="h-8 w-8 sm:h-10 sm:w-10 text-indigo-300 shrink-0" />
           </div>
 
-          {/* Total Revenus */}
           <div className="col-span-2 sm:col-span-1 rounded-xl p-4 bg-green-800 flex items-center justify-between">
             <div>
               <p className="text-white font-bold text-sm sm:text-base leading-tight">REVENUS TOTAL</p>
@@ -411,7 +618,6 @@ export function CartesClient({ items, zoneLogo, readOnly, odcavOnly }: { items: 
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          {/* Revenus Vendeurs */}
           <div className="rounded-xl p-4 bg-amber-50 border border-amber-200 flex items-center justify-between">
             <div>
               <p className="text-amber-800 font-bold text-sm sm:text-base leading-tight">Revenus Vendeurs</p>
@@ -422,7 +628,6 @@ export function CartesClient({ items, zoneLogo, readOnly, odcavOnly }: { items: 
             <Wallet className="h-8 w-8 sm:h-10 sm:w-10 text-amber-200 shrink-0" />
           </div>
 
-          {/* Revenus Spectateurs */}
           <div className="rounded-xl p-4 bg-pink-50 border border-pink-200 flex items-center justify-between">
             <div>
               <p className="text-pink-800 font-bold text-sm sm:text-base leading-tight">Revenus spectateurs</p>
@@ -456,13 +661,10 @@ export function CartesClient({ items, zoneLogo, readOnly, odcavOnly }: { items: 
           variant="outline"
           size="sm"
           className="mb-1 mr-1 text-xs gap-1.5 border-green-700 text-green-700 hover:bg-green-50"
-          onClick={() => downloadBulk(filteredItems)}
-          disabled={downloading || filteredItems.length === 0}
+          onClick={() => openModal(filteredItems, activeTabLabel)}
+          disabled={filteredItems.length === 0}
         >
-          {downloading
-            ? <><Loader2 className="h-3.5 w-3.5 animate-spin" />Génération…</>
-            : <><FileDown className="h-3.5 w-3.5" />PDF A4 ({filteredItems.length})</>
-          }
+          <FileDown className="h-3.5 w-3.5" />PDF A4 ({filteredItems.length})
         </Button>
       </div>
 
@@ -475,6 +677,16 @@ export function CartesClient({ items, zoneLogo, readOnly, odcavOnly }: { items: 
       ) : (
         <CartesGrid items={filteredItems} zoneLogo={zoneLogo} readOnly={readOnly} />
       )}
+
+      {/* Bulk download modal */}
+      <BulkDownloadModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        items={modalItems}
+        tabLabel={modalLabel}
+        onDownload={downloadBulk}
+        downloading={downloading}
+      />
     </div>
   );
 }
