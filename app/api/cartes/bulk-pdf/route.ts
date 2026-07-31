@@ -9,17 +9,39 @@ import React from "react";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-async function fetchBase64(url: string): Promise<string | null> {
-  try {
-    const res = await fetch(url);
-    if (!res.ok) return null;
-    const buf = await res.arrayBuffer();
-    const b64 = Buffer.from(buf).toString("base64");
-    const ct = res.headers.get("content-type") || "image/jpeg";
-    return `data:${ct};base64,${b64}`;
-  } catch {
-    return null;
+async function fetchBase64(url: string, retries = 2): Promise<string | null> {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 12_000);
+      const res = await fetch(url, { signal: controller.signal });
+      clearTimeout(timer);
+      if (!res.ok) return null;
+      const buf = await res.arrayBuffer();
+      const b64 = Buffer.from(buf).toString("base64");
+      const ct = res.headers.get("content-type") || "image/jpeg";
+      return `data:${ct};base64,${b64}`;
+    } catch {
+      if (attempt < retries) {
+        await new Promise((r) => setTimeout(r, 600 * (attempt + 1)));
+      }
+    }
   }
+  return null;
+}
+
+async function processInBatches<T, R>(
+  items: T[],
+  batchSize: number,
+  fn: (item: T) => Promise<R>
+): Promise<R[]> {
+  const results: R[] = [];
+  for (let i = 0; i < items.length; i += batchSize) {
+    const batch = items.slice(i, i + batchSize);
+    const batchResults = await Promise.all(batch.map(fn));
+    results.push(...batchResults);
+  }
+  return results;
 }
 
 export async function POST(request: Request) {
@@ -48,9 +70,11 @@ export async function POST(request: Request) {
   const logoBuf = readFileSync(join(process.cwd(), "public", "logoodcavdes.png"));
   const logoDataUrl = `data:image/png;base64,${logoBuf.toString("base64")}`;
 
-  // Generate QR + photo for each card in parallel
-  const cardData: CardPDFData[] = await Promise.all(
-    cards.map(async (card: any) => {
+  // Generate QR + photo per card, in batches to avoid saturating Supabase Storage
+  const cardData: CardPDFData[] = await processInBatches(
+    cards,
+    8,
+    async (card: any) => {
       const [qrDataUrl, photoDataUrl] = await Promise.all([
         QRCode.toDataURL(`${appUrl}/carte/${card.qr_token}`, {
           width: 200, margin: 2, errorCorrectionLevel: "M",
@@ -59,7 +83,7 @@ export async function POST(request: Request) {
         card.photo_url ? fetchBase64(card.photo_url) : Promise.resolve(null),
       ]);
       return { ...card, qrDataUrl, logoDataUrl, photoDataUrl };
-    })
+    }
   );
 
   const buffer = await renderToBuffer(
