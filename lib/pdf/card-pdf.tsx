@@ -199,7 +199,7 @@ export function CardPDFView({ card }: { card: CardPDFData }) {
     <View style={{
       width: CARD_W, height: CARD_H,
       borderWidth: 1.5, borderColor: typeColor, borderRadius: 5 * MM,
-      overflow: "hidden", backgroundColor: "white",
+      overflow: "hidden", backgroundColor: typeBg,
       position: "relative",
     }}>
 
@@ -326,6 +326,7 @@ export function CardPDFView({ card }: { card: CardPDFData }) {
               justifyContent: "flex-end",
               paddingBottom: CARD_H * 0.03,
               paddingHorizontal: qrColPad,
+              backgroundColor: typeBg,
             }}>
               <View style={{
                 borderWidth: qrBorder, borderColor: typeColor,

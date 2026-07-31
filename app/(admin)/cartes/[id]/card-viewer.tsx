@@ -136,8 +136,8 @@ export function CardViewer({ card, qrDataUrl, printUrl, zoneLogo }: CardViewerPr
       <Card className="overflow-hidden p-4 bg-gray-100">
         <div className="w-full max-w-xl mx-auto" style={{ containerType: "inline-size" }}>
           <div
-            className="relative w-full rounded-2xl overflow-hidden bg-white shadow-lg"
-            style={{ aspectRatio: "85.6 / 54", border: `3px solid ${typeColor}` }}
+            className="relative w-full rounded-2xl overflow-hidden shadow-lg"
+            style={{ aspectRatio: "85.6 / 54", border: `3px solid ${typeColor}`, backgroundColor: typeBg }}
           >
             {/* ── HEADER ── */}
             <div
@@ -229,7 +229,7 @@ export function CardViewer({ card, qrDataUrl, printUrl, zoneLogo }: CardViewerPr
 
               {/* QR — 35% */}
               <div
-                className="flex items-end justify-center bg-white"
+                className="flex items-end justify-center"
                 style={{ width: "35%", paddingBottom: "2%" }}
               >
                 <div style={{ width: "84%", padding: "1%", border: `1px solid ${typeColor}` }}>

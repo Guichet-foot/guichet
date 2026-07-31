@@ -104,8 +104,8 @@ function CardDesign({ card, qrDataUrl, zoneLogo }: { card: AccessCard; qrDataUrl
 
   return (
     <div
-      className="relative w-full rounded-xl overflow-hidden bg-white shadow-md"
-      style={{ aspectRatio: "85.6 / 54", border: `2.5px solid ${typeColor}` }}
+      className="relative w-full rounded-xl overflow-hidden shadow-md"
+      style={{ aspectRatio: "85.6 / 54", border: `2.5px solid ${typeColor}`, backgroundColor: typeBg }}
     >
       {/* Header */}
       <div
@@ -191,7 +191,7 @@ function CardDesign({ card, qrDataUrl, zoneLogo }: { card: AccessCard; qrDataUrl
 
         {/* QR */}
         <div
-          className="flex items-end justify-center bg-white"
+          className="flex items-end justify-center"
           style={{ width: "35%", paddingBottom: "2%" }}
         >
           <div style={{ width: "84%", padding: "1%", border: `1px solid ${typeColor}` }}>

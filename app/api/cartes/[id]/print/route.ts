@@ -151,6 +151,7 @@ html, body {
   border: 1.5pt solid ${typeColor};
   border-radius: 5mm;
   overflow: hidden;
+  background: ${typeBg};
 }
 /* Header */
 .header {
