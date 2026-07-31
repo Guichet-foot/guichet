@@ -35,9 +35,15 @@ const ICON_TAG = `<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.
 
 const TYPE_LABELS: Record<string, string> = {
   zone: "ZONE", delegue: "DÉLÉGUÉ", vendeur: "VENDEUR", spectateur: "SPECTATEUR",
+  personne_ressource: "PERS. RESSOURCE",
 };
 const TYPE_COLORS: Record<string, string> = {
   zone: "#166534", delegue: "#1D4ED8", vendeur: "#B45309", spectateur: "#6D28D9",
+  personne_ressource: "#475569",
+};
+const TYPE_BG: Record<string, string> = {
+  zone: "#f0fdf4", delegue: "#eff6ff", vendeur: "#fffbeb", spectateur: "#faf5ff",
+  personne_ressource: "#f8fafc",
 };
 
 function svgIcon(path: string) {
@@ -71,8 +77,10 @@ export async function GET(
   const saison = getSaison(card);
   const cardType = (card as any).card_type || "zone";
   const isPaidCard = cardType === "vendeur" || cardType === "spectateur";
+  const isPersonneRessource = cardType === "personne_ressource";
   const typeLabel = TYPE_LABELS[cardType] || "ZONE";
   const typeColor = TYPE_COLORS[cardType] || "#166534";
+  const typeBg = TYPE_BG[cardType] || "#f0fdf4";
 
   // Embed logo
   let logoDataUrl: string;
@@ -109,10 +117,10 @@ export async function GET(
   const rows = [
     infoRow(ICON_USER, "NOM COMPLET", card.full_name),
     infoRow(ICON_PHONE, "TÉLÉPHONE", card.phone),
-    infoRow(ICON_MAP, "ZONE", card.zone_name),
+    ...(!isPersonneRessource ? [infoRow(ICON_MAP, "ZONE", card.zone_name)] : []),
     ...(!isPaidCard ? [infoRow(ICON_BADGE, "POSTE", card.poste || "")] : []),
     ...(card.asc_name ? [infoRow(ICON_SHIELD, "ASC", card.asc_name)] : []),
-    ...(cardPrice ? [infoRow(ICON_TAG, "MONTANT", `${cardPrice.toLocaleString("fr-FR")} FCFA`)] : []),
+    ...(cardPrice && !isPersonneRessource ? [infoRow(ICON_TAG, "MONTANT", `${cardPrice.toLocaleString("fr-FR")} FCFA`)] : []),
   ];
 
   const numRows = rows.length;
@@ -140,7 +148,7 @@ html, body {
   position: relative;
   width: 85.6mm;
   height: 54mm;
-  border: 1.5pt solid #1a5c2a;
+  border: 1.5pt solid ${typeColor};
   border-radius: 5mm;
   overflow: hidden;
 }
@@ -151,8 +159,8 @@ html, body {
   height: 16.2mm;
   display: flex;
   align-items: center;
-  background: #f0fdf4;
-  border-bottom: 1pt solid #1a5c2a;
+  background: ${typeBg};
+  border-bottom: 1pt solid ${typeColor};
   padding: 0.8mm 2mm;
 }
 .logo-wrap {
@@ -177,14 +185,14 @@ html, body {
 .title {
   font-size: 9pt;
   font-weight: 900;
-  color: #1a5c2a;
+  color: ${typeColor};
   letter-spacing: 0.3px;
   line-height: 1.05;
 }
 .season {
   font-size: 4.5pt;
   font-weight: 600;
-  color: #1a5c2a;
+  color: ${typeColor};
   margin-top: 0.3mm;
 }
 .type-badge {
@@ -224,7 +232,7 @@ html, body {
 .icon-box {
   width: 4.5mm;
   height: 4.5mm;
-  background: #1a5c2a;
+  background: ${typeColor};
   border-radius: 0.7mm;
   display: flex;
   align-items: center;
@@ -235,7 +243,7 @@ html, body {
 }
 .field-label {
   font-size: 3.2pt;
-  color: #1a5c2a;
+  color: ${typeColor};
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.2px;
@@ -262,7 +270,7 @@ html, body {
   padding: 1.5mm 1.5mm 2mm;
 }
 .qr-box {
-  border: 0.5pt solid #1a5c2a;
+  border: 0.5pt solid ${typeColor};
   padding: 0.5mm;
   display: flex;
 }
@@ -282,9 +290,9 @@ html, body {
   width: 21mm;
   height: 21mm;
   border-radius: 50%;
-  border: 1.5pt solid #1a5c2a;
+  border: 1.5pt solid ${typeColor};
   overflow: hidden;
-  background: #d1fae5;
+  background: ${typeBg};
 }
 .photo-wrap img {
   width: 100%;
@@ -316,7 +324,7 @@ html, body {
     <div class="title-section">
       <div class="title">CARTE D'ACCÈS</div>
       <div class="season">— SAISON ${saison} —</div>
-      <div class="type-badge">${typeLabel}</div>
+      ${!isPersonneRessource ? `<div class="type-badge">${typeLabel}</div>` : ""}
     </div>
   </div>
 

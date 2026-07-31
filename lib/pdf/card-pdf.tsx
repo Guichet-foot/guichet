@@ -40,9 +40,15 @@ const ROW_H = CARD_H * 0.105;      // 16.1 pt (fixed, NOT body/numRows)
 // ── Types ──────────────────────────────────────────────────────────
 const TYPE_LABELS: Record<string, string> = {
   zone: "ZONE", delegue: "DÉLÉGUÉ", vendeur: "VENDEUR", spectateur: "SPECTATEUR", odcav: "ODCAV",
+  personne_ressource: "PERS. RESSOURCE",
 };
 const TYPE_COLORS: Record<string, string> = {
   zone: "#166534", delegue: "#1D4ED8", vendeur: "#B45309", spectateur: "#6D28D9", odcav: "#7C3AED",
+  personne_ressource: "#475569",
+};
+const TYPE_BG: Record<string, string> = {
+  zone: "#f0fdf4", delegue: "#eff6ff", vendeur: "#fffbeb", spectateur: "#faf5ff", odcav: "#fdf4ff",
+  personne_ressource: "#f8fafc",
 };
 
 export interface CardPDFData {
@@ -124,12 +130,12 @@ function IconTag() {
   );
 }
 
-// ── Icon box: green rounded square, centered icon ──────────────────
-function IconBox({ children }: { children: React.ReactNode }) {
+// ── Icon box: colored rounded square, centered icon ────────────────
+function IconBox({ color, children }: { color: string; children: React.ReactNode }) {
   return (
     <View style={{
       width: ICON_BOX, height: ICON_BOX,
-      backgroundColor: "#1a5c2a",
+      backgroundColor: color,
       borderRadius: ICON_BOX * 0.16,
       marginRight: CARD_W * 0.014, // ~3.4pt gap
       flexShrink: 0,
@@ -152,10 +158,12 @@ function getSaison(card: CardPDFData): string {
 
 // ── Card component ─────────────────────────────────────────────────
 export function CardPDFView({ card }: { card: CardPDFData }) {
-  const type       = card.card_type || "zone";
-  const isPaid     = type === "vendeur" || type === "spectateur";
-  const isOdcav    = type === "odcav";
-  const typeColor  = TYPE_COLORS[type] || "#166534";
+  const type                = card.card_type || "zone";
+  const isPaid              = type === "vendeur" || type === "spectateur";
+  const isOdcav             = type === "odcav";
+  const isPersonneRessource = type === "personne_ressource";
+  const typeColor           = TYPE_COLORS[type] || "#166534";
+  const typeBg              = TYPE_BG[type] || "#f0fdf4";
   // Zone cards: badge = zone_name; others: use TYPE_LABELS
   const typeLabel  = type === "zone" && card.zone_name
     ? card.zone_name.toUpperCase()
@@ -165,7 +173,7 @@ export function CardPDFView({ card }: { card: CardPDFData }) {
   const rows: CardRow[] = [
     { label: "NOM COMPLET", value: card.full_name, icon: <IconUser /> },
     { label: "TÉLÉPHONE",   value: card.phone,      icon: <IconPhone /> },
-    ...(!isPaid && !isOdcav
+    ...(!isPaid && !isOdcav && !isPersonneRessource
       ? [{ label: "ZONE", value: card.zone_name, icon: <IconMapPin /> }]
       : []),
     ...(!isPaid && card.poste
@@ -174,7 +182,7 @@ export function CardPDFView({ card }: { card: CardPDFData }) {
     ...(!isOdcav && card.asc_name
       ? [{ label: "ASC", value: card.asc_name, icon: <IconShield /> }]
       : []),
-    ...(card.price
+    ...(card.price && !isPersonneRessource
       ? [{ label: "MONTANT", value: `${card.price.toLocaleString("fr-FR")} FCFA`, icon: <IconTag /> }]
       : []),
   ];
@@ -190,7 +198,7 @@ export function CardPDFView({ card }: { card: CardPDFData }) {
   return (
     <View style={{
       width: CARD_W, height: CARD_H,
-      borderWidth: 1.5, borderColor: "#1a5c2a", borderRadius: 5 * MM,
+      borderWidth: 1.5, borderColor: typeColor, borderRadius: 5 * MM,
       overflow: "hidden", backgroundColor: "white",
       position: "relative",
     }}>
@@ -199,8 +207,8 @@ export function CardPDFView({ card }: { card: CardPDFData }) {
       <View style={{
         position: "absolute", top: 0, left: 0, width: CARD_W, height: HEADER_H,
         flexDirection: "row", alignItems: "center",
-        backgroundColor: "#f0fdf4",
-        borderBottomWidth: 1, borderBottomColor: "#1a5c2a",
+        backgroundColor: typeBg,
+        borderBottomWidth: 1, borderBottomColor: typeColor,
         paddingHorizontal: CARD_W * 0.02,
         paddingVertical: CARD_H * 0.01,
       }}>
@@ -220,7 +228,7 @@ export function CardPDFView({ card }: { card: CardPDFData }) {
           <Text style={{
             fontFamily: "Helvetica-Bold",
             fontSize: F_TITLE,
-            color: "#1a5c2a",
+            color: typeColor,
             lineHeight: 1.05,
             letterSpacing: 0.3,
           }}>
@@ -229,29 +237,31 @@ export function CardPDFView({ card }: { card: CardPDFData }) {
           <Text style={{
             fontFamily: "Helvetica",
             fontSize: F_SAISON,
-            color: "#166534",
+            color: typeColor,
             marginTop: CARD_H * 0.008,
             letterSpacing: 0.2,
           }}>
             — SAISON {saison} —
           </Text>
-          {/* Type badge */}
-          <View style={{
-            marginTop: CARD_H * 0.012,
-            backgroundColor: typeColor,
-            borderRadius: 99,
-            paddingHorizontal: CARD_W * 0.02,
-            paddingVertical: CARD_H * 0.008,
-          }}>
-            <Text style={{
-              fontFamily: "Helvetica-Bold",
-              fontSize: F_BADGE,
-              color: "white",
-              letterSpacing: 0.5,
+          {/* Type badge — hidden for personne_ressource */}
+          {!isPersonneRessource && (
+            <View style={{
+              marginTop: CARD_H * 0.012,
+              backgroundColor: typeColor,
+              borderRadius: 99,
+              paddingHorizontal: CARD_W * 0.02,
+              paddingVertical: CARD_H * 0.008,
             }}>
-              {typeLabel}
-            </Text>
-          </View>
+              <Text style={{
+                fontFamily: "Helvetica-Bold",
+                fontSize: F_BADGE,
+                color: "white",
+                letterSpacing: 0.5,
+              }}>
+                {typeLabel}
+              </Text>
+            </View>
+          )}
         </View>
       </View>
 
@@ -277,12 +287,12 @@ export function CardPDFView({ card }: { card: CardPDFData }) {
               borderBottomWidth: i < rows.length - 1 ? 0.4 : 0,
               borderBottomColor: "#e5e7eb",
             }}>
-              <IconBox>{icon}</IconBox>
+              <IconBox color={typeColor}>{icon}</IconBox>
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={{
                   fontFamily: "Helvetica-Bold",
                   fontSize: F_LABEL,
-                  color: "#166534",
+                  color: typeColor,
                   letterSpacing: 0.3,
                   lineHeight: 1,
                 }}>
@@ -318,7 +328,7 @@ export function CardPDFView({ card }: { card: CardPDFData }) {
               paddingHorizontal: qrColPad,
             }}>
               <View style={{
-                borderWidth: qrBorder, borderColor: "#1a5c2a",
+                borderWidth: qrBorder, borderColor: typeColor,
                 padding: qrPad,
               }}>
                 <Image
@@ -340,9 +350,9 @@ export function CardPDFView({ card }: { card: CardPDFData }) {
         height: PHOTO_H,
         borderRadius: PHOTO_RADIUS,
         borderWidth: 1.5,
-        borderColor: "#1a5c2a",
+        borderColor: typeColor,
         overflow: "hidden",
-        backgroundColor: "#d1fae5",
+        backgroundColor: typeBg,
       }}>
         {card.photoDataUrl ? (
           <Image

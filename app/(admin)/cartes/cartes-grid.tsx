@@ -46,6 +46,7 @@ const TYPE_LABELS: Record<string, string> = {
   vendeur: "VENDEUR",
   spectateur: "SPECTATEUR",
   odcav: "ODCAV",
+  personne_ressource: "PERS. RESSOURCE",
 };
 
 const TYPE_COLORS: Record<string, string> = {
@@ -54,6 +55,16 @@ const TYPE_COLORS: Record<string, string> = {
   vendeur: "#B45309",
   spectateur: "#6D28D9",
   odcav: "#7C3AED",
+  personne_ressource: "#475569",
+};
+
+const TYPE_BG: Record<string, string> = {
+  zone: "#f0fdf4",
+  delegue: "#eff6ff",
+  vendeur: "#fffbeb",
+  spectateur: "#faf5ff",
+  odcav: "#fdf4ff",
+  personne_ressource: "#f8fafc",
 };
 
 function getSaison(card: AccessCard): string {
@@ -71,6 +82,10 @@ function CardDesign({ card, qrDataUrl, zoneLogo }: { card: AccessCard; qrDataUrl
 
   const isOdcavCard = type === "odcav";
   const isPaidCard = type === "vendeur" || type === "spectateur";
+  const isPersonneRessource = type === "personne_ressource";
+
+  const typeColor = TYPE_COLORS[type] || "#166534";
+  const typeBg = TYPE_BG[type] || "#f0fdf4";
 
   const badgeText = type === "zone" && card.zone_name
     ? card.zone_name.toUpperCase()
@@ -79,23 +94,23 @@ function CardDesign({ card, qrDataUrl, zoneLogo }: { card: AccessCard; qrDataUrl
   const rows: { Icon: React.ElementType; label: string; value: string | null | undefined }[] = [
     { Icon: User,  label: "NOM COMPLET", value: card.full_name },
     { Icon: Phone, label: "TÉLÉPHONE",   value: card.phone },
-    ...(!isPaidCard && !isOdcavCard ? [{ Icon: MapPin,     label: "ZONE",     value: card.zone_name }] : []),
+    ...(!isPaidCard && !isOdcavCard && !isPersonneRessource ? [{ Icon: MapPin, label: "ZONE", value: card.zone_name }] : []),
     ...(!isPaidCard ? [{ Icon: Briefcase, label: isOdcavCard ? "FONCTION" : "POSTE", value: card.poste }] : []),
     ...(!isOdcavCard && card.asc_name ? [{ Icon: Shield, label: "ASC", value: card.asc_name }] : []),
-    ...(price != null && price > 0
+    ...(price != null && price > 0 && !isPersonneRessource
       ? [{ Icon: Tag, label: "MONTANT", value: `${price.toLocaleString("fr-FR")} FCFA` }]
       : []),
   ];
 
   return (
     <div
-      className="relative w-full border-[2.5px] border-green-800 rounded-xl overflow-hidden bg-white shadow-md"
-      style={{ aspectRatio: "85.6 / 54" }}
+      className="relative w-full rounded-xl overflow-hidden bg-white shadow-md"
+      style={{ aspectRatio: "85.6 / 54", border: `2.5px solid ${typeColor}` }}
     >
       {/* Header */}
       <div
-        className="absolute inset-x-0 top-0 flex items-center bg-green-50 border-b border-green-800"
-        style={{ height: "30%", padding: "1% 2%" }}
+        className="absolute inset-x-0 top-0 flex items-center"
+        style={{ height: "30%", padding: "1% 2%", backgroundColor: typeBg, borderBottom: `1px solid ${typeColor}` }}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
@@ -105,37 +120,33 @@ function CardDesign({ card, qrDataUrl, zoneLogo }: { card: AccessCard; qrDataUrl
         />
         <div style={{ flex: 1, textAlign: "center", paddingRight: "25%" }}>
           <p
-            className="font-black text-green-800 leading-tight"
-            style={{ fontSize: "5.5cqi", lineHeight: 1.05 }}
+            className="font-black leading-tight"
+            style={{ fontSize: "5.5cqi", lineHeight: 1.05, color: typeColor }}
           >
             CARTE D&apos;ACCÈS
           </p>
           <p
-            className="font-semibold text-green-700"
-            style={{ fontSize: "2.1cqi", marginTop: "0.2cqi" }}
+            className="font-semibold"
+            style={{ fontSize: "2.1cqi", marginTop: "0.2cqi", color: typeColor }}
           >
             — SAISON {saison} —
           </p>
-          <div style={{
-            marginTop: "0.5cqi",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: "1.5cqi",
-          }}>
-            <span style={{
-              backgroundColor: TYPE_COLORS[type] || "#166534",
-              color: "white",
-              fontSize: "1.6cqi",
-              padding: "0.2cqi 1.3cqi",
-              borderRadius: "99px",
-              fontWeight: 800,
-              letterSpacing: "0.06em",
-              display: "inline-block",
-            }}>
-              {badgeText}
-            </span>
-          </div>
+          {!isPersonneRessource && (
+            <div style={{ marginTop: "0.5cqi", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <span style={{
+                backgroundColor: typeColor,
+                color: "white",
+                fontSize: "1.6cqi",
+                padding: "0.2cqi 1.3cqi",
+                borderRadius: "99px",
+                fontWeight: 800,
+                letterSpacing: "0.06em",
+                display: "inline-block",
+              }}>
+                {badgeText}
+              </span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -155,15 +166,15 @@ function CardDesign({ card, qrDataUrl, zoneLogo }: { card: AccessCard; qrDataUrl
               }}
             >
               <div
-                className="flex items-center justify-center rounded bg-green-800 shrink-0"
-                style={{ width: "5.5cqi", height: "5.5cqi" }}
+                className="flex items-center justify-center rounded shrink-0"
+                style={{ width: "5.5cqi", height: "5.5cqi", backgroundColor: typeColor }}
               >
                 <Icon style={{ width: "58%", height: "58%", color: "white" }} />
               </div>
               <div style={{ minWidth: 0 }}>
                 <p
-                  className="font-bold text-green-800 uppercase leading-none"
-                  style={{ fontSize: "1.6cqi", letterSpacing: "0.03em" }}
+                  className="font-bold uppercase leading-none"
+                  style={{ fontSize: "1.6cqi", letterSpacing: "0.03em", color: typeColor }}
                 >
                   {label}
                 </p>
@@ -183,7 +194,7 @@ function CardDesign({ card, qrDataUrl, zoneLogo }: { card: AccessCard; qrDataUrl
           className="flex items-end justify-center bg-white"
           style={{ width: "35%", paddingBottom: "2%" }}
         >
-          <div className="border border-green-800" style={{ width: "84%", padding: "1%" }}>
+          <div style={{ width: "84%", padding: "1%", border: `1px solid ${typeColor}` }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={qrDataUrl}
@@ -197,14 +208,15 @@ function CardDesign({ card, qrDataUrl, zoneLogo }: { card: AccessCard; qrDataUrl
 
       {/* Photo — portrait rectangle, header height + small overflow into body */}
       <div
-        className="absolute overflow-hidden bg-green-50"
+        className="absolute overflow-hidden"
         style={{
           width: "25%",
           height: "38%",
           top: "3%",
           right: "2%",
           borderRadius: "6px",
-          border: "2.5px solid #1a5c2a",
+          border: `2.5px solid ${typeColor}`,
+          backgroundColor: typeBg,
         }}
       >
         {card.photo_url ? (
@@ -212,7 +224,7 @@ function CardDesign({ card, qrDataUrl, zoneLogo }: { card: AccessCard; qrDataUrl
           <img src={card.photo_url} alt="" className="w-full h-full object-cover" />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
-            <User className="w-2/5 h-2/5 text-green-600" />
+            <User className="w-2/5 h-2/5" style={{ color: typeColor }} />
           </div>
         )}
       </div>
@@ -337,7 +349,10 @@ export function CartesClient({ items, zoneLogo, readOnly, odcavOnly }: { items: 
   const filteredItems =
     activeTab === "zone_delegue"
       ? items.filter(
-          (i) => i.card.card_type === "zone" || i.card.card_type === "delegue"
+          (i) =>
+            i.card.card_type === "zone" ||
+            i.card.card_type === "delegue" ||
+            i.card.card_type === "personne_ressource"
         )
       : activeTab === "vendeur"
       ? vendeurItems

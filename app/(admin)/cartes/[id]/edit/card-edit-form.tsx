@@ -20,10 +20,11 @@ import { useRouter } from "next/navigation";
 import type { AccessCard, CardType } from "@/lib/types";
 
 const CARD_TYPES = [
-  { value: "zone",       label: "Zone",        paid: false },
-  { value: "delegue",    label: "Délégué",     paid: false },
-  { value: "vendeur",    label: "Vendeurs",    paid: true  },
-  { value: "spectateur", label: "Spectateurs", paid: true  },
+  { value: "zone",               label: "Zone",               paid: false },
+  { value: "delegue",            label: "Délégué",            paid: false },
+  { value: "vendeur",            label: "Vendeurs",           paid: true  },
+  { value: "spectateur",         label: "Spectateurs",        paid: true  },
+  { value: "personne_ressource", label: "Personne ressource", paid: false },
 ];
 
 interface CardEditFormProps {

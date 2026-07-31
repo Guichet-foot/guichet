@@ -151,7 +151,7 @@ export interface ScanResult {
   scannedAt?: string;
 }
 
-export type CardType = 'zone' | 'delegue' | 'vendeur' | 'spectateur' | 'odcav';
+export type CardType = 'zone' | 'delegue' | 'vendeur' | 'spectateur' | 'odcav' | 'personne_ressource';
 
 export interface AccessCard {
   id: string;
