@@ -33,12 +33,13 @@ export interface CardWithQR {
   qrDataUrl: string;
 }
 
-type Tab = "zone_delegue" | "vendeur" | "spectateur";
+type Tab = "zone_delegue" | "vendeur" | "spectateur" | "personne_ressource";
 
 const TABS: { id: Tab; label: string }[] = [
-  { id: "zone_delegue", label: "Zone et Délégué" },
-  { id: "vendeur", label: "Vendeurs" },
-  { id: "spectateur", label: "Spectateurs" },
+  { id: "zone_delegue",       label: "Zone et Délégué" },
+  { id: "vendeur",            label: "Vendeurs" },
+  { id: "spectateur",         label: "Spectateurs" },
+  { id: "personne_ressource", label: "Pers. Ressource" },
 ];
 
 const TYPE_LABELS: Record<string, string> = {
@@ -348,17 +349,16 @@ export function CartesClient({ items, zoneLogo, readOnly, odcavOnly }: { items: 
   const revenusSpectateurs = spectateurItems.reduce((s, i) => s + (i.card.price || 0), 0);
   const totalRevenus = revenusVendeurs + revenusSpectateurs;
 
+  const personneRessourceItems = items.filter((i) => i.card.card_type === "personne_ressource");
+
   const filteredItems =
     activeTab === "zone_delegue"
-      ? items.filter(
-          (i) =>
-            i.card.card_type === "zone" ||
-            i.card.card_type === "delegue" ||
-            i.card.card_type === "personne_ressource"
-        )
+      ? items.filter((i) => i.card.card_type === "zone" || i.card.card_type === "delegue")
       : activeTab === "vendeur"
       ? vendeurItems
-      : spectateurItems;
+      : activeTab === "spectateur"
+      ? spectateurItems
+      : personneRessourceItems;
 
   if (items.length === 0) {
     return (
