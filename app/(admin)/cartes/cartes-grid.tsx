@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   Dialog,
   DialogContent,
@@ -240,6 +241,7 @@ interface CartesGridProps {
 
 function CartesGrid({ items, zoneLogo, readOnly }: CartesGridProps) {
   const [selected, setSelected] = useState<CardWithQR | null>(null);
+  const pathname = usePathname();
 
   return (
     <>
@@ -267,7 +269,7 @@ function CartesGrid({ items, zoneLogo, readOnly }: CartesGridProps) {
               </div>
               <div className="flex gap-2">
                 {!readOnly && (
-                  <Link href={`/cartes/${selected.card.id}/edit`} className="flex-1">
+                  <Link href={`/cartes/${selected.card.id}/edit?from=${encodeURIComponent(pathname)}`} className="flex-1">
                     <Button className="w-full bg-green-700 hover:bg-green-800 text-white">
                       <Pencil className="h-4 w-4 mr-1.5" />Modifier
                     </Button>

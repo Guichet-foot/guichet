@@ -32,9 +32,10 @@ interface CardEditFormProps {
   zones: { id: string; name: string }[];
   isSuperAdmin: boolean;
   initialTeams: { id: string; name: string }[];
+  returnUrl?: string;
 }
 
-export function CardEditForm({ card, zones, isSuperAdmin, initialTeams }: CardEditFormProps) {
+export function CardEditForm({ card, zones, isSuperAdmin, initialTeams, returnUrl = "/cartes" }: CardEditFormProps) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -159,7 +160,7 @@ export function CardEditForm({ card, zones, isSuperAdmin, initialTeams }: CardEd
 
     setDone(true);
     toast.success("Carte mise à jour !");
-    setTimeout(() => router.push("/cartes"), 900);
+    setTimeout(() => router.push(returnUrl), 900);
   }
 
   async function handleDelete() {
@@ -169,7 +170,7 @@ export function CardEditForm({ card, zones, isSuperAdmin, initialTeams }: CardEd
     if (result.error) { toast.error(result.error); return; }
     toast.success("Carte supprimée");
     setDeleteOpen(false);
-    router.push("/cartes");
+    router.push(returnUrl);
     router.refresh();
   }
 

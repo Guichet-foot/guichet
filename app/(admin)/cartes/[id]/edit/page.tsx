@@ -13,10 +13,14 @@ export const metadata = { title: "Modifier la carte" };
 
 export default async function EditCartePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ from?: string }>;
 }) {
   const { id } = await params;
+  const { from } = await searchParams;
+  const returnUrl = from || "/cartes";
   const profile = await requireRole(["super_admin", "admin_zone", "fondateur"]);
   const supabase = await createClient();
   const adminClient = await createAdminClient();
@@ -63,7 +67,7 @@ export default async function EditCartePage({
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       <div className="flex items-center gap-3">
-        <Link href="/cartes">
+        <Link href={returnUrl}>
           <Button variant="outline" size="sm">
             <ArrowLeft className="h-4 w-4 mr-1" />Retour
           </Button>
@@ -81,6 +85,7 @@ export default async function EditCartePage({
         zones={zones}
         isSuperAdmin={isSuperAdmin}
         initialTeams={teams}
+        returnUrl={returnUrl}
       />
     </div>
   );
