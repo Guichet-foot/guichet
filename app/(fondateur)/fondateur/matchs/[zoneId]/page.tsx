@@ -178,8 +178,6 @@ export default async function FondateurZoneMatchsPage({
                   <TableHead>Match</TableHead>
                   <TableHead className="hidden md:table-cell">Date</TableHead>
                   <TableHead className="hidden sm:table-cell">Statut</TableHead>
-                  <TableHead className="hidden lg:table-cell text-right">Imprimés</TableHead>
-                  <TableHead className="hidden lg:table-cell text-right">Validés</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -187,8 +185,6 @@ export default async function FondateurZoneMatchsPage({
                 {(matches as any[]).map((match) => {
                   const stats = ticketStats[match.id] || { printed: 0, validated: 0, printedRevenue: 0, validatedRevenue: 0 };
                   const bil = bilStats[match.id] || { bilPrinted: 0, bilValidated: 0 };
-                  const totalPrinted = stats.printed + bil.bilPrinted;
-                  const totalValidated = stats.validated + bil.bilValidated;
                   return (
                     <TableRow key={match.id}>
                       <TableCell className="font-medium">
@@ -201,20 +197,6 @@ export default async function FondateurZoneMatchsPage({
                         <Badge variant="secondary" className={MATCH_STATUS_COLORS[match.status]}>
                           {MATCH_STATUS_LABELS[match.status]}
                         </Badge>
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell text-right">
-                        {totalPrinted > 0 ? (
-                          <span className="font-semibold">{totalPrinted.toLocaleString("fr-FR")}</span>
-                        ) : (
-                          <span className="text-muted-foreground text-xs">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell text-right">
-                        {totalValidated > 0 ? (
-                          <span className="font-semibold text-success">{totalValidated.toLocaleString("fr-FR")}</span>
-                        ) : (
-                          <span className="text-muted-foreground text-xs">—</span>
-                        )}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1 flex-wrap">
