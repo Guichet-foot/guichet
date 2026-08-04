@@ -11,6 +11,7 @@ import { MATCH_STATUS_LABELS, MATCH_STATUS_COLORS } from "@/lib/constants";
 import { formatDateShort } from "@/lib/format";
 import { PrintBlocsButton } from "@/app/(admin)/matchs/print-blocs-button";
 import { MatchApercuDialog } from "../match-apercu-dialog";
+import { MatchRowActions } from "../match-row-actions";
 import { fetchAll } from "@/lib/supabase/paginate";
 
 export const metadata = { title: "Matchs de zone — Fondateur" };
@@ -216,7 +217,7 @@ export default async function FondateurZoneMatchsPage({
                         )}
                       </TableCell>
                       <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1">
+                        <div className="flex items-center justify-end gap-1 flex-wrap">
                           <MatchApercuDialog
                             matchName={`${match.home_team} vs ${match.away_team}`}
                             stats={{ ...stats, bilPrinted: bil.bilPrinted, bilValidated: bil.bilValidated }}
@@ -227,6 +228,7 @@ export default async function FondateurZoneMatchsPage({
                               matchName={`${match.home_team} vs ${match.away_team}`}
                             />
                           )}
+                          <MatchRowActions match={match} />
                         </div>
                       </TableCell>
                     </TableRow>

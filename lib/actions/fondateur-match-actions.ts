@@ -2,6 +2,7 @@
 
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import type { MatchStatus } from "@/lib/types";
 
 async function getFondateur() {
   const supabase = await createClient();
@@ -125,4 +126,109 @@ export async function createDirectMatch(formData: {
 
   revalidatePath("/fondateur/matchs");
   return { success: true, matchId: match.id };
+}
+
+export async function updateMatchAsFondateur(
+  matchId: string,
+  formData: { homeTeam: string; awayTeam: string; venue: string; matchDate: string; notes: string }
+) {
+  const user = await getFondateur();
+  if (!user) return { error: "Non autorisé" };
+
+  const adminClient = await createAdminClient();
+  const { data: match } = await adminClient
+    .from("matches")
+    .select("zone_id")
+    .eq("id", matchId)
+    .single();
+
+  const { error } = await adminClient
+    .from("matches")
+    .update({
+      home_team: formData.homeTeam,
+      away_team: formData.awayTeam,
+      venue: formData.venue,
+      match_date: formData.matchDate,
+      notes: formData.notes || null,
+    })
+    .eq("id", matchId);
+
+  if (error) return { error: error.message };
+
+  revalidatePath("/fondateur/matchs");
+  if (match?.zone_id) revalidatePath(`/fondateur/matchs/${match.zone_id}`);
+  return { success: true };
+}
+
+export async function updateMatchStatusAsFondateur(matchId: string, status: MatchStatus) {
+  const user = await getFondateur();
+  if (!user) return { error: "Non autorisé" };
+
+  const adminClient = await createAdminClient();
+  const { data: match } = await adminClient
+    .from("matches")
+    .select("zone_id")
+    .eq("id", matchId)
+    .single();
+
+  const updateData: Record<string, unknown> = { status };
+  if (status === "termine" || status === "annule") {
+    updateData.vente_active = false;
+  }
+
+  const { error } = await adminClient
+    .from("matches")
+    .update(updateData)
+    .eq("id", matchId);
+
+  if (error) return { error: error.message };
+
+  revalidatePath("/fondateur/matchs");
+  if (match?.zone_id) revalidatePath(`/fondateur/matchs/${match.zone_id}`);
+  return { success: true };
+}
+
+export async function deleteMatchAsFondateur(matchId: string) {
+  const user = await getFondateur();
+  if (!user) return { error: "Non autorisé" };
+
+  const adminClient = await createAdminClient();
+  const { data: match } = await adminClient
+    .from("matches")
+    .select("status, zone_id")
+    .eq("id", matchId)
+    .single();
+
+  if (!match) return { error: "Match introuvable" };
+  if (match.status === "en_cours") return { error: "Impossible de supprimer un match en cours" };
+
+  const zoneId = match.zone_id;
+
+  const { data: cats } = await adminClient
+    .from("ticket_categories")
+    .select("id")
+    .eq("match_id", matchId);
+
+  const catIds = (cats || []).map((c: { id: string }) => c.id);
+
+  if (catIds.length > 0) {
+    const { error: tickCatErr } = await adminClient
+      .from("tickets")
+      .delete()
+      .in("category_id", catIds);
+    if (tickCatErr) return { error: tickCatErr.message };
+  }
+
+  const { error: tickErr } = await adminClient.from("tickets").delete().eq("match_id", matchId);
+  if (tickErr) return { error: tickErr.message };
+
+  const { error: catErr } = await adminClient.from("ticket_categories").delete().eq("match_id", matchId);
+  if (catErr) return { error: catErr.message };
+
+  const { error } = await adminClient.from("matches").delete().eq("id", matchId);
+  if (error) return { error: error.message };
+
+  revalidatePath("/fondateur/matchs");
+  if (zoneId) revalidatePath(`/fondateur/matchs/${zoneId}`);
+  return { success: true };
 }
