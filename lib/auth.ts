@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import type { Profile, UserRole } from "@/lib/types";
@@ -10,7 +11,8 @@ export async function getSession() {
   return user;
 }
 
-export async function getProfile(): Promise<Profile | null> {
+// cache() deduplicates calls within the same request — layout + page share one DB hit
+export const getProfile = cache(async (): Promise<Profile | null> => {
   const supabase = await createClient();
   const {
     data: { user },
@@ -27,7 +29,7 @@ export async function getProfile(): Promise<Profile | null> {
   if (!profile) return null;
 
   return { ...profile, email: user.email } as Profile;
-}
+});
 
 export async function requireAuth(): Promise<Profile> {
   const profile = await getProfile();
