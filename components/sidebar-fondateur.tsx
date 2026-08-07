@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { LayoutDashboard, Users, LogOut, Menu, X, Settings2, Trophy, IdCard, Shield, TicketCheck, UserCog, PackageX } from "lucide-react";
+import { LayoutDashboard, Users, LogOut, Menu, X, Settings2, Trophy, IdCard, Shield, TicketCheck, UserCog, PackageX, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { ROLE_LABELS } from "@/lib/constants";
@@ -23,6 +23,7 @@ const ALL_LINKS = [
   { key: "equipes",      href: "/fondateur/equipes",      label: "Équipes",        icon: Shield },
   { key: "billeterie",   href: "/fondateur/billeterie",   label: "Billetterie",    icon: TicketCheck },
   { key: "invendus",     href: "/fondateur/invendus",     label: "Invendus",       icon: PackageX, fondateurOnly: true },
+  { key: "finances",     href: "/fondateur/finances",     label: "Finances",       icon: Wallet, fondateurOnly: true },
   { key: "parametres",   href: "/fondateur/parametres",   label: "Paramètres",     icon: Settings2 },
   // Utilisateurs: visible only to the fondateur role itself
   { key: "utilisateurs", href: "/fondateur/utilisateurs", label: "Utilisateurs",   icon: UserCog, fondateurOnly: true },
