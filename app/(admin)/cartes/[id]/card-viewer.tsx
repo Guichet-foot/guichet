@@ -23,7 +23,9 @@ import {
   Shield,
   Pencil,
   Tag,
+  Clock,
 } from "lucide-react";
+import { formatDateTime } from "@/lib/format";
 
 const TYPE_LABELS: Record<string, string> = {
   zone: "ZONE",
@@ -269,6 +271,12 @@ export function CardViewer({ card, qrDataUrl, printUrl, zoneLogo }: CardViewerPr
           </div>
         </div>
       </Card>
+
+      {/* Creation date — between card and delete dialog */}
+      <p className="text-center text-sm text-muted-foreground flex items-center justify-center gap-1.5">
+        <Clock className="h-4 w-4 shrink-0" />
+        Créée le {formatDateTime(card.created_at)}
+      </p>
 
       {/* Delete dialog */}
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>

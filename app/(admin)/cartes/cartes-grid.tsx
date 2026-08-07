@@ -30,7 +30,11 @@ import {
   Search,
   CheckSquare,
   Square,
+  Clock,
+  CalendarRange,
+  X,
 } from "lucide-react";
+import { formatDateTime } from "@/lib/format";
 import type { AccessCard } from "@/lib/types";
 import { formatFCFA } from "@/lib/format";
 
@@ -454,12 +458,17 @@ function CartesGrid({ items, zoneLogo, readOnly }: CartesGridProps) {
       </div>
 
       <Dialog open={!!selected} onOpenChange={(open) => !open && setSelected(null)}>
-        <DialogContent className="max-w-lg p-5 gap-4">
+        <DialogContent className="max-w-lg p-5 gap-3">
           {selected && (
             <>
               <div style={{ containerType: "inline-size" }}>
                 <CardDesign card={selected.card} qrDataUrl={selected.qrDataUrl} zoneLogo={zoneLogo} />
               </div>
+              {/* Creation date */}
+              <p className="text-center text-xs text-muted-foreground flex items-center justify-center gap-1.5">
+                <Clock className="h-3.5 w-3.5 shrink-0" />
+                Créée le {formatDateTime(selected.card.created_at)}
+              </p>
               <div className="flex gap-2">
                 {!readOnly && (
                   <Link href={`/cartes/${selected.card.id}/edit?from=${encodeURIComponent(pathname)}`} className="flex-1">
@@ -490,6 +499,8 @@ export function CartesClient({ items, zoneLogo, readOnly, odcavOnly }: { items: 
   const [modalOpen, setModalOpen] = useState(false);
   const [modalItems, setModalItems] = useState<CardWithQR[]>([]);
   const [modalLabel, setModalLabel] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
 
   async function downloadBulk(cardItems: CardWithQR[]) {
     if (cardItems.length === 0) return;
@@ -523,22 +534,85 @@ export function CartesClient({ items, zoneLogo, readOnly, odcavOnly }: { items: 
     setModalOpen(true);
   }
 
+  // ── Date filter logic (shared by all views) ───────────────────────────────
+  const dateFiltered = items.filter((item) => {
+    const created = new Date(item.card.created_at);
+    if (dateFrom) {
+      const from = new Date(dateFrom);
+      from.setHours(0, 0, 0, 0);
+      if (created < from) return false;
+    }
+    if (dateTo) {
+      const to = new Date(dateTo);
+      to.setHours(23, 59, 59, 999);
+      if (created > to) return false;
+    }
+    return true;
+  });
+
+  const hasDateFilter = !!dateFrom || !!dateTo;
+
+  function DateFilterBar() {
+    return (
+      <div className="flex flex-wrap items-center gap-2 p-3 rounded-xl border bg-muted/30">
+        <CalendarRange className="h-4 w-4 text-muted-foreground shrink-0" />
+        <span className="text-sm font-medium text-muted-foreground">Filtrer par date :</span>
+        <div className="flex flex-wrap gap-2 flex-1">
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-muted-foreground">Du</span>
+            <Input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className="h-8 text-xs w-36"
+            />
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-muted-foreground">Au</span>
+            <Input
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              className="h-8 text-xs w-36"
+            />
+          </div>
+          {hasDateFilter && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 text-xs text-muted-foreground hover:text-foreground"
+              onClick={() => { setDateFrom(""); setDateTo(""); }}
+            >
+              <X className="h-3.5 w-3.5 mr-1" />Effacer
+            </Button>
+          )}
+        </div>
+        {hasDateFilter && (
+          <span className="text-xs text-muted-foreground ml-auto">
+            {dateFiltered.length} / {items.length} carte{dateFiltered.length > 1 ? "s" : ""}
+          </span>
+        )}
+      </div>
+    );
+  }
+
   // Mode ODCAV : affichage direct sans stats/onglets zone
   if (odcavOnly) {
     return (
       <div className="space-y-4">
+        <DateFilterBar />
         <div className="flex justify-end">
           <Button
             variant="outline"
             size="sm"
             className="text-xs gap-1.5 border-purple-700 text-purple-700 hover:bg-purple-50"
-            onClick={() => openModal(items, "Toutes les cartes")}
-            disabled={items.length === 0}
+            onClick={() => openModal(dateFiltered, "Toutes les cartes")}
+            disabled={dateFiltered.length === 0}
           >
-            <FileDown className="h-3.5 w-3.5" />PDF A4 ({items.length})
+            <FileDown className="h-3.5 w-3.5" />PDF A4 ({dateFiltered.length})
           </Button>
         </div>
-        <CartesGrid items={items} zoneLogo={zoneLogo} readOnly={readOnly} />
+        <CartesGrid items={dateFiltered} zoneLogo={zoneLogo} readOnly={readOnly} />
         <BulkDownloadModal
           open={modalOpen}
           onClose={() => setModalOpen(false)}
@@ -551,17 +625,17 @@ export function CartesClient({ items, zoneLogo, readOnly, odcavOnly }: { items: 
     );
   }
 
-  const vendeurItems = items.filter((i) => i.card.card_type === "vendeur");
-  const spectateurItems = items.filter((i) => i.card.card_type === "spectateur");
+  const vendeurItems = dateFiltered.filter((i) => i.card.card_type === "vendeur");
+  const spectateurItems = dateFiltered.filter((i) => i.card.card_type === "spectateur");
   const revenusVendeurs = vendeurItems.reduce((s, i) => s + (i.card.price || 0), 0);
   const revenusSpectateurs = spectateurItems.reduce((s, i) => s + (i.card.price || 0), 0);
   const totalRevenus = revenusVendeurs + revenusSpectateurs;
 
-  const personneRessourceItems = items.filter((i) => i.card.card_type === "personne_ressource");
+  const personneRessourceItems = dateFiltered.filter((i) => i.card.card_type === "personne_ressource");
 
   const filteredItems =
     activeTab === "zone_delegue"
-      ? items.filter((i) => i.card.card_type === "zone" || i.card.card_type === "delegue")
+      ? dateFiltered.filter((i) => i.card.card_type === "zone" || i.card.card_type === "delegue")
       : activeTab === "vendeur"
       ? vendeurItems
       : activeTab === "spectateur"
@@ -582,6 +656,9 @@ export function CartesClient({ items, zoneLogo, readOnly, odcavOnly }: { items: 
 
   return (
     <div className="space-y-6">
+      {/* Date filter */}
+      <DateFilterBar />
+
       {/* Stats Cards */}
       <div className="space-y-3">
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
