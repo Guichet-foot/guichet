@@ -188,12 +188,31 @@ export async function deleteAccessCard(id: string): Promise<{ error?: string }> 
   }
 
   const adminClient = await createAdminClient();
+
+  // Fetch the card to get the photo_url before deleting
+  const { data: card } = await adminClient
+    .from("access_cards")
+    .select("photo_url")
+    .eq("id", id)
+    .single();
+
   const { error } = await adminClient
     .from("access_cards")
     .delete()
     .eq("id", id);
 
   if (error) return { error: error.message };
+
+  // Delete the photo from Storage after the row is gone
+  if (card?.photo_url) {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const prefix = `${supabaseUrl}/storage/v1/object/public/card-photos/`;
+    if (card.photo_url.startsWith(prefix)) {
+      const filePath = decodeURIComponent(card.photo_url.slice(prefix.length).split("?")[0]);
+      await adminClient.storage.from("card-photos").remove([filePath]);
+    }
+  }
+
   return {};
 }
 

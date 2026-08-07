@@ -2,13 +2,16 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
+import { toast } from "sonner";
+import { deleteAccessCard } from "@/lib/actions/carte-actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -33,6 +36,7 @@ import {
   Clock,
   CalendarRange,
   X,
+  Trash2,
 } from "lucide-react";
 import { formatDateTime } from "@/lib/format";
 import type { AccessCard } from "@/lib/types";
@@ -438,7 +442,26 @@ interface CartesGridProps {
 
 function CartesGrid({ items, zoneLogo, readOnly }: CartesGridProps) {
   const [selected, setSelected] = useState<CardWithQR | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const pathname = usePathname();
+  const router = useRouter();
+
+  function closeMain() {
+    setSelected(null);
+    setDeleteOpen(false);
+  }
+
+  async function handleDelete() {
+    if (!selected) return;
+    setDeleting(true);
+    const result = await deleteAccessCard(selected.card.id);
+    setDeleting(false);
+    if (result.error) { toast.error(result.error); return; }
+    toast.success("Carte supprimée");
+    closeMain();
+    router.refresh();
+  }
 
   return (
     <>
@@ -457,7 +480,8 @@ function CartesGrid({ items, zoneLogo, readOnly }: CartesGridProps) {
         ))}
       </div>
 
-      <Dialog open={!!selected} onOpenChange={(open) => !open && setSelected(null)}>
+      {/* Card preview modal */}
+      <Dialog open={!!selected && !deleteOpen} onOpenChange={(open) => !open && setSelected(null)}>
         <DialogContent className="max-w-lg p-5 gap-3">
           {selected && (
             <>
@@ -482,9 +506,41 @@ function CartesGrid({ items, zoneLogo, readOnly }: CartesGridProps) {
                     <Download className="h-4 w-4 mr-1.5" />Télécharger
                   </Button>
                 </a>
+                {!readOnly && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="text-destructive hover:text-destructive hover:bg-destructive/10 shrink-0"
+                    onClick={() => setDeleteOpen(true)}
+                    title="Supprimer"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
               </div>
             </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete confirmation */}
+      <Dialog open={deleteOpen} onOpenChange={(open) => { if (!open) setDeleteOpen(false); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Supprimer la carte ?</DialogTitle>
+            <DialogDescription>
+              La carte de <strong>{selected?.card.full_name}</strong> sera définitivement supprimée ainsi que sa photo.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-3 pt-2">
+            <Button variant="outline" className="flex-1" onClick={() => setDeleteOpen(false)} disabled={deleting}>
+              Annuler
+            </Button>
+            <Button className="flex-1 bg-red-600 hover:bg-red-700 text-white" onClick={handleDelete} disabled={deleting}>
+              {deleting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />}
+              Supprimer
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </>
