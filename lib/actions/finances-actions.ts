@@ -156,9 +156,13 @@ export async function getFinancesData(): Promise<FinanceRow[]> {
   }
 
   // ── 7. Construire les lignes ───────────────────────────────────────
+  const today = new Date().toISOString().split("T")[0];
   const rows: FinanceRow[] = [];
 
   for (const [accountKey, group] of groupMap) {
+    // Ne pas afficher les dates futures
+    if (group.date > today) continue;
+
     let billetsPrinted = 0;
     let billetsScanned = 0;
 
@@ -179,6 +183,9 @@ export async function getFinancesData(): Promise<FinanceRow[]> {
         billetsScanned += (ticketScanned.get(mid) || 0) + (bilScannedByMatch.get(mid) || 0);
       }
     }
+
+    // Ne pas afficher les comptes sans aucun scan ce jour-là
+    if (billetsScanned === 0) continue;
 
     const organisateur =
       group.type === "c3"    ? (c3Map.get(group.accountId)?.full_name || "C3") :
