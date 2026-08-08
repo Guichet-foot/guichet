@@ -3,6 +3,7 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
+import { fetchAll } from "@/lib/supabase/paginate";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -49,7 +50,7 @@ export async function getFinancesData(): Promise<FinanceRow[]> {
     ])
   );
 
-  // ── 2. Matchs valides (pas demo, pas sans date) ────────────────────
+  // ── 2. Matchs valides ──────────────────────────────────────────────
   const validMatches = matches.filter((m: any) => {
     if (!m.match_date) return false;
     if (m.zone_id && demoZoneIds.has(m.zone_id as string)) return false;
@@ -63,34 +64,34 @@ export async function getFinancesData(): Promise<FinanceRow[]> {
   const c3MatchIdSet = new Set(c3MatchIds);
   const odcavMatchIds = validMatches.filter((m: any) => !m.zone_id && !m.c3_account_id).map((m: any) => m.id as string);
 
-  // scansByGroup : "type::accountId::scanDate" → nombre de scans
-  const scansByGroup = new Map<string, number>();
-  // matchesByScanGroup : scanKey → Set<matchId> (pour retrouver les billets imprimés)
-  const matchesByScanGroup = new Map<string, Set<string>>();
-  // printedByMatchId : matchId → billets imprimés (bloc_printed)
-  const printedByMatchId = new Map<string, number>();
+  // Accumulateurs : scanKey = "type::accountId::scanDate"
+  const scansByGroup        = new Map<string, number>();
+  const matchesByScanGroup  = new Map<string, Set<string>>(); // pour billets imprimés zone
+  const printedByMatchId    = new Map<string, number>();
+  const c3PrintedByKey      = new Map<string, number>();
 
-  // ── 3. Tickets Zone + ODCAV (groupés par date de SCAN) ────────────
+  // ── 3. Zone + ODCAV : tickets (avec pagination) ────────────────────
   const regularMatchIds = [...zoneMatchIds, ...odcavMatchIds];
   if (regularMatchIds.length > 0) {
-    const { data: ticketsData } = await supabase
-      .from("tickets")
-      .select("match_id, status, bloc_printed, scanned_at")
-      .in("match_id", regularMatchIds);
+    const allTickets = await fetchAll<any>((from, to) =>
+      supabase
+        .from("tickets")
+        .select("match_id, status, bloc_printed, scanned_at")
+        .in("match_id", regularMatchIds)
+        .range(from, to)
+    );
 
-    for (const t of ticketsData || []) {
+    for (const t of allTickets) {
       const m = matchMap.get(t.match_id as string);
       if (!m) continue;
 
       const type      = m.zone_id ? "zone" : "odcav";
       const accountId = (m.zone_id as string | null) || "odcav";
 
-      // Compter les billets imprimés par match (référence fixe)
       if (t.bloc_printed) {
         printedByMatchId.set(t.match_id as string, (printedByMatchId.get(t.match_id as string) || 0) + 1);
       }
 
-      // Compter les scans par date de scan
       if (t.status === "scanne" && t.scanned_at) {
         const scanDate = (t.scanned_at as string).split("T")[0];
         if (scanDate > today) continue;
@@ -102,50 +103,60 @@ export async function getFinancesData(): Promise<FinanceRow[]> {
     }
   }
 
-  // ── 4. C3 : billeterie → scans (même logique que la page admin C3) ─
-  // Clé : la page admin filtre billeterie_scans par scanned_at ET par
-  // ticket appartenant aux billeteries du C3 (incluant les matchs ODCAV
-  // dans les mêmes billeteries). On réplique exactement ce comportement.
-  const c3PrintedByKey = new Map<string, number>(); // scanKey → billets imprimés C3
-
+  // ── 4. C3 : billeteries → scans (même logique que la page admin) ───
+  // On passe par match_id → billeterie → c3_account_id.
+  // Pas besoin de ticket_id : un match appartient à UNE seule billetterie C3.
+  // On utilise fetchAll pour dépasser la limite de 1000 lignes Supabase.
   if (c3MatchIds.length > 0) {
-    // Trouver toutes les billeteries liées aux matchs C3
     const { data: allBilsData } = await supabase.from("billeterie").select("id, match_ids");
     const c3Bils = (allBilsData || []).filter((b: any) =>
       ((b.match_ids as string[]) || []).some((id) => c3MatchIdSet.has(id))
     );
 
     if (c3Bils.length > 0) {
-      // Déterminer c3_account_id pour chaque billetterie
+      // match_id → billeterie_id (premier match C3 dans la billetterie)
+      const matchIdToBilId = new Map<string, string>();
+      // billeterie_id → c3_account_id
       const bilToC3Id = new Map<string, string>();
+
       for (const b of c3Bils as any[]) {
         for (const mid of (b.match_ids as string[]) || []) {
+          matchIdToBilId.set(mid, b.id as string);
           const m = matchMap.get(mid);
-          if (m?.c3_account_id) {
+          if (m?.c3_account_id && !bilToC3Id.has(b.id as string)) {
             bilToC3Id.set(b.id as string, m.c3_account_id as string);
-            break;
           }
         }
       }
 
-      // Tous les matchs des billeteries C3 (y compris ODCAV associés)
+      // Tous les match IDs dans les billeteries C3 (y compris matchs ODCAV associés)
       const allBilMatchIds = [...new Set(
         (c3Bils as any[]).flatMap((b: any) => (b.match_ids as string[]) || [])
       )];
 
       const bilIds = (c3Bils as any[]).map((b: any) => b.id as string);
 
-      // Scans + tickets en parallèle
-      const [bilScansRes, bilTicketsRes] = await Promise.all([
-        supabase.from("billeterie_scans").select("ticket_id, scanned_at").in("match_id", allBilMatchIds),
-        supabase.from("billeterie_tickets").select("id, billeterie_id, withdrawn").in("billeterie_id", bilIds),
+      // Scans et billets en parallèle — avec pagination pour éviter la limite 1000
+      const [allBilScans, allBilTickets] = await Promise.all([
+        fetchAll<any>((from, to) =>
+          supabase
+            .from("billeterie_scans")
+            .select("match_id, scanned_at")   // pas besoin de ticket_id
+            .in("match_id", allBilMatchIds)
+            .range(from, to)
+        ),
+        fetchAll<any>((from, to) =>
+          supabase
+            .from("billeterie_tickets")
+            .select("billeterie_id, withdrawn")
+            .in("billeterie_id", bilIds)
+            .range(from, to)
+        ),
       ]);
 
-      // Construire la map ticket → billetterie + comptage non-retirés
-      const ticketIdToBilId   = new Map<string, string>();
+      // Compter les billets non retirés par billetterie
       const nonWithdrawnByBil = new Map<string, number>();
-      for (const t of bilTicketsRes.data || []) {
-        ticketIdToBilId.set(t.id as string, t.billeterie_id as string);
+      for (const t of allBilTickets) {
         if (!t.withdrawn) {
           nonWithdrawnByBil.set(
             t.billeterie_id as string,
@@ -154,16 +165,15 @@ export async function getFinancesData(): Promise<FinanceRow[]> {
         }
       }
 
-      // Enregistrer les dates de scan par billetterie (pour les billets imprimés)
+      // Dates de scan par billetterie (pour attribuer les billets imprimés)
       const bilScanDates = new Map<string, Set<string>>();
 
-      for (const s of bilScansRes.data || []) {
+      for (const s of allBilScans) {
         if (!s.scanned_at) continue;
         const scanDate = (s.scanned_at as string).split("T")[0];
         if (scanDate > today) continue;
 
-        // Seuls les tickets appartenant aux billeteries C3 sont comptabilisés
-        const bilId = ticketIdToBilId.get(s.ticket_id as string);
+        const bilId = matchIdToBilId.get(s.match_id as string);
         if (!bilId) continue;
         const c3Id = bilToC3Id.get(bilId);
         if (!c3Id) continue;
@@ -175,12 +185,12 @@ export async function getFinancesData(): Promise<FinanceRow[]> {
         bilScanDates.get(bilId)!.add(scanDate);
       }
 
-      // Attribuer les billets imprimés (non retirés) à chaque (c3, scanDate)
+      // Attribuer billets imprimés à chaque (c3, scanDate)
       for (const b of c3Bils as any[]) {
         const c3Id        = bilToC3Id.get(b.id as string);
         const nonWithdrawn = nonWithdrawnByBil.get(b.id as string) || 0;
         const scanDates   = bilScanDates.get(b.id as string);
-        if (!c3Id || nonWithdrawn === 0 || !scanDates) continue;
+        if (!c3Id || !scanDates) continue;
         for (const scanDate of scanDates) {
           const pk = `c3::${c3Id}::${scanDate}`;
           c3PrintedByKey.set(pk, (c3PrintedByKey.get(pk) || 0) + nonWithdrawn);
@@ -195,20 +205,17 @@ export async function getFinancesData(): Promise<FinanceRow[]> {
   for (const [scanKey, billetsScanned] of scansByGroup) {
     if (billetsScanned === 0) continue;
 
-    // scanKey format: "type::accountId::scanDate"
-    const colonIdx  = scanKey.indexOf("::");
-    const rest      = scanKey.slice(colonIdx + 2);
-    const colon2    = rest.lastIndexOf("::");
-    const type      = scanKey.slice(0, colonIdx) as "zone" | "c3" | "odcav";
-    const accountId = rest.slice(0, colon2);
-    const scanDate  = rest.slice(colon2 + 2);
+    // Parse scanKey = "type::accountId::scanDate"
+    // UUID peut contenir des tirets mais pas "::", donc split("::") est sûr
+    const parts     = scanKey.split("::");
+    const type      = parts[0] as "zone" | "c3" | "odcav";
+    const accountId = parts[1];
+    const scanDate  = parts[2];
 
-    // Billets imprimés
     let billetsPrinted = 0;
     if (type === "c3") {
       billetsPrinted = c3PrintedByKey.get(scanKey) || 0;
     } else {
-      // Sommer les billets imprimés pour tous les matchs scannés ce jour-là
       const matchIds = matchesByScanGroup.get(scanKey) || new Set<string>();
       for (const mid of matchIds) billetsPrinted += printedByMatchId.get(mid) || 0;
     }
