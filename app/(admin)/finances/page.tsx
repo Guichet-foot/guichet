@@ -139,11 +139,28 @@ export default async function FinancesPage({
   const { data: matchesInPeriod } = await matchesPeriodQuery;
   const matchIdsInPeriod = (matchesInPeriod || []).map((m: any) => m.id as string);
 
-  // ── Regular tickets for those matches ───────────────────────────
-  let periodTickets: any[] = [];
-  if (matchIdsInPeriod.length > 0) {
-    periodTickets = await fetchAll<any>((from, to) =>
-      adminSupabase.from("tickets").select("price, status, bloc_printed, counts_as_revenue, match_id").in("match_id", matchIdsInPeriod).range(from, to)
+  // For zone accounts: ALL zone matches (not just period) so billeterie lookup works
+  // even when the new match of today isn't yet in the billeterie's match_ids.
+  let allScopeMatchIds: string[];
+  if (filterMatchId) {
+    allScopeMatchIds = matchIdsInPeriod;
+  } else if (c3AllMatchIds !== null) {
+    allScopeMatchIds = c3AllMatchIds;
+  } else if (zoneId) {
+    const { data: allZoneMatchData } = await adminSupabase
+      .from("matches").select("id").eq("zone_id", zoneId);
+    allScopeMatchIds = ((allZoneMatchData || []) as any[]).map((m: any) => m.id as string);
+  } else {
+    allScopeMatchIds = matchIdsInPeriod;
+  }
+
+  // ── Regular tickets across all scope matches (scanned_at used for period filter) ──
+  let allScopeTickets: any[] = [];
+  if (allScopeMatchIds.length > 0) {
+    allScopeTickets = await fetchAll<any>((from, to) =>
+      adminSupabase.from("tickets")
+        .select("price, status, bloc_printed, counts_as_revenue, match_id, scanned_at")
+        .in("match_id", allScopeMatchIds).range(from, to)
     );
   }
 
@@ -153,9 +170,9 @@ export default async function FinancesPage({
   let bilRevenue = 0;
 
   {
-    // Pour les scans : utiliser TOUS les matchs C3 (pas seulement ceux de la période)
-    // car le scan peut être attribué à un match antérieur encore en_cours via la chaîne.
-    const scanMatchIds = c3AllMatchIds !== null ? c3AllMatchIds : matchIdsInPeriod;
+    // C3: own match list. Zone: ALL zone matches so billeterie is found even when
+    // today's new match isn't in its match_ids array yet.
+    const scanMatchIds = c3AllMatchIds !== null ? c3AllMatchIds : allScopeMatchIds;
     if (scanMatchIds.length > 0) {
       const scanMatchIdSet = new Set(scanMatchIds);
       const { data: allBils } = await adminSupabase.from("billeterie").select("id, price, match_ids, categories");
@@ -171,10 +188,12 @@ export default async function FinancesPage({
         if (b.categories) bilCatMapF[b.id] = b.categories;
       });
 
+      // C3: billeteries matching period matches. Zone: all found billeteries —
+      // scanned_at is the temporal anchor, not match_date.
       const periodMatchSet = new Set(matchIdsInPeriod);
-      const bilsInPeriod = allC3Bils.filter((b: any) =>
-        (b.match_ids || []).some((id: string) => periodMatchSet.has(id))
-      );
+      const bilsInPeriod = c3AllMatchIds !== null
+        ? allC3Bils.filter((b: any) => (b.match_ids || []).some((id: string) => periodMatchSet.has(id)))
+        : allC3Bils;
       const periodBilIdSet = new Set(bilsInPeriod.map((b: any) => b.id as string));
 
       // Partenaires indirects : billeteries partageant des matchs avec bilsInPeriod
@@ -281,20 +300,33 @@ export default async function FinancesPage({
   }
 
   // ── Financial metrics (regular tickets + billeterie combinés) ────
-  const printedTickets = periodTickets.filter((t: any) => t.bloc_printed === true);
+  const dateStartMs2 = dateStart.getTime();
+  const dateEndMs2   = dateEnd.getTime();
+
+  const printedTickets = allScopeTickets.filter((t: any) => t.bloc_printed === true);
+  const allTimeScopeScanned = allScopeTickets.filter((t: any) => t.status === "scanne").length;
   const regularPrinted = printedTickets.length;
   const totalPrinted = regularPrinted + bilPrinted;
   const totalBlocs = Math.floor(totalPrinted / 100);
-  const regularScanned = periodTickets.filter((t: any) => t.status === "scanne").length;
+
+  const periodScannedTickets = filterMatchId
+    ? allScopeTickets.filter((t: any) => t.status === "scanne")
+    : allScopeTickets.filter((t: any) => {
+        if (!t.scanned_at) return false;
+        const ms = new Date(t.scanned_at as string).getTime();
+        return ms >= dateStartMs2 && ms <= dateEndMs2;
+      });
+
+  const regularScanned = periodScannedTickets.length;
   const totalScanned = regularScanned + bilScanned;
-  const totalUnsold = Math.max(0, totalPrinted - totalScanned);
+  const totalUnsold = Math.max(0, totalPrinted - allTimeScopeScanned - bilScanned);
   const totalUnsoldValue = printedTickets
     .filter((t: any) => t.status !== "scanne")
     .reduce((sum: number, t: any) => sum + (t.price || 0), 0);
 
-  const totalSold = periodTickets.filter((t: any) => t.counts_as_revenue && t.status === "scanne").length;
-  const totalRevenue = periodTickets
-    .filter((t: any) => t.counts_as_revenue && t.status === "scanne")
+  const totalSold = periodScannedTickets.filter((t: any) => t.counts_as_revenue).length;
+  const totalRevenue = periodScannedTickets
+    .filter((t: any) => t.counts_as_revenue)
     .reduce((sum: number, t: any) => sum + t.price, 0) + bilRevenue;
 
   const odcavCommission = Math.round(totalRevenue * odcavRate);
