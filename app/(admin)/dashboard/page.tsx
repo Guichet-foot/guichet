@@ -558,44 +558,32 @@ export default async function DashboardPage({
   const { data: matchesPeriodData } = await matchesPeriodQuery;
   const matchIdsInPeriod = (matchesPeriodData || []).map((m: any) => m.id as string);
 
-  let periodTickets: any[] = [];
-  if (matchIdsInPeriod.length > 0) {
-    periodTickets = await fetchAll<any>((from, to) =>
-      adminClient.from("tickets")
-        .select("price, status, bloc_printed, counts_as_revenue, match_id")
-        .in("match_id", matchIdsInPeriod)
-        .range(from, to)
-    );
+  // All match IDs in scope for this account.
+  // For zones, this covers ALL zone matches regardless of match_date so that
+  // scanning leftover blocs from past matches is always visible.
+  let allScopeMatchIds: string[];
+  if (filterMatchId) {
+    allScopeMatchIds = matchIdsInPeriod; // [filterMatchId]
+  } else if (c3AllMatchIds !== null) {
+    allScopeMatchIds = c3AllMatchIds;
+  } else if (zoneFilter) {
+    const { data: allZoneMatchData } = await adminClient
+      .from("matches").select("id").eq("zone_id", zoneFilter);
+    allScopeMatchIds = ((allZoneMatchData || []) as any[]).map((m: any) => m.id as string);
+  } else {
+    allScopeMatchIds = matchIdsInPeriod;
   }
 
-  // Tickets scanned in the period from matches NOT in matchIdsInPeriod
-  // (e.g. ticket for a future match scanned today) — tracked by scanned_at
-  let extraScannedTickets: { price: number; counts_as_revenue: boolean }[] = [];
-  if (!filterMatchId) {
-    // Build the full set of match IDs the user can see
-    let allScopeMatchIds: string[];
-    if (c3AllMatchIds !== null) {
-      allScopeMatchIds = c3AllMatchIds;
-    } else if (zoneFilter) {
-      const { data: allZoneMatchData } = await adminClient
-        .from("matches").select("id").eq("zone_id", zoneFilter);
-      allScopeMatchIds = ((allZoneMatchData || []) as any[]).map((m: any) => m.id as string);
-    } else {
-      allScopeMatchIds = [];
-    }
-    const periodMatchSet = new Set(matchIdsInPeriod);
-    const nonPeriodIds = allScopeMatchIds.filter((id) => !periodMatchSet.has(id));
-    if (nonPeriodIds.length > 0) {
-      extraScannedTickets = await fetchAll<any>((from, to) =>
-        adminClient.from("tickets")
-          .select("price, counts_as_revenue")
-          .eq("status", "scanne")
-          .gte("scanned_at", dateStart2.toISOString())
-          .lte("scanned_at", dateEnd2.toISOString())
-          .in("match_id", nonPeriodIds)
-          .range(from, to)
-      );
-    }
+  // Fetch ALL tickets for those matches (scanned_at is the temporal anchor for period stats,
+  // not match_date — a zone can scan leftover blocs from past matches on any day).
+  let allScopeTickets: any[] = [];
+  if (allScopeMatchIds.length > 0) {
+    allScopeTickets = await fetchAll<any>((from, to) =>
+      adminClient.from("tickets")
+        .select("price, status, bloc_printed, counts_as_revenue, match_id, scanned_at")
+        .in("match_id", allScopeMatchIds)
+        .range(from, to)
+    );
   }
 
   let bilPrinted = 0, bilScanned = 0, bilRevenue = 0;
@@ -732,22 +720,34 @@ export default async function DashboardPage({
     }
   }
 
-  const printedTickets  = periodTickets.filter((t: any) => t.bloc_printed === true);
-  const totalPrinted    = printedTickets.length + bilPrinted;
-  const totalBlocs      = Math.floor(totalPrinted / 100);
-  const totalScanned    = periodTickets.filter((t: any) => t.status === "scanne").length
-    + extraScannedTickets.length
-    + bilScanned;
-  const totalUnsold     = Math.max(0, totalPrinted - totalScanned);
+  const dateStartMs2 = dateStart2.getTime();
+  const dateEndMs2   = dateEnd2.getTime();
+
+  // Printed = ALL bloc tickets across scope matches (available blocs regardless of match_date)
+  const printedTickets   = allScopeTickets.filter((t: any) => t.bloc_printed === true);
+  const totalPrinted     = printedTickets.length + bilPrinted;
+  const totalBlocs       = Math.floor(totalPrinted / 100);
+
+  // Scanned in period: anchored to scanned_at so scanning yesterday's blocs today is counted.
+  // Exception: filterMatchId view shows all scans for that match without date restriction.
+  const periodScannedTickets = filterMatchId
+    ? allScopeTickets.filter((t: any) => t.status === "scanne")
+    : allScopeTickets.filter((t: any) => {
+        if (!t.scanned_at) return false;
+        const ms = new Date(t.scanned_at as string).getTime();
+        return ms >= dateStartMs2 && ms <= dateEndMs2;
+      });
+
+  const allTimeScopeScanned = allScopeTickets.filter((t: any) => t.status === "scanne").length;
+  const totalScanned    = periodScannedTickets.length + bilScanned;
+  // Unsold = all printed - all ever scanned (remaining blocs in circulation)
+  const totalUnsold     = Math.max(0, totalPrinted - allTimeScopeScanned - bilScanned);
   const totalUnsoldValue = printedTickets
     .filter((t: any) => t.status !== "scanne")
     .reduce((s: number, t: any) => s + (t.price || 0), 0);
-  const extraScannedRevenue = extraScannedTickets
+  const grossRevenue    = periodScannedTickets
     .filter((t: any) => t.counts_as_revenue)
-    .reduce((s: number, t: any) => s + (t.price || 0), 0);
-  const grossRevenue    = periodTickets
-    .filter((t: any) => t.counts_as_revenue && t.status === "scanne")
-    .reduce((s: number, t: any) => s + (t.price || 0), 0) + bilRevenue + extraScannedRevenue;
+    .reduce((s: number, t: any) => s + (t.price || 0), 0) + bilRevenue;
   const fraisODCAV      = Math.round(grossRevenue * 0.05);
   const fraisBilleterie = totalScanned * 10;
 
