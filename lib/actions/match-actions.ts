@@ -4,6 +4,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import type { MatchStatus } from "@/lib/types";
+import { autoAttributeMatchToBilleteries } from "@/lib/actions/billeterie-actions";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -116,6 +117,13 @@ export async function createMatch(formData: {
     .single();
 
   if (error) return { error: error.message };
+
+  // Auto-attribute the new match to any existing billeteries for this account
+  await autoAttributeMatchToBilleteries(
+    match.id,
+    formData.c3AccountId || null,
+    formData.zoneId || null,
+  );
 
   revalidatePath("/matchs");
   return { success: true, matchId: match.id };

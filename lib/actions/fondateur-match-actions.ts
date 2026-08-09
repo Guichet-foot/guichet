@@ -3,6 +3,7 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import type { MatchStatus } from "@/lib/types";
+import { autoAttributeMatchToBilleteries } from "@/lib/actions/billeterie-actions";
 
 async function getFondateur() {
   const supabase = await createClient();
@@ -81,6 +82,9 @@ export async function createMatchAsFondateur(formData: {
     formData.selectedTemplateIds || [],
     formData.inlineCategories || []
   );
+
+  // Auto-attribute the new match to existing billeteries for this zone
+  await autoAttributeMatchToBilleteries(match.id, null, formData.zoneId);
 
   revalidatePath("/fondateur/matchs");
   revalidatePath(`/fondateur/matchs/${formData.zoneId}`);

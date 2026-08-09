@@ -950,3 +950,55 @@ export async function validateBilleterieTicket(rawToken: string): Promise<ScanRe
     categoryName: `${bil.name} · ${match.home_team} vs ${match.away_team}`,
   };
 }
+
+// ── Auto-attribution : ajoute un nouveau match à toutes les billeteries du même compte ──
+// Appelée automatiquement à la création d'un match (C3 ou zone) pour que les billets
+// invendus des billeteries existantes soient valables au nouveau match sans action manuelle.
+export async function autoAttributeMatchToBilleteries(
+  newMatchId: string,
+  c3AccountId: string | null,
+  zoneId: string | null,
+): Promise<void> {
+  if (!c3AccountId && !zoneId) return;
+
+  const adminClient = await createAdminClient();
+
+  // Find sibling matches for the same account (excluding the newly created match)
+  let siblingQuery = adminClient.from("matches").select("id").neq("id", newMatchId);
+  if (c3AccountId) {
+    siblingQuery = siblingQuery.eq("c3_account_id", c3AccountId);
+  } else {
+    siblingQuery = siblingQuery.eq("zone_id", zoneId as string);
+  }
+
+  const { data: siblingMatches } = await siblingQuery;
+  const siblingIds = (siblingMatches || []).map((m: any) => m.id as string);
+  if (siblingIds.length === 0) return; // First match for this account — no billeteries yet
+
+  // Find billeteries that cover at least one sibling match
+  const { data: relatedBils } = await adminClient
+    .from("billeterie")
+    .select("id, match_ids")
+    .overlaps("match_ids", siblingIds);
+
+  if (!relatedBils || relatedBils.length === 0) return;
+
+  // Add newMatchId to every billeterie that doesn't already contain it
+  const toUpdate = relatedBils.filter(
+    (b: any) => !(b.match_ids || []).includes(newMatchId)
+  );
+  if (toUpdate.length === 0) return;
+
+  await Promise.all(
+    toUpdate.map((b: any) =>
+      adminClient
+        .from("billeterie")
+        .update({ match_ids: [...(b.match_ids || []), newMatchId] })
+        .eq("id", b.id)
+    )
+  );
+
+  revalidatePath("/fondateur/invendus");
+  revalidatePath("/invendus");
+  revalidatePath("/fondateur/billeterie");
+}
