@@ -590,7 +590,9 @@ export default async function DashboardPage({
   {
     // Pour les scans : utiliser TOUS les matchs C3 (pas seulement ceux de la période)
     // car le scan peut être attribué à un match antérieur encore en_cours via la chaîne.
-    const scanMatchIds = c3AllMatchIds !== null ? c3AllMatchIds : matchIdsInPeriod;
+    // C3 accounts: their own match list. Zone accounts: ALL zone matches so the
+    // billeterie is found even when today's new match isn't in its match_ids yet.
+    const scanMatchIds = c3AllMatchIds !== null ? c3AllMatchIds : allScopeMatchIds;
     if (scanMatchIds.length > 0) {
       const scanMatchIdSet = new Set(scanMatchIds);
       const { data: allBils } = await adminClient.from("billeterie").select("id, price, match_ids, categories");
@@ -607,11 +609,12 @@ export default async function DashboardPage({
         if (b.categories) bilCatMap2[b.id] = b.categories;
       });
 
-      // Billeteries de la période uniquement → pour bilPrinted
+      // C3: billeteries matching period matches → bilPrinted reflects period window
+      // Zone: all found billeteries — scanned_at is the temporal anchor, not match_date
       const periodMatchSet = new Set(matchIdsInPeriod);
-      const bilsInPeriod = allC3Bils.filter((b: any) =>
-        (b.match_ids || []).some((id: string) => periodMatchSet.has(id))
-      );
+      const bilsInPeriod = c3AllMatchIds !== null
+        ? allC3Bils.filter((b: any) => (b.match_ids || []).some((id: string) => periodMatchSet.has(id)))
+        : allC3Bils;
       const periodBilIdSet = new Set(bilsInPeriod.map((b: any) => b.id as string));
 
       // Partenaires indirects : billeteries partageant des matchs avec bilsInPeriod
