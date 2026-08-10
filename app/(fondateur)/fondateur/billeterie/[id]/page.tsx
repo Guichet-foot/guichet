@@ -9,7 +9,7 @@ import { notFound } from "next/navigation";
 import { formatFCFA, fmtZone } from "@/lib/format";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
-import { AddTicketsDialog, WithdrawTicketsDialog, PrintBatchButton } from "@/app/(admin)/billeterie/[id]/billeterie-actions-client";
+import { AddTicketsDialog, WithdrawTicketsDialog } from "@/app/(admin)/billeterie/[id]/billeterie-actions-client";
 import { AutoRefresh } from "@/components/auto-refresh";
 
 export const metadata = { title: "Détail Billetterie — Fondateur" };
@@ -156,14 +156,11 @@ export default async function FondateurBilleterieDetailPage({
               {catBatches.length > 0 && (
                 <CardContent className="space-y-2">
                   {catBatches.map((batch: any) => (
-                    <div key={batch.batchId} className="flex items-center justify-between gap-2 rounded-lg border border-border p-3">
-                      <div>
-                        <p className="text-sm font-semibold">{batch.count - batch.withdrawnCount} billet{(batch.count - batch.withdrawnCount) !== 1 ? "s" : ""}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {format(new Date(batch.createdAt), "d MMM yyyy HH:mm", { locale: fr })}
-                        </p>
-                      </div>
-                      <PrintBatchButton batchId={batch.batchId} count={batch.count - batch.withdrawnCount} />
+                    <div key={batch.batchId} className="rounded-lg border border-border p-3">
+                      <p className="text-sm font-semibold">{batch.count - batch.withdrawnCount} billet{(batch.count - batch.withdrawnCount) !== 1 ? "s" : ""}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {format(new Date(batch.createdAt), "d MMM yyyy HH:mm", { locale: fr })}
+                      </p>
                     </div>
                   ))}
                 </CardContent>
@@ -190,14 +187,11 @@ export default async function FondateurBilleterieDetailPage({
               <p className="text-sm text-muted-foreground">Aucun lot généré</p>
             ) : (
               bil.batches.map((batch: any) => (
-                <div key={batch.batchId} className="flex items-center justify-between gap-2 rounded-lg border border-border p-3">
-                  <div>
-                    <p className="text-sm font-semibold">{batch.count - batch.withdrawnCount} billet{(batch.count - batch.withdrawnCount) !== 1 ? "s" : ""}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {format(new Date(batch.createdAt), "d MMM yyyy HH:mm", { locale: fr })}
-                    </p>
-                  </div>
-                  <PrintBatchButton batchId={batch.batchId} count={batch.count - batch.withdrawnCount} />
+                <div key={batch.batchId} className="rounded-lg border border-border p-3">
+                  <p className="text-sm font-semibold">{batch.count - batch.withdrawnCount} billet{(batch.count - batch.withdrawnCount) !== 1 ? "s" : ""}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {format(new Date(batch.createdAt), "d MMM yyyy HH:mm", { locale: fr })}
+                  </p>
                 </div>
               ))
             )}
