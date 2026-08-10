@@ -858,96 +858,114 @@ export async function validateBilleterieTicket(rawToken: string): Promise<ScanRe
 
   if (!ticket) return { status: "invalid", message: "Billet invalide" };
   if (ticket.status === "annule") return { status: "invalid", message: "Billet annulé" };
+  // Billet marqué directement comme scanné (cas sans match associé)
+  if (ticket.status === "scanne") {
+    return {
+      status: "already_scanned",
+      message: "Déjà utilisé",
+      categoryName: (ticket as any).billeterie?.name,
+    };
+  }
 
   const bil = (ticket as any).billeterie;
   const matchIds: string[] = bil?.match_ids || [];
-  if (matchIds.length === 0) return { status: "invalid", message: "Billetterie sans match" };
 
   // Charger created_at de la billeterie pour suivre la chaîne d'attribution
-  const { data: bilRow } = await adminClient
-    .from("billeterie")
-    .select("created_at")
-    .eq("id", (ticket as any).billeterie_id)
-    .single();
-
-  // Suivre la chaîne d'attribution : les billeteries plus récentes qui partagent des matchs
-  // avec celle-ci ont reçu les invendus → leurs matchs sont aussi valables pour ce billet.
   let allMatchIds: string[] = [...matchIds];
-  if (bilRow?.created_at) {
-    const { data: newerBilleteries } = await adminClient
+  if (matchIds.length > 0) {
+    const { data: bilRow } = await adminClient
       .from("billeterie")
-      .select("match_ids")
-      .gt("created_at", bilRow.created_at);
+      .select("created_at")
+      .eq("id", (ticket as any).billeterie_id)
+      .single();
 
-    for (const nb of (newerBilleteries || []) as any[]) {
-      const nbIds: string[] = nb.match_ids || [];
-      if (nbIds.some((m: string) => matchIds.includes(m))) {
-        for (const m of nbIds) {
-          if (!allMatchIds.includes(m)) allMatchIds.push(m);
+    if (bilRow?.created_at) {
+      const { data: newerBilleteries } = await adminClient
+        .from("billeterie")
+        .select("match_ids")
+        .gt("created_at", bilRow.created_at);
+
+      for (const nb of (newerBilleteries || []) as any[]) {
+        const nbIds: string[] = nb.match_ids || [];
+        if (nbIds.some((m: string) => matchIds.includes(m))) {
+          for (const m of nbIds) {
+            if (!allMatchIds.includes(m)) allMatchIds.push(m);
+          }
         }
       }
     }
   }
 
-  // 1. Vérifier si ce billet a déjà été scanné à N'IMPORTE QUEL match (chaîne complète).
-  //    Un billet déjà utilisé reste bloqué définitivement.
-  const { data: anyExistingScan } = await adminClient
-    .from("billeterie_scans")
-    .select("scanned_at")
-    .eq("ticket_id", ticket.id)
-    .in("match_id", allMatchIds)
-    .order("scanned_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  // 1. Vérifier si ce billet a déjà été scanné (chaîne complète).
+  if (allMatchIds.length > 0) {
+    const { data: anyExistingScan } = await adminClient
+      .from("billeterie_scans")
+      .select("scanned_at")
+      .eq("ticket_id", ticket.id)
+      .in("match_id", allMatchIds)
+      .order("scanned_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-  if (anyExistingScan) {
-    return {
-      status: "already_scanned",
-      message: "Déjà utilisé",
-      scannedAt: anyExistingScan.scanned_at || undefined,
-      categoryName: bil.name,
-    };
+    if (anyExistingScan) {
+      return {
+        status: "already_scanned",
+        message: "Déjà utilisé",
+        scannedAt: anyExistingScan.scanned_at || undefined,
+        categoryName: bil?.name,
+      };
+    }
   }
 
   // 2. Trouver un match dans toute la chaîne : en_cours en priorité, sinon programme,
-  //    sinon le plus récent même terminé (billet valable même après la fin du match).
-  const { data: activeMatches } = await adminClient
-    .from("matches")
-    .select("id, home_team, away_team, status")
-    .in("id", allMatchIds)
-    .in("status", ["en_cours", "programme"])
-    .order("match_date", { ascending: true });
-
-  let match: any;
-  if (activeMatches && activeMatches.length > 0) {
-    match = (activeMatches as any[]).find((m: any) => m.status === "en_cours") || activeMatches[0];
-  } else {
-    // Tous les matchs sont terminés → on autorise quand même le scan sur le plus récent.
-    // scanned_at = aujourd'hui → comptabilisé dans les stats du jour du scan.
-    const { data: lastMatch } = await adminClient
+  //    sinon le plus récent même terminé.
+  let match: any = null;
+  if (allMatchIds.length > 0) {
+    const { data: activeMatches } = await adminClient
       .from("matches")
       .select("id, home_team, away_team, status")
       .in("id", allMatchIds)
-      .order("match_date", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (!lastMatch) return { status: "invalid", message: "Aucun match trouvé pour ce billet" };
-    match = lastMatch;
+      .in("status", ["en_cours", "programme"])
+      .order("match_date", { ascending: true });
+
+    if (activeMatches && activeMatches.length > 0) {
+      match = (activeMatches as any[]).find((m: any) => m.status === "en_cours") || activeMatches[0];
+    } else {
+      const { data: lastMatch } = await adminClient
+        .from("matches")
+        .select("id, home_team, away_team, status")
+        .in("id", allMatchIds)
+        .order("match_date", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      match = lastMatch || null;
+    }
   }
 
   // 3. Enregistrer l'entrée.
-  const { error } = await adminClient.from("billeterie_scans").insert({
-    ticket_id: ticket.id,
-    match_id: match.id,
-    scanned_by: user.id,
-    scanned_at: new Date().toISOString(),
-  });
-  if (error) return { status: "invalid", message: "Erreur lors du scan" };
+  if (match) {
+    const { error } = await adminClient.from("billeterie_scans").insert({
+      ticket_id: ticket.id,
+      match_id: match.id,
+      scanned_by: user.id,
+      scanned_at: new Date().toISOString(),
+    });
+    if (error) return { status: "invalid", message: "Erreur lors du scan" };
+  } else {
+    // Aucun match associé : on marque le billet directement comme scanné.
+    const { error } = await adminClient
+      .from("billeterie_tickets")
+      .update({ status: "scanne" })
+      .eq("id", ticket.id);
+    if (error) return { status: "invalid", message: "Erreur lors du scan" };
+  }
 
   return {
     status: "valid",
     message: "Entrée validée",
-    categoryName: `${bil.name} · ${match.home_team} vs ${match.away_team}`,
+    categoryName: match
+      ? `${bil?.name || ""} · ${match.home_team} vs ${match.away_team}`
+      : bil?.name || "Billet validé",
   };
 }
 

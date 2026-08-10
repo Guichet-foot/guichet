@@ -294,11 +294,6 @@ export async function validateTicket(qrToken: string): Promise<ScanResult> {
     };
   }
 
-  const matchStatus = (ticket as any).match?.status;
-  if (matchStatus !== "en_cours") {
-    return { status: "invalid", message: "Le match n'est pas encore démarré" };
-  }
-
   const { error } = await adminClient
     .from("tickets")
     .update({
