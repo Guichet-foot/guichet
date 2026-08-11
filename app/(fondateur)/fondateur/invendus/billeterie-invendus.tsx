@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import {
-  getAllMatchesForBilleterie,
+  getAllMatchesForAttribution,
   addMatchesToBilleterie,
   type BilleterieInvendusItem,
   type MatchOption,
@@ -129,7 +129,7 @@ export function BilleterieInvendusList({ items, canAssign = true }: Props) {
                   )}
                 </div>
 
-                {canAssign && !bil.isAttributed && bil.unscannedCount > 0 && (
+                {canAssign && bil.physicalUnscanned > 0 && (
                   <div className="flex items-end shrink-0 self-end pb-0.5">
                     <Button
                       size="sm"
@@ -178,8 +178,7 @@ function AssignMatchesDialog({
   const [search, setSearch] = useState("");
 
   useEffect(() => {
-    getAllMatchesForBilleterie().then((data) => {
-      // Exclude matches already in the billeterie
+    getAllMatchesForAttribution().then((data) => {
       setMatches(data.filter((m) => !bil.matchIds.includes(m.id)));
       setLoading(false);
     });
@@ -216,7 +215,7 @@ function AssignMatchesDialog({
       return;
     }
     toast.success(
-      `${selected.size} match${selected.size !== 1 ? "s" : ""} ajouté${selected.size !== 1 ? "s" : ""} à "${bil.name}" — ${bil.unscannedCount} billet${bil.unscannedCount !== 1 ? "s" : ""} invendu${bil.unscannedCount !== 1 ? "s" : ""} maintenant valables pour ces matchs`
+      `${selected.size} match${selected.size !== 1 ? "s" : ""} ajouté${selected.size !== 1 ? "s" : ""} à "${bil.name}" — ${bil.physicalUnscanned} billet${bil.physicalUnscanned !== 1 ? "s" : ""} invendu${bil.physicalUnscanned !== 1 ? "s" : ""} maintenant valables pour ces matchs`
     );
     onSuccess();
   }

@@ -12,7 +12,8 @@ export default async function InvendusPage() {
   const canAssign =
     profile.role === "super_admin" ||
     profile.role === "president_odcav" ||
-    profile.role === "tresorier";
+    profile.role === "tresorier" ||
+    profile.role === "admin_zone";
 
   return (
     <div className="max-w-3xl space-y-6">

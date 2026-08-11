@@ -80,6 +80,21 @@ export async function getAllMatchesForBilleterie(): Promise<MatchOption[]> {
   return [];
 }
 
+// ── Tous les matchs disponibles pour l'attribution inter-zones ───────────────────
+// Contrairement à getAllMatchesForBilleterie (filtrée par zone pour admin_zone),
+// celle-ci retourne tous les matchs pour permettre l'attribution cross-zone.
+export async function getAllMatchesForAttribution(): Promise<MatchOption[]> {
+  await requireRole(["fondateur", "super_admin", "president_odcav", "tresorier", "admin_zone", "c3"]);
+  const adminClient = await createAdminClient();
+  const fields = "id, home_team, away_team, venue, match_date, match_type, status, home_team_zone, away_team_zone";
+  const { data } = await adminClient
+    .from("matches")
+    .select(fields)
+    .in("status", ["programme", "en_cours"])
+    .order("match_date", { ascending: false });
+  return (data || []) as MatchOption[];
+}
+
 // ── Créer un billetterie + générer les billets ─────────────────────────────────
 export type BilCategory = { name: string; price: number };
 
@@ -494,6 +509,7 @@ export interface BilleterieInvendusItem {
   totalTickets: number;
   totalScanned: number;
   unscannedCount: number;
+  physicalUnscanned: number; // billets physiquement non scannés, indép. de isAttributed
   isAttributed: boolean; // true si les invendus ont déjà été attribués à une autre billetterie
   matches: { id: string; home_team: string; away_team: string; match_date: string; status: string; match_type: string | null }[];
 }
@@ -714,6 +730,8 @@ export async function getBilleterieInvendusList(): Promise<BilleterieInvendusIte
     const totalScanned = (totalScansByBil[b.id] || 0) + (partnerScannedByBil[b.id] || 0) + (indirectPartnerScannedByBil[b.id] || 0);
     // Si attribuée : 0 invendus restants (les tickets ont été affectés à une autre billetterie)
     const unscannedCount = isAttributed ? 0 : Math.max(0, totalTickets - totalScanned);
+    // Billets physiquement non scannés (propres tickets seulement), indépendant de isAttributed
+    const physicalUnscanned = Math.max(0, ownTickets - (totalScansByBil[b.id] || 0));
     return {
       id: b.id as string,
       name: b.name as string,
@@ -723,6 +741,7 @@ export async function getBilleterieInvendusList(): Promise<BilleterieInvendusIte
       totalTickets,
       totalScanned,
       unscannedCount,
+      physicalUnscanned,
       isAttributed,
       matches: matchIds
         .map((id: string) => matchMap.get(id))
