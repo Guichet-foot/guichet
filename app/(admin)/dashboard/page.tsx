@@ -595,12 +595,16 @@ export default async function DashboardPage({
     const scanMatchIds = c3AllMatchIds !== null ? c3AllMatchIds : allScopeMatchIds;
     if (scanMatchIds.length > 0) {
       const scanMatchIdSet = new Set(scanMatchIds);
-      const { data: allBils } = await adminClient.from("billeterie").select("id, price, match_ids, categories");
+      const { data: allBilsRaw } = await adminClient.from("billeterie").select("id, price, match_ids, categories, zone_id");
+      const allBils = (allBilsRaw || []) as any[];
 
       // Toutes les billeteries C3 (pour la couverture des scans)
-      const allC3Bils = (allBils || []).filter((b: any) =>
-        (b.match_ids || []).some((id: string) => scanMatchIdSet.has(id))
-      );
+      // Si une billeterie a un zone_id explicite appartenant à une autre zone, on l'exclut
+      // pour éviter la contamination croisée entre zones.
+      const allC3Bils = allBils.filter((b: any) => {
+        if (b.zone_id && zoneFilter && b.zone_id !== zoneFilter) return false;
+        return (b.match_ids || []).some((id: string) => scanMatchIdSet.has(id));
+      });
       const allC3BilIds = allC3Bils.map((b: any) => b.id as string);
       const bilPriceMap: Record<string, number> = {};
       const bilCatMap2: Record<string, Array<{name: string; price: number}>> = {};
@@ -630,8 +634,9 @@ export default async function DashboardPage({
         return bm.some((id: string) => periodBilMatchIds2.has(id));
       });
       // b) hors de allC3Bils, partageant des matchs avec bilsInPeriod
-      const indirectOutside2 = ((allBils || []) as any[]).filter((b: any) => {
+      const indirectOutside2 = allBils.filter((b: any) => {
         if (allC3BilIdSet2.has(b.id)) return false;
+        if (b.zone_id && zoneFilter && b.zone_id !== zoneFilter) return false;
         const bm: string[] = b.match_ids || [];
         if (bm.some((id: string) => scanMatchIdSet.has(id))) return false;
         return bm.some((id: string) => periodBilMatchIds2.has(id));
