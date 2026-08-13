@@ -723,6 +723,50 @@ export default async function DashboardPage({
     }
   }
 
+  // Zone accounts: supplement bilPrinted with billeteries created by zone users
+  // whose match_ids have no overlap with this zone's matches (e.g. billeteries with no match_ids).
+  // These are not picked up by the main billeterie block which finds billeteries via match_ids.
+  if (zoneFilter && !c3AccountId) {
+    const { data: zoneProfiles } = await adminClient
+      .from("profiles").select("id").eq("zone_id", zoneFilter);
+    const zoneUserIds = ((zoneProfiles || []) as any[]).map((u: any) => u.id as string);
+
+    if (zoneUserIds.length > 0) {
+      const scopeIdSet = new Set(allScopeMatchIds);
+      const { data: zoneBilsData } = await adminClient
+        .from("billeterie").select("id, match_ids")
+        .in("created_by", zoneUserIds);
+
+      // Only billeteries whose match_ids have NO overlap with this zone's match IDs
+      // (those with overlap are already counted by the main block above)
+      const uncountedBilIds = ((zoneBilsData || []) as any[])
+        .filter((b: any) => !(b.match_ids || []).some((id: string) => scopeIdSet.has(id)))
+        .map((b: any) => b.id as string);
+
+      if (uncountedBilIds.length > 0) {
+        const { data: uncTickets } = await adminClient
+          .from("billeterie_tickets")
+          .select("billeterie_id, withdrawn, status")
+          .in("billeterie_id", uncountedBilIds);
+
+        const countByBil: Record<string, { nw: number; scanned: number }> = {};
+        ((uncTickets || []) as any[]).forEach((t: any) => {
+          const bId = t.billeterie_id as string;
+          if (!countByBil[bId]) countByBil[bId] = { nw: 0, scanned: 0 };
+          if (!t.withdrawn) {
+            countByBil[bId].nw++;
+            if (t.status === "scanne") countByBil[bId].scanned++;
+          }
+        });
+
+        uncountedBilIds.forEach((bId) => {
+          const { nw = 0, scanned = 0 } = countByBil[bId] || {};
+          bilPrinted += Math.max(0, nw - scanned);
+        });
+      }
+    }
+  }
+
   const dateStartMs2 = dateStart2.getTime();
   const dateEndMs2   = dateEnd2.getTime();
 
