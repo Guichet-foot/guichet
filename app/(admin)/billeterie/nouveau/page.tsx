@@ -114,6 +114,7 @@ export default function NouveauBilletteriePage() {
       matchIds,
       price: multiCat ? 0 : parseInt(price),
       categories: multiCat ? categories : undefined,
+      showMatchesOnTicket: scopeMode !== "zone",
     });
     setLoading(false);
 
@@ -356,11 +357,16 @@ export default function NouveauBilletteriePage() {
                     Chargement des matchs…
                   </div>
                 ) : (
-                  <p className="text-xs text-muted-foreground">
-                    {zoneMatchIds.length > 0
-                      ? `${zoneMatchIds.length} match${zoneMatchIds.length !== 1 ? "s" : ""} existant${zoneMatchIds.length !== 1 ? "s" : ""} inclus — les futurs matchs s'ajouteront automatiquement`
-                      : "Aucun match existant — les futurs matchs s'ajouteront automatiquement"}
-                  </p>
+                  <>
+                    <p className="text-xs text-muted-foreground">
+                      {zoneMatchIds.length > 0
+                        ? `${zoneMatchIds.length} match${zoneMatchIds.length !== 1 ? "s" : ""} existant${zoneMatchIds.length !== 1 ? "s" : ""} inclus — les futurs matchs s'ajouteront automatiquement`
+                        : "Aucun match existant — les futurs matchs s'ajouteront automatiquement"}
+                    </p>
+                    <p className="text-xs font-medium text-amber-700 mt-1">
+                      Les matchs ne seront pas affichés sur le billet imprimé.
+                    </p>
+                  </>
                 )}
               </div>
             )}

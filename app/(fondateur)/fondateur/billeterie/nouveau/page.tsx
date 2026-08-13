@@ -132,6 +132,7 @@ export default function FondateurNouveauBilletteriePage() {
       matchIds,
       price: multiCat ? 0 : parseInt(price),
       categories: multiCat ? categories : undefined,
+      showMatchesOnTicket: scopeMode !== "zone",
     });
     setLoading(false);
 
@@ -398,12 +399,17 @@ export default function FondateurNouveauBilletteriePage() {
                         Chargement des matchs…
                       </div>
                     ) : (
-                      <p className="text-xs text-muted-foreground">
-                        {zoneMatchIds && zoneMatchIds.length > 0
-                          ? `${zoneMatchIds.length} match${zoneMatchIds.length !== 1 ? "s" : ""} existant${zoneMatchIds.length !== 1 ? "s" : ""} inclus`
-                          : "Aucun match existant pour cette zone"}
-                        {" — les futurs matchs s'ajouteront automatiquement"}
-                      </p>
+                      <>
+                        <p className="text-xs text-muted-foreground">
+                          {zoneMatchIds && zoneMatchIds.length > 0
+                            ? `${zoneMatchIds.length} match${zoneMatchIds.length !== 1 ? "s" : ""} existant${zoneMatchIds.length !== 1 ? "s" : ""} inclus`
+                            : "Aucun match existant pour cette zone"}
+                          {" — les futurs matchs s'ajouteront automatiquement"}
+                        </p>
+                        <p className="text-xs font-medium text-amber-700">
+                          Les matchs ne seront pas affichés sur le billet imprimé.
+                        </p>
+                      </>
                     )}
                   </div>
                 )}

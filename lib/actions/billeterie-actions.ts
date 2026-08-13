@@ -141,6 +141,7 @@ export async function createBilleterie(formData: {
   price: number;
   quantity?: number;
   categories?: BilCategory[];
+  showMatchesOnTicket?: boolean;
 }): Promise<{ error?: string; billeterieId?: string; batchId?: string }> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -170,6 +171,7 @@ export async function createBilleterie(formData: {
     match_ids: formData.matchIds,
     price: isMultiCat ? 0 : formData.price,
     created_by: user.id,
+    show_matches_on_ticket: formData.showMatchesOnTicket !== false,
   };
   if (isMultiCat) insertData.categories = formData.categories;
 

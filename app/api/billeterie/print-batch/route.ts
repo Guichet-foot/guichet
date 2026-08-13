@@ -21,11 +21,35 @@ function renderBilleterieTicket(
   matches: Array<{ home_team: string; away_team: string; match_date: string; home_team_zone?: string | null; away_team_zone?: string | null }>,
   sellerName: string,
   qrDataUrl: string,
-  fmt: PrintFormat
+  fmt: PrintFormat,
+  showMatches: boolean
 ): string {
   const is58 = fmt === "58";
   const priceFmt = new Intl.NumberFormat("fr-FR").format(price);
   const createdAtFmt = format(new Date(ticket.created_at), "dd/MM/yyyy HH:mm", { locale: fr });
+
+  const namePt = is58 ? "9" : "11";
+  const matchPt = is58 ? "6" : "7";
+  const logoFontPt = is58 ? "10" : "12";
+  const prixStyle = `font-weight:900;font-size:${is58 ? "9" : "10"}pt;letter-spacing:0.5px;`;
+
+  if (!showMatches) {
+    return `
+<div class="print-ticket">
+<div class="c" style="font-weight:900;font-size:${logoFontPt}pt;letter-spacing:1px;padding:1mm 0;">Guichet Foot</div>
+<div class="sep"></div>
+<div class="c" style="font-size:${namePt}pt;font-weight:900;line-height:1.3;letter-spacing:0.5px;">${bilName}</div>
+<div class="c tiny" style="font-style:italic;margin-top:0;">PASS MULTI-MATCHS</div>
+<div class="c" style="${prixStyle}">${priceFmt}&nbsp;FCFA</div>
+<div class="sep"></div>
+<div class="c qr"><img src="${qrDataUrl}" alt="QR Code" /></div>
+<div class="c small">${ticket.serial_number}</div>
+<div class="c tiny">${sellerName} &middot; ${createdAtFmt}</div>
+<div class="sep"></div>
+<div class="c tiny">Non remboursable</div>
+<div class="c bon-match">BON MATCH !</div>
+</div>`;
+  }
 
   // Date commune à tous les matchs (affichée une seule fois)
   const matchDateFmt = matches.length > 0
@@ -40,14 +64,10 @@ function renderBilleterieTicket(
     })
     .join("<br>");
 
-  const namePt = is58 ? "9" : "11";
-  const matchPt = is58 ? "6" : "7";
   const passLine = matchDateFmt
     ? `PASS MULTI-MATCHS &middot; ${matchDateFmt}`
     : "PASS MULTI-MATCHS";
 
-  const logoFontPt = is58 ? "10" : "12";
-  const prixStyle = `font-weight:900;font-size:${is58 ? "9" : "10"}pt;letter-spacing:0.5px;`;
   return `
 <div class="print-ticket">
 <div class="c" style="font-weight:900;font-size:${logoFontPt}pt;letter-spacing:1px;padding:1mm 0;">Guichet Foot</div>
@@ -95,7 +115,7 @@ export async function GET(request: Request) {
   const billeterieId = tickets[0].billeterie_id;
   const { data: bil } = await adminClient
     .from("billeterie")
-    .select("name, price, match_ids, categories")
+    .select("name, price, match_ids, categories, show_matches_on_ticket")
     .eq("id", billeterieId)
     .single();
 
@@ -133,7 +153,7 @@ export async function GET(request: Request) {
         errorCorrectionLevel: "M",
         color: { dark: "#000000", light: "#FFFFFF" },
       });
-      return renderBilleterieTicket(ticket, displayName, effectivePrice, matches || [], sellerName, qrDataUrl, fmt);
+      return renderBilleterieTicket(ticket, displayName, effectivePrice, matches || [], sellerName, qrDataUrl, fmt, bil.show_matches_on_ticket !== false);
     })
   );
 
