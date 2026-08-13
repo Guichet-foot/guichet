@@ -758,6 +758,7 @@ export default async function DashboardPage({
       uncountedBilIds.forEach((bId) => {
         const { nw = 0, scanned = 0 } = countByBil[bId] || {};
         bilPrinted += Math.max(0, nw - scanned);
+        bilScanned += scanned;
       });
     }
   }

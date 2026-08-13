@@ -371,7 +371,7 @@ export async function getBilleterieDetails(id: string): Promise<{
       ? adminClient.from("matches").select("id, home_team, away_team, venue, match_date, match_type, status, home_team_zone, away_team_zone").in("id", matchIds)
       : Promise.resolve({ data: [] as any[] }),
     fetchAll<any>((from, to) =>
-      adminClient.from("billeterie_tickets").select("id, sale_batch_id, created_at, withdrawn, category_name").eq("billeterie_id", id).order("created_at").range(from, to)
+      adminClient.from("billeterie_tickets").select("id, sale_batch_id, created_at, withdrawn, category_name, status").eq("billeterie_id", id).order("created_at").range(from, to)
     ),
   ]);
 
@@ -398,6 +398,9 @@ export async function getBilleterieDetails(id: string): Promise<{
         .range(from, to)
     );
     ownScanCount = scansAtOwnMatches.filter((s: any) => ownTicketIdSet.has(s.ticket_id as string)).length;
+  } else if (matchIds.length === 0) {
+    // Billeterie sans match : les scans sont enregistrés directement sur billeterie_tickets.status
+    ownScanCount = allTicketRows.filter((t: any) => t.status === "scanne").length;
   }
 
   // Invendus attribués depuis d'autres billeteries couvrant les mêmes matchs
