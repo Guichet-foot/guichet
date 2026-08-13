@@ -142,6 +142,7 @@ export async function createBilleterie(formData: {
   quantity?: number;
   categories?: BilCategory[];
   showMatchesOnTicket?: boolean;
+  zoneId?: string;
 }): Promise<{ error?: string; billeterieId?: string; batchId?: string }> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -150,7 +151,7 @@ export async function createBilleterie(formData: {
   const adminClient = await createAdminClient();
   const { data: profile } = await adminClient
     .from("profiles")
-    .select("role")
+    .select("role, zone_id")
     .eq("id", user.id)
     .single();
 
@@ -166,12 +167,19 @@ export async function createBilleterie(formData: {
     if (formData.price < 0) return { error: "Prix invalide" };
   }
 
+  // Determine zone_id: explicit param, or auto-detect for admin_zone creators
+  const bilZoneId: string | null =
+    formData.zoneId ||
+    ((profile as any).role === "admin_zone" ? ((profile as any).zone_id as string | null) : null) ||
+    null;
+
   const insertData: Record<string, unknown> = {
     name: formData.name.trim(),
     match_ids: formData.matchIds,
     price: isMultiCat ? 0 : formData.price,
     created_by: user.id,
     show_matches_on_ticket: formData.showMatchesOnTicket !== false,
+    zone_id: bilZoneId,
   };
   if (isMultiCat) insertData.categories = formData.categories;
 

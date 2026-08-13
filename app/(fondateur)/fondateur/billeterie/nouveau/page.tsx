@@ -133,6 +133,7 @@ export default function FondateurNouveauBilletteriePage() {
       price: multiCat ? 0 : parseInt(price),
       categories: multiCat ? categories : undefined,
       showMatchesOnTicket: scopeMode !== "zone",
+      zoneId: scopeMode === "zone" ? selectedZoneId : undefined,
     });
     setLoading(false);
 
