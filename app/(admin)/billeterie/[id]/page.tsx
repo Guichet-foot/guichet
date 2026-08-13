@@ -65,10 +65,10 @@ export default async function BilleterieDetailPage({
             <div className="flex items-center gap-2">
               <Ticket className="h-5 w-5 text-brand" />
               <div>
-                <p className="text-2xl font-bold">{bil.totalTickets + bil.attributedBillets}</p>
-                <p className="text-xs text-muted-foreground">Billets</p>
+                <p className="text-2xl font-bold">{bil.totalTickets}</p>
+                <p className="text-xs text-muted-foreground">Billets imprimés</p>
                 {bil.attributedBillets > 0 && (
-                  <p className="text-xs text-amber-600 mt-0.5">dont {bil.attributedBillets} attribués</p>
+                  <p className="text-xs text-muted-foreground/70 mt-0.5">+ {bil.attributedBillets} d&apos;autres billetteries</p>
                 )}
               </div>
             </div>
