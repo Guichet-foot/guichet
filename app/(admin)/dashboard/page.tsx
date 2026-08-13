@@ -602,8 +602,15 @@ export default async function DashboardPage({
       // Si une billeterie a un zone_id explicite appartenant à une autre zone, on l'exclut
       // pour éviter la contamination croisée entre zones.
       const allC3Bils = allBils.filter((b: any) => {
-        if (b.zone_id && zoneFilter && b.zone_id !== zoneFilter) return false;
-        return (b.match_ids || []).some((id: string) => scanMatchIdSet.has(id));
+        const matchIds: string[] = b.match_ids || [];
+        // zone_id explicite = autorité absolue pour l'isolation par zone
+        if (b.zone_id) return !zoneFilter || b.zone_id === zoneFilter;
+        // Pas de zone_id : filtrer par match_ids
+        if (!matchIds.some((id) => scanMatchIdSet.has(id))) return false;
+        // Contamination croisée : si certains match_ids appartiennent à une autre zone
+        // (pas dans le scope de la zone courante), exclure la billeterie
+        if (zoneFilter && matchIds.some((id) => !scanMatchIdSet.has(id))) return false;
+        return true;
       });
       const allC3BilIds = allC3Bils.map((b: any) => b.id as string);
       const bilPriceMap: Record<string, number> = {};
