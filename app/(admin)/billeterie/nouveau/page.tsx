@@ -2,14 +2,18 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { getAllMatchesForBilleterie, createBilleterie } from "@/lib/actions/billeterie-actions";
+import {
+  getAllMatchesForBilleterie,
+  getMyZoneMatchIds,
+  createBilleterie,
+} from "@/lib/actions/billeterie-actions";
 import type { MatchOption, BilCategory } from "@/lib/actions/billeterie-actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Loader2, Check, Trophy, Plus, Trash2, Layers } from "lucide-react";
+import { ArrowLeft, Loader2, Check, Trophy, Plus, Trash2, Layers, MapPin } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
 import { formatFCFA, fmtZone } from "@/lib/format";
@@ -38,9 +42,22 @@ export default function NouveauBilletteriePage() {
   const [multiCat, setMultiCat] = useState(false);
   const [categories, setCategories] = useState<BilCategory[]>([{ name: "", price: 0 }]);
 
+  // Mode : "matches" (sélection manuelle) | "zone" (toute la zone de l'admin)
+  const [scopeMode, setScopeMode] = useState<"matches" | "zone">("matches");
+  const [zoneMatchIds, setZoneMatchIds] = useState<string[]>([]);
+  const [loadingZone, setLoadingZone] = useState(false);
+
   useEffect(() => {
     getAllMatchesForBilleterie().then((data) => setMatches(data));
   }, []);
+
+  async function switchToZoneMode() {
+    setScopeMode("zone");
+    setLoadingZone(true);
+    const ids = await getMyZoneMatchIds();
+    setZoneMatchIds(ids);
+    setLoadingZone(false);
+  }
 
   function toggleMatch(id: string) {
     setSelectedIds((prev) => {
@@ -77,9 +94,8 @@ export default function NouveauBilletteriePage() {
     );
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: { preventDefault(): void }) {
     e.preventDefault();
-    if (selectedIds.size === 0) { toast.error("Sélectionnez au moins un match"); return; }
 
     if (multiCat) {
       if (categories.length === 0) { toast.error("Ajoutez au moins une catégorie"); return; }
@@ -90,10 +106,12 @@ export default function NouveauBilletteriePage() {
       if (isNaN(p) || p < 0) { toast.error("Prix invalide"); return; }
     }
 
+    const matchIds = scopeMode === "zone" ? zoneMatchIds : Array.from(selectedIds);
+
     setLoading(true);
     const result = await createBilleterie({
       name,
-      matchIds: Array.from(selectedIds),
+      matchIds,
       price: multiCat ? 0 : parseInt(price),
       categories: multiCat ? categories : undefined,
     });
@@ -104,6 +122,8 @@ export default function NouveauBilletteriePage() {
     toast.success("Pass créé");
     router.push(`/billeterie/${result.billeterieId}`);
   }
+
+  const canSubmit = scopeMode === "zone" || selectedIds.size > 0;
 
   return (
     <div className="max-w-xl mx-auto space-y-6">
@@ -238,57 +258,110 @@ export default function NouveauBilletteriePage() {
           </CardContent>
         </Card>
 
-        {/* Sélection des matchs */}
+        {/* Sélection du périmètre */}
         <Card>
           <CardContent className="pt-5 space-y-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <Label className="text-sm font-semibold">Matchs inclus dans le pass</Label>
-                {selectedIds.size > 0 && (
-                  <p className="text-xs text-brand mt-0.5">{selectedIds.size} match{selectedIds.size !== 1 ? "s" : ""} sélectionné{selectedIds.size !== 1 ? "s" : ""}</p>
-                )}
-              </div>
-              {matches.length > 0 && (
-                <button type="button" onClick={selectAll} className="text-xs text-brand hover:underline">
-                  {selectedIds.size === matches.length ? "Tout désélectionner" : "Tout sélectionner"}
-                </button>
-              )}
+            {/* Toggle Par matchs / Par zone */}
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setScopeMode("matches")}
+                className={`rounded-lg border-2 p-3 text-sm font-medium transition-colors text-left ${
+                  scopeMode === "matches" ? "border-brand bg-brand/5 text-brand" : "border-border text-muted-foreground hover:border-brand/30"
+                }`}
+              >
+                <Trophy className="h-4 w-4 mb-1" />
+                Matchs spécifiques
+                <p className="text-xs font-normal mt-0.5 text-muted-foreground">Sélectionner des matchs</p>
+              </button>
+              <button
+                type="button"
+                onClick={switchToZoneMode}
+                className={`rounded-lg border-2 p-3 text-sm font-medium transition-colors text-left ${
+                  scopeMode === "zone" ? "border-brand bg-brand/5 text-brand" : "border-border text-muted-foreground hover:border-brand/30"
+                }`}
+              >
+                <MapPin className="h-4 w-4 mb-1" />
+                Toute ma zone
+                <p className="text-xs font-normal mt-0.5 text-muted-foreground">Sans sélectionner les matchs</p>
+              </button>
             </div>
 
-            {matches.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <Trophy className="h-8 w-8 mx-auto mb-2" />
-                <p className="text-sm">Aucun match programmé disponible</p>
-              </div>
-            ) : (
-              <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
-                {matches.map((m) => {
-                  const isSelected = selectedIds.has(m.id);
-                  return (
-                    <button
-                      key={m.id}
-                      type="button"
-                      onClick={() => toggleMatch(m.id)}
-                      className={`w-full text-left rounded-lg border-2 p-3 transition-colors ${
-                        isSelected ? "border-brand bg-brand/5" : "border-border hover:border-brand/30"
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold truncate">{matchLabel(m)}</p>
-                          <p className="text-xs text-muted-foreground mt-0.5">
-                            {format(new Date(m.match_date), "EEE d MMM yyyy · HH'h'mm", { locale: fr })}
-                            {m.match_type && ` · ${m.match_type}`}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          {statusBadge(m.status)}
-                          {isSelected && <Check className="h-4 w-4 text-brand" />}
-                        </div>
-                      </div>
+            {/* Mode : matchs spécifiques */}
+            {scopeMode === "matches" && (
+              <>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label className="text-sm font-semibold">Matchs inclus dans le pass</Label>
+                    {selectedIds.size > 0 && (
+                      <p className="text-xs text-brand mt-0.5">{selectedIds.size} match{selectedIds.size !== 1 ? "s" : ""} sélectionné{selectedIds.size !== 1 ? "s" : ""}</p>
+                    )}
+                  </div>
+                  {matches.length > 0 && (
+                    <button type="button" onClick={selectAll} className="text-xs text-brand hover:underline">
+                      {selectedIds.size === matches.length ? "Tout désélectionner" : "Tout sélectionner"}
                     </button>
-                  );
-                })}
+                  )}
+                </div>
+
+                {matches.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Trophy className="h-8 w-8 mx-auto mb-2" />
+                    <p className="text-sm">Aucun match programmé disponible</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+                    {matches.map((m) => {
+                      const isSelected = selectedIds.has(m.id);
+                      return (
+                        <button
+                          key={m.id}
+                          type="button"
+                          onClick={() => toggleMatch(m.id)}
+                          className={`w-full text-left rounded-lg border-2 p-3 transition-colors ${
+                            isSelected ? "border-brand bg-brand/5" : "border-border hover:border-brand/30"
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-semibold truncate">{matchLabel(m)}</p>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                {format(new Date(m.match_date), "EEE d MMM yyyy · HH'h'mm", { locale: fr })}
+                                {m.match_type && ` · ${m.match_type}`}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              {statusBadge(m.status)}
+                              {isSelected && <Check className="h-4 w-4 text-brand" />}
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Mode : toute la zone */}
+            {scopeMode === "zone" && (
+              <div className="rounded-lg border border-brand/30 bg-brand/5 p-4 space-y-2">
+                <div className="flex items-center gap-2">
+                  <MapPin className="h-4 w-4 text-brand shrink-0" />
+                  <p className="text-sm font-semibold text-brand">Billetterie pour toute ma zone</p>
+                </div>
+                {loadingZone ? (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    Chargement des matchs…
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    {zoneMatchIds.length > 0
+                      ? `${zoneMatchIds.length} match${zoneMatchIds.length !== 1 ? "s" : ""} existant${zoneMatchIds.length !== 1 ? "s" : ""} inclus — les futurs matchs s'ajouteront automatiquement`
+                      : "Aucun match existant — les futurs matchs s'ajouteront automatiquement"}
+                  </p>
+                )}
               </div>
             )}
           </CardContent>
@@ -297,10 +370,12 @@ export default function NouveauBilletteriePage() {
         <Button
           type="submit"
           className="w-full bg-brand hover:bg-brand/90"
-          disabled={loading || selectedIds.size === 0}
+          disabled={loading || !canSubmit}
         >
           {loading ? (
             <Loader2 className="h-4 w-4 animate-spin" />
+          ) : scopeMode === "zone" ? (
+            "Créer le pass — toute ma zone"
           ) : (
             `Créer le pass — ${selectedIds.size} match${selectedIds.size !== 1 ? "s" : ""}`
           )}

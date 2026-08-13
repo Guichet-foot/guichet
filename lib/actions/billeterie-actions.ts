@@ -95,6 +95,43 @@ export async function getAllMatchesForAttribution(): Promise<MatchOption[]> {
   return (data || []) as MatchOption[];
 }
 
+// ── Zones disponibles pour le sélecteur fondateur ─────────────────────────────
+export async function getZonesForBilleterie(): Promise<{ id: string; name: string }[]> {
+  await requireRole(["fondateur", "super_admin", "president_odcav", "tresorier"]);
+  const adminClient = await createAdminClient();
+  const { data } = await adminClient.from("zones").select("id, name").order("name");
+  return (data || []) as { id: string; name: string }[];
+}
+
+// ── Tous les match_ids d'un scope (zone ou c3), tous statuts ──────────────────
+// Utilisé pour pré-remplir une billetterie créée "par zone" sans sélection manuelle.
+export async function getAllMatchIdsForScope(
+  zoneId?: string,
+  c3AccountId?: string,
+): Promise<string[]> {
+  await requireRole(["fondateur", "super_admin", "president_odcav", "tresorier", "admin_zone"]);
+  const adminClient = await createAdminClient();
+  if (!zoneId && !c3AccountId) return [];
+  let query = adminClient.from("matches").select("id");
+  if (zoneId) query = query.eq("zone_id", zoneId);
+  else if (c3AccountId) query = query.eq("c3_account_id", c3AccountId);
+  const { data } = await query;
+  return ((data || []) as any[]).map((m) => m.id as string);
+}
+
+// ── Match_ids de la zone de l'utilisateur connecté (admin_zone) ───────────────
+export async function getMyZoneMatchIds(): Promise<string[]> {
+  const supabase = await createClient();
+  const adminClient = await createAdminClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+  const { data: prof } = await adminClient
+    .from("profiles").select("zone_id").eq("id", user.id).single();
+  if (!prof?.zone_id) return [];
+  const { data } = await adminClient.from("matches").select("id").eq("zone_id", prof.zone_id as string);
+  return ((data || []) as any[]).map((m) => m.id as string);
+}
+
 // ── Créer un billetterie + générer les billets ─────────────────────────────────
 export type BilCategory = { name: string; price: number };
 
@@ -116,11 +153,10 @@ export async function createBilleterie(formData: {
     .eq("id", user.id)
     .single();
 
-  const allowed = ["super_admin", "president_odcav", "tresorier", "fondateur"];
+  const allowed = ["super_admin", "president_odcav", "tresorier", "fondateur", "admin_zone"];
   if (!profile || !allowed.includes(profile.role)) return { error: "Non autorisé" };
 
   if (!formData.name.trim()) return { error: "Nom obligatoire" };
-  if (formData.matchIds.length < 1) return { error: "Sélectionnez au moins un match" };
 
   const isMultiCat = formData.categories && formData.categories.length > 0;
   if (isMultiCat) {
