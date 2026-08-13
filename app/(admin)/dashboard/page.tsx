@@ -740,10 +740,13 @@ export default async function DashboardPage({
       .map((b: any) => b.id as string);
 
     if (uncountedBilIds.length > 0) {
-      const { data: uncTickets } = await adminClient
-        .from("billeterie_tickets")
-        .select("billeterie_id, withdrawn, status")
-        .in("billeterie_id", uncountedBilIds);
+      const uncTickets = await fetchAll<any>((from, to) =>
+        adminClient
+          .from("billeterie_tickets")
+          .select("billeterie_id, withdrawn, status")
+          .in("billeterie_id", uncountedBilIds)
+          .range(from, to)
+      );
 
       const countByBil: Record<string, { nw: number; scanned: number }> = {};
       ((uncTickets || []) as any[]).forEach((t: any) => {
