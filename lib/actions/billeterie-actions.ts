@@ -368,7 +368,7 @@ export async function getBilleterieDetails(id: string): Promise<{
 
   const [{ data: matches }, allTicketRows] = await Promise.all([
     matchIds.length > 0
-      ? adminClient.from("matches").select("id, home_team, away_team, venue, match_date, match_type, status, home_team_zone, away_team_zone").in("id", matchIds)
+      ? adminClient.from("matches").select("id, home_team, away_team, venue, match_date, match_type, status, home_team_zone, away_team_zone, zone_id").in("id", matchIds)
       : Promise.resolve({ data: [] as any[] }),
     fetchAll<any>((from, to) =>
       adminClient.from("billeterie_tickets").select("id, sale_batch_id, created_at, withdrawn, category_name, status").eq("billeterie_id", id).order("created_at").range(from, to)
@@ -406,7 +406,14 @@ export async function getBilleterieDetails(id: string): Promise<{
   // Invendus attribués depuis d'autres billeteries couvrant les mêmes matchs
   let attributedBillets = 0;
   let attributedScans = 0;
+
+  // Zone primaire : zone_id explicite, ou déduite des matchs si tous dans la même zone
   const bilZoneId: string | null = (bil as any).zone_id || null;
+  const matchZoneIds = [...new Set(
+    ((matches || []) as any[]).map((m: any) => m.zone_id as string | null).filter(Boolean)
+  )] as string[];
+  const primaryZoneId: string | null = bilZoneId || (matchZoneIds.length === 1 ? matchZoneIds[0] : null);
+
   if (matchIds.length > 0) {
     const { data: otherBils } = await adminClient
       .from("billeterie")
@@ -414,10 +421,8 @@ export async function getBilleterieDetails(id: string): Promise<{
       .neq("id", id);
 
     const relatedBils = (otherBils || []).filter((b: any) => {
-      // Isolation zone : si les deux ont un zone_id, ils doivent correspondre
-      if (bilZoneId && b.zone_id && bilZoneId !== b.zone_id) return false;
-      // Si cette billeterie a un zone_id mais l'autre pas (et vice-versa), on accepte
-      // seulement si les match_ids se recoupent et appartiennent à la même zone
+      // Exclure si l'autre billeterie appartient explicitement à une zone différente
+      if (primaryZoneId && b.zone_id && primaryZoneId !== b.zone_id) return false;
       return (b.match_ids || []).some((mid: string) => matchIds.includes(mid));
     });
 
@@ -478,7 +483,7 @@ export async function getBilleterieDetails(id: string): Promise<{
       const relatedBilIdSet = new Set(relatedBilIds);
       const indirectBilsDet = (otherBils || []).filter((b: any) => {
         if (relatedBilIdSet.has(b.id)) return false;
-        if (bilZoneId && b.zone_id && bilZoneId !== b.zone_id) return false;
+        if (primaryZoneId && b.zone_id && primaryZoneId !== b.zone_id) return false;
         const bm: string[] = b.match_ids || [];
         if (bm.some((mid: string) => thisMatchSet.has(mid))) return false;
         return bm.some((mid: string) => relatedBilMatchIdSet.has(mid));
