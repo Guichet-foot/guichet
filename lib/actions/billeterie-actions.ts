@@ -358,7 +358,7 @@ export async function getBilleterieDetails(id: string): Promise<{
 
   const { data: bil } = await adminClient
     .from("billeterie")
-    .select("id, name, match_ids, price, categories, created_at")
+    .select("id, name, match_ids, price, categories, created_at, zone_id")
     .eq("id", id)
     .single();
 
@@ -406,15 +406,20 @@ export async function getBilleterieDetails(id: string): Promise<{
   // Invendus attribués depuis d'autres billeteries couvrant les mêmes matchs
   let attributedBillets = 0;
   let attributedScans = 0;
+  const bilZoneId: string | null = (bil as any).zone_id || null;
   if (matchIds.length > 0) {
     const { data: otherBils } = await adminClient
       .from("billeterie")
-      .select("id, match_ids")
+      .select("id, match_ids, zone_id")
       .neq("id", id);
 
-    const relatedBils = (otherBils || []).filter((b: any) =>
-      (b.match_ids || []).some((mid: string) => matchIds.includes(mid))
-    );
+    const relatedBils = (otherBils || []).filter((b: any) => {
+      // Isolation zone : si les deux ont un zone_id, ils doivent correspondre
+      if (bilZoneId && b.zone_id && bilZoneId !== b.zone_id) return false;
+      // Si cette billeterie a un zone_id mais l'autre pas (et vice-versa), on accepte
+      // seulement si les match_ids se recoupent et appartiennent à la même zone
+      return (b.match_ids || []).some((mid: string) => matchIds.includes(mid));
+    });
 
     if (relatedBils.length > 0) {
       const relatedBilIds = relatedBils.map((b: any) => b.id as string);
@@ -473,6 +478,7 @@ export async function getBilleterieDetails(id: string): Promise<{
       const relatedBilIdSet = new Set(relatedBilIds);
       const indirectBilsDet = (otherBils || []).filter((b: any) => {
         if (relatedBilIdSet.has(b.id)) return false;
+        if (bilZoneId && b.zone_id && bilZoneId !== b.zone_id) return false;
         const bm: string[] = b.match_ids || [];
         if (bm.some((mid: string) => thisMatchSet.has(mid))) return false;
         return bm.some((mid: string) => relatedBilMatchIdSet.has(mid));
