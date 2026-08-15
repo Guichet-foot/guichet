@@ -678,15 +678,19 @@ export default async function DashboardPage({
           }
         });
 
-        const bilTicketIds = Object.keys(bilTicketIdMap);
-        const bilTicketIdSet = new Set(bilTicketIds);
+        const bilTicketIdSet = new Set(Object.keys(bilTicketIdMap));
 
-        // Step 2: fetch scans by ticket_id — not match_id — so scans are found
-        // regardless of which match_id was attributed at scan time (can differ from billeterie.match_ids)
-        const allBilScans = bilTicketIds.length > 0
+        // Step 2: fetch scans by match_id (like Finance page) — avoids .in() on thousands of
+        // ticket_ids which can exceed Supabase URL limits. allBilMatchIds contains only
+        // the match_ids from the billeteries themselves (typically < 100).
+        const allBilMatchIds2 = [...new Set([
+          ...allC3Bils.flatMap((b: any) => (b.match_ids || []) as string[]),
+          ...indirectOutside2.flatMap((b: any) => (b.match_ids || []) as string[]),
+        ])];
+        const allBilScans = allBilMatchIds2.length > 0
           ? await fetchAll<any>((from, to) =>
               adminClient.from("billeterie_scans").select("ticket_id, scanned_at")
-                .in("ticket_id", bilTicketIds).range(from, to)
+                .in("match_id", allBilMatchIds2).range(from, to)
             )
           : [];
 
@@ -828,8 +832,8 @@ export default async function DashboardPage({
   const totalScanned    = periodScannedTickets.length + bilScanned;
   // Unsold = all printed - all ever scanned (remaining blocs in circulation)
   const totalUnsold     = Math.max(0, totalPrinted - allTimeScopeScanned - bilScanned);
-  // Blocs disponibles = blocs invendus (pas le total imprimé)
-  const totalBlocs      = Math.floor(totalUnsold / 100);
+  // Blocs imprimés = total imprimé / 100 (comme la page Finances)
+  const totalBlocs      = Math.floor(totalPrinted / 100);
   const totalUnsoldValue = printedTickets
     .filter((t: any) => t.status !== "scanne")
     .reduce((s: number, t: any) => s + (t.price || 0), 0);
@@ -950,8 +954,8 @@ export default async function DashboardPage({
       <DashboardFilters matches={filterMatches} />
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <StatCard title="Blocs disponibles" value={totalBlocs}
-          subtitle={`${totalUnsold.toLocaleString("fr-FR")} billets invendus`}
+        <StatCard title="Blocs imprimés" value={totalBlocs}
+          subtitle={`${totalPrinted.toLocaleString("fr-FR")} billets${totalPrinted % 100 !== 0 && totalPrinted > 0 ? ` · ${totalPrinted % 100} hors bloc` : ""}`}
           icon={<Layers className="h-5 w-5 text-brand" />} iconBg="bg-brand/10" />
         <StatCard title="Validés par scan" value={totalScanned.toLocaleString("fr-FR")}
           subtitle={totalPrinted > 0 ? `${Math.round((totalScanned / totalPrinted) * 100)}% des imprimés` : "0% des imprimés"}
