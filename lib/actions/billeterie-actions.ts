@@ -1034,7 +1034,7 @@ export async function validateBilleterieTicket(rawToken: string): Promise<ScanRe
     // Aucun match associé : on marque le billet directement comme scanné.
     const { error } = await adminClient
       .from("billeterie_tickets")
-      .update({ status: "scanne" })
+      .update({ status: "scanne", scanned_at: new Date().toISOString() })
       .eq("id", ticket.id);
     if (error) return { status: "invalid", message: "Erreur lors du scan" };
   }

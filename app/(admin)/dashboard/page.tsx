@@ -602,13 +602,13 @@ export default async function DashboardPage({
       // Si une billeterie a un zone_id explicite appartenant à une autre zone, on l'exclut
       // pour éviter la contamination croisée entre zones.
       const allC3Bils = allBils.filter((b: any) => {
+        // zone_id d'une AUTRE zone → toujours exclure
+        if (b.zone_id && zoneFilter && b.zone_id !== zoneFilter) return false;
         const matchIds: string[] = b.match_ids || [];
-        // zone_id explicite = autorité absolue pour l'isolation par zone
-        if (b.zone_id) return !zoneFilter || b.zone_id === zoneFilter;
-        // Pas de zone_id : filtrer par match_ids
+        // Doit avoir au moins un match_id dans le scope courant
+        // (les billeteries sans match_ids sont gérées par le bloc supplémentaire)
         if (!matchIds.some((id) => scanMatchIdSet.has(id))) return false;
-        // Contamination croisée : si certains match_ids appartiennent à une autre zone
-        // (pas dans le scope de la zone courante), exclure la billeterie
+        // Contamination croisée : match_ids hors scope → exclure
         if (zoneFilter && matchIds.some((id) => !scanMatchIdSet.has(id))) return false;
         return true;
       });
@@ -755,25 +755,36 @@ export default async function DashboardPage({
       const uncTickets = await fetchAll<any>((from, to) =>
         adminClient
           .from("billeterie_tickets")
-          .select("billeterie_id, withdrawn, status")
+          .select("billeterie_id, withdrawn, status, scanned_at")
           .in("billeterie_id", uncountedBilIds)
           .range(from, to)
       );
 
-      const countByBil: Record<string, { nw: number; scanned: number }> = {};
+      // dateStartMs2/dateEndMs2 pas encore calculés ici — on les calcule en avance
+      const _dsMs = dateStart2.getTime();
+      const _deMs = dateEnd2.getTime();
+
+      const countByBil: Record<string, { nw: number; allTimeScanned: number; periodScanned: number }> = {};
       ((uncTickets || []) as any[]).forEach((t: any) => {
         const bId = t.billeterie_id as string;
-        if (!countByBil[bId]) countByBil[bId] = { nw: 0, scanned: 0 };
+        if (!countByBil[bId]) countByBil[bId] = { nw: 0, allTimeScanned: 0, periodScanned: 0 };
         if (!t.withdrawn) {
           countByBil[bId].nw++;
-          if (t.status === "scanne") countByBil[bId].scanned++;
+          if (t.status === "scanne") {
+            countByBil[bId].allTimeScanned++;
+            // Filtrer par période si scanned_at est disponible
+            if (t.scanned_at) {
+              const ms = new Date(t.scanned_at as string).getTime();
+              if (ms >= _dsMs && ms <= _deMs) countByBil[bId].periodScanned++;
+            }
+          }
         }
       });
 
       uncountedBilIds.forEach((bId) => {
-        const { nw = 0, scanned = 0 } = countByBil[bId] || {};
-        bilPrinted += Math.max(0, nw - scanned);
-        bilScanned += scanned;
+        const { nw = 0, allTimeScanned = 0, periodScanned = 0 } = countByBil[bId] || {};
+        bilPrinted += Math.max(0, nw - allTimeScanned);   // stock restant (tous temps)
+        bilScanned += periodScanned;                       // scans de la période seulement
       });
     }
   }
@@ -784,7 +795,6 @@ export default async function DashboardPage({
   // Printed = ALL bloc tickets across scope matches (available blocs regardless of match_date)
   const printedTickets   = allScopeTickets.filter((t: any) => t.bloc_printed === true);
   const totalPrinted     = printedTickets.length + bilPrinted;
-  const totalBlocs       = Math.floor(totalPrinted / 100);
 
   // Scanned in period: anchored to scanned_at so scanning yesterday's blocs today is counted.
   // Exception: filterMatchId view shows all scans for that match without date restriction.
@@ -800,6 +810,8 @@ export default async function DashboardPage({
   const totalScanned    = periodScannedTickets.length + bilScanned;
   // Unsold = all printed - all ever scanned (remaining blocs in circulation)
   const totalUnsold     = Math.max(0, totalPrinted - allTimeScopeScanned - bilScanned);
+  // Blocs disponibles = blocs invendus (pas le total imprimé)
+  const totalBlocs      = Math.floor(totalUnsold / 100);
   const totalUnsoldValue = printedTickets
     .filter((t: any) => t.status !== "scanne")
     .reduce((s: number, t: any) => s + (t.price || 0), 0);
@@ -920,8 +932,8 @@ export default async function DashboardPage({
       <DashboardFilters matches={filterMatches} />
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <StatCard title="Blocs imprimés" value={totalBlocs}
-          subtitle={`${totalPrinted.toLocaleString("fr-FR")} billets au total`}
+        <StatCard title="Blocs disponibles" value={totalBlocs}
+          subtitle={`${totalUnsold.toLocaleString("fr-FR")} billets invendus`}
           icon={<Layers className="h-5 w-5 text-brand" />} iconBg="bg-brand/10" />
         <StatCard title="Validés par scan" value={totalScanned.toLocaleString("fr-FR")}
           subtitle={totalPrinted > 0 ? `${Math.round((totalScanned / totalPrinted) * 100)}% des imprimés` : "0% des imprimés"}
