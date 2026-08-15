@@ -660,21 +660,11 @@ export default async function DashboardPage({
       const allFetchBilIds2 = [...allC3BilIds, ...outsideIds2];
 
       if (allFetchBilIds2.length > 0) {
-        const allBilMatchIds = [...new Set([
-          ...allC3Bils.flatMap((b: any) => (b.match_ids || []) as string[]),
-          ...indirectOutside2.flatMap((b: any) => (b.match_ids || []) as string[]),
-        ])];
-
-        const [bilAllTickets, allBilScans] = await Promise.all([
-          fetchAll<any>((from, to) =>
-            adminClient.from("billeterie_tickets").select("id, billeterie_id, withdrawn, category_name")
-              .in("billeterie_id", allFetchBilIds2).range(from, to)
-          ),
-          fetchAll<any>((from, to) =>
-            adminClient.from("billeterie_scans").select("ticket_id, scanned_at")
-              .in("match_id", allBilMatchIds).range(from, to)
-          ),
-        ]);
+        // Step 1: fetch tickets first to get ticket IDs
+        const bilAllTickets = await fetchAll<any>((from, to) =>
+          adminClient.from("billeterie_tickets").select("id, billeterie_id, withdrawn, category_name")
+            .in("billeterie_id", allFetchBilIds2).range(from, to)
+        );
 
         const nonWithdrawnByBil: Record<string, number> = {};
         const bilTicketIdMap: Record<string, string> = {};
@@ -687,7 +677,18 @@ export default async function DashboardPage({
           }
         });
 
-        const bilTicketIdSet = new Set(Object.keys(bilTicketIdMap));
+        const bilTicketIds = Object.keys(bilTicketIdMap);
+        const bilTicketIdSet = new Set(bilTicketIds);
+
+        // Step 2: fetch scans by ticket_id — not match_id — so scans are found
+        // regardless of which match_id was attributed at scan time (can differ from billeterie.match_ids)
+        const allBilScans = bilTicketIds.length > 0
+          ? await fetchAll<any>((from, to) =>
+              adminClient.from("billeterie_scans").select("ticket_id, scanned_at")
+                .in("ticket_id", bilTicketIds).range(from, to)
+            )
+          : [];
+
         const relevantScans = allBilScans.filter((s: any) => bilTicketIdSet.has(s.ticket_id as string));
 
         const dateStartMs = dateStart2.getTime();
