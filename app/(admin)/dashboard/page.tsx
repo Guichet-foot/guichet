@@ -602,18 +602,15 @@ export default async function DashboardPage({
       // Si une billeterie a un zone_id explicite appartenant à une autre zone, on l'exclut
       // pour éviter la contamination croisée entre zones.
       const allC3Bils = allBils.filter((b: any) => {
-        // zone_id d'une AUTRE zone → toujours exclure
+        // zone_id d'une AUTRE zone → toujours exclure (source de vérité explicite)
         if (b.zone_id && zoneFilter && b.zone_id !== zoneFilter) return false;
         const matchIds: string[] = b.match_ids || [];
         // Doit avoir au moins un match_id dans le scope courant
         // (les billeteries sans match_ids sont gérées par le bloc supplémentaire)
         if (!matchIds.some((id) => scanMatchIdSet.has(id))) return false;
-        // Si zone_id correspond explicitement à cette zone, on fait confiance à zone_id :
-        // on n'applique pas le check cross-zone (certains match_ids peuvent appartenir
-        // à des matches sans zone_id dans la DB sans pour autant être hors-scope).
-        if (b.zone_id && zoneFilter && b.zone_id === zoneFilter) return true;
-        // Sans zone_id explicite : check contamination croisée strict
-        if (zoneFilter && matchIds.some((id) => !scanMatchIdSet.has(id))) return false;
+        // On n'applique plus de check cross-zone strict sur les match_ids hors-scope :
+        // certains matchs n'ont pas encore zone_id dans la DB, ce qui ferait exclure
+        // à tort des billeteries légitimes. La protection se fait via zone_id explicite.
         return true;
       });
       const allC3BilIds = allC3Bils.map((b: any) => b.id as string);
