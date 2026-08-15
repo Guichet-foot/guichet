@@ -743,8 +743,15 @@ export default async function DashboardPage({
   if (zoneFilter && !c3AccountId) {
     const scopeIdSet = new Set(allScopeMatchIds);
     const { data: zoneBilsData } = await adminClient
-      .from("billeterie").select("id, match_ids")
+      .from("billeterie").select("id, match_ids, price, categories")
       .eq("zone_id", zoneFilter);
+
+    const uncPriceMap: Record<string, number> = {};
+    const uncCatMap: Record<string, Array<{ name: string; price: number }>> = {};
+    ((zoneBilsData || []) as any[]).forEach((b: any) => {
+      uncPriceMap[b.id] = b.price || 0;
+      if (b.categories) uncCatMap[b.id] = b.categories;
+    });
 
     // Only billeteries whose match_ids have NO overlap with this zone's match IDs
     // (those with overlap are already counted by the main block above)
@@ -756,12 +763,11 @@ export default async function DashboardPage({
       const uncTickets = await fetchAll<any>((from, to) =>
         adminClient
           .from("billeterie_tickets")
-          .select("billeterie_id, withdrawn, status, scanned_at")
+          .select("billeterie_id, withdrawn, status, scanned_at, category_name")
           .in("billeterie_id", uncountedBilIds)
           .range(from, to)
       );
 
-      // dateStartMs2/dateEndMs2 pas encore calculés ici — on les calcule en avance
       const _dsMs = dateStart2.getTime();
       const _deMs = dateEnd2.getTime();
 
@@ -773,10 +779,20 @@ export default async function DashboardPage({
           countByBil[bId].nw++;
           if (t.status === "scanne") {
             countByBil[bId].allTimeScanned++;
-            // Filtrer par période si scanned_at est disponible
             if (t.scanned_at) {
               const ms = new Date(t.scanned_at as string).getTime();
-              if (ms >= _dsMs && ms <= _deMs) countByBil[bId].periodScanned++;
+              if (ms >= _dsMs && ms <= _deMs) {
+                countByBil[bId].periodScanned++;
+                // Revenue for this period scan
+                const catName = t.category_name as string | null;
+                const cats = uncCatMap[bId];
+                if (cats && catName) {
+                  const cat = cats.find((c: any) => c.name === catName);
+                  bilRevenue += cat ? cat.price : 0;
+                } else {
+                  bilRevenue += uncPriceMap[bId] || 0;
+                }
+              }
             }
           }
         }
