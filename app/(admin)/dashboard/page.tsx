@@ -608,7 +608,11 @@ export default async function DashboardPage({
         // Doit avoir au moins un match_id dans le scope courant
         // (les billeteries sans match_ids sont gérées par le bloc supplémentaire)
         if (!matchIds.some((id) => scanMatchIdSet.has(id))) return false;
-        // Contamination croisée : match_ids hors scope → exclure
+        // Si zone_id correspond explicitement à cette zone, on fait confiance à zone_id :
+        // on n'applique pas le check cross-zone (certains match_ids peuvent appartenir
+        // à des matches sans zone_id dans la DB sans pour autant être hors-scope).
+        if (b.zone_id && zoneFilter && b.zone_id === zoneFilter) return true;
+        // Sans zone_id explicite : check contamination croisée strict
         if (zoneFilter && matchIds.some((id) => !scanMatchIdSet.has(id))) return false;
         return true;
       });
