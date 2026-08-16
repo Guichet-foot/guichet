@@ -4,7 +4,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MapPin, Wallet, Ticket, CalendarDays, Trophy } from "lucide-react";
 import { formatFCFA } from "@/lib/format";
 import { RevenueLineChart } from "./revenue-line-chart";
-import { FraisPlateformeChart } from "./frais-plateforme-chart";
 import { FondateurFilters } from "./fondateur-filters";
 import { fetchAll } from "@/lib/supabase/paginate";
 import { Suspense } from "react";
@@ -48,11 +47,10 @@ export default async function FondateurDashboardPage({
   const nextMonthStart = `${smMonth === 12 ? smYear + 1 : smYear}-${String(smMonth === 12 ? 1 : smMonth + 1).padStart(2, "0")}-01T00:00:00`;
 
   // ── Phase 1: profiles, zones, matches, platform settings ─────────────────
-  const [superAdminsRes, zonesRes, matchesRes, platformSettingsRes, c3ProfilesRes] = await Promise.all([
+  const [superAdminsRes, zonesRes, matchesRes, c3ProfilesRes] = await Promise.all([
     supabase.from("profiles").select("id, full_name").in("role", ["super_admin", "president_odcav"]),
     supabase.from("zones").select("id, name, created_by"),
     supabase.from("matches").select("id, match_date, zone_id, home_team_zone, away_team_zone, status, match_type, created_by, c3_account_id"),
-    supabase.from("platform_settings").select("fee_per_block, effective_date").order("effective_date", { ascending: true }),
     supabase.from("profiles").select("id, full_name").eq("role", "c3").order("full_name"),
   ]);
 
@@ -62,17 +60,6 @@ export default async function FondateurDashboardPage({
   const allC3Profiles = (c3ProfilesRes.data || []) as { id: string; full_name: string }[];
   const allMatchesRaw = (matchesRes.data || []) as any[];
   const allMatches = allMatchesRaw.filter((m: any) => m.status !== "annule") as any[];
-  const platformHistory = (platformSettingsRes.data || []) as { fee_per_block: number; effective_date: string }[];
-
-  // ── Platform fee helper ───────────────────────────────────────────────────
-  function getFraisForDate(dateStr: string): number {
-    let frais = 1000;
-    for (const row of platformHistory) {
-      if (row.effective_date <= dateStr) frais = row.fee_per_block ?? 1000;
-      else break;
-    }
-    return frais;
-  }
 
   // Demo zone IDs
   const demoZoneIds = allZones.filter((z) => z.created_by === DEMO_ACCOUNT_ID).map((z) => z.id);
@@ -160,38 +147,6 @@ export default async function FondateurDashboardPage({
     const scopeSet = new Set(scopeMatchIds);
     visibleMatches = visibleMatches.filter((m: any) => scopeSet.has(m.id as string));
   }
-
-  // ── Core revenue engine ───────────────────────────────────────────────────
-  // For each match we determine the "billing units" (zone-days).
-  // Zone match    → 1 zone per day  (zone_id)
-  // ODCAV match   → home + away zones per day (if known), else 1 unit (match.id as proxy)
-  // This ensures ODCAV matches always generate revenue even if zone fields are null.
-
-  function getBillingUnitsForMatch(m: any): string[] {
-    if (m.zone_id) return [m.zone_id as string];
-    const units: string[] = [];
-    if (m.home_team_zone) units.push(m.home_team_zone as string);
-    if (m.away_team_zone) units.push(m.away_team_zone as string);
-    // Fallback: ODCAV match with no zone info → count as 1 unit using match id
-    if (units.length === 0) units.push(`match:${m.id as string}`);
-    return units;
-  }
-
-  // Build map: dayStr → Set<billingUnit>
-  function buildBillingByDay(matches: any[]): Map<string, Set<string>> {
-    const byDay = new Map<string, Set<string>>();
-    for (const m of matches) {
-      if (!m.match_date) continue;
-      const day = (m.match_date as string).split("T")[0];
-      if (!byDay.has(day)) byDay.set(day, new Set());
-      for (const unit of getBillingUnitsForMatch(m)) {
-        byDay.get(day)!.add(unit);
-      }
-    }
-    return byDay;
-  }
-
-  const billingByDay = buildBillingByDay(visibleMatches);
 
   // ── Demo exclusion (skipped when SA filter applied — demo naturally excluded) ──
   let demoRegScanned = 0, demoBilScanned = 0;
@@ -286,49 +241,51 @@ export default async function FondateurDashboardPage({
   const matchesCount = allMatches.length;
   const visibleMatchesCount = visibleMatches.length;
 
-  // ── 12-month revenue chart ────────────────────────────────────────────────
+  // ── 12-month revenue chart (scans × 10 FCFA par mois) ───────────────────
   const monthNames = ["Jan", "Fév", "Mar", "Avr", "Mai", "Jun", "Jul", "Aoû", "Sep", "Oct", "Nov", "Déc"];
-  const revenueChartData: { month: string; revenue: number }[] = [];
 
-  for (let i = 11; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    const monthLabel = `${monthNames[d.getMonth()]} ${d.getFullYear().toString().slice(2)}`;
-    let monthRevenue = 0;
-    const seenPairs = new Set<string>();
-    for (const [dayStr, units] of billingByDay) {
-      if (!dayStr.startsWith(monthKey)) continue;
-      for (const unit of units) {
-        const key = `${unit}|${dayStr}`;
-        if (!seenPairs.has(key)) {
-          seenPairs.add(key);
-          monthRevenue += getFraisForDate(dayStr);
-        }
+  const monthRanges = Array.from({ length: 12 }, (_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth() - (11 - i), 1);
+    const nextD = new Date(now.getFullYear(), now.getMonth() - (11 - i) + 1, 1);
+    return {
+      label: `${monthNames[d.getMonth()]} ${d.getFullYear().toString().slice(2)}`,
+      start: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01T00:00:00`,
+      end: `${nextD.getFullYear()}-${String(nextD.getMonth() + 1).padStart(2, "0")}-01T00:00:00`,
+    };
+  });
+
+  const monthScanCounts = await Promise.all(
+    monthRanges.map(async ({ start, end }) => {
+      const [bilRes, regRes] = await Promise.all([
+        withScopeFilter(
+          supabase.from("billeterie_scans").select("*", { count: "exact", head: true })
+            .gte("scanned_at", start).lt("scanned_at", end)
+        ),
+        withScopeFilter(
+          supabase.from("tickets").select("id", { count: "exact", head: true })
+            .eq("status", "scanne").eq("counts_as_revenue", true)
+            .gte("scanned_at", start).lt("scanned_at", end)
+        ),
+      ]);
+      let total = (bilRes.count || 0) + (regRes.count || 0);
+      if (demoMatchIds.length > 0 && scopeMatchIds === null) {
+        const [dBil, dReg] = await Promise.all([
+          supabase.from("billeterie_scans").select("*", { count: "exact", head: true })
+            .in("match_id", demoMatchIds).gte("scanned_at", start).lt("scanned_at", end),
+          supabase.from("tickets").select("id", { count: "exact", head: true })
+            .eq("status", "scanne").in("match_id", demoMatchIds)
+            .gte("scanned_at", start).lt("scanned_at", end),
+        ]);
+        total = Math.max(0, total - (dBil.count || 0) - (dReg.count || 0));
       }
-    }
-    revenueChartData.push({ month: monthLabel, revenue: monthRevenue });
-  }
+      return total;
+    })
+  );
 
-  // ── Daily platform chart (last 15 days by default) ───────────────────────
-  const defaultChartTo = today;
-  const defaultChartFrom = (() => {
-    const d = new Date(now);
-    d.setDate(d.getDate() - 14);
-    return d.toISOString().split("T")[0];
-  })();
-  const chartFrom = params.chartFrom || defaultChartFrom;
-  const chartTo = params.chartTo || defaultChartTo;
-
-  const dailyPlatformData: { date: string; label: string; revenue: number }[] = [];
-  const chartCursor = new Date(chartFrom + "T12:00:00");
-  const chartEnd = new Date(chartTo + "T12:00:00");
-  while (chartCursor <= chartEnd) {
-    const dayStr = chartCursor.toISOString().split("T")[0];
-    const label = chartCursor.toLocaleDateString("fr-FR", { day: "2-digit", month: "short" });
-    const units = billingByDay.get(dayStr) || new Set<string>();
-    dailyPlatformData.push({ date: dayStr, label, revenue: units.size * getFraisForDate(dayStr) });
-    chartCursor.setDate(chartCursor.getDate() + 1);
-  }
+  const revenueChartData = monthRanges.map(({ label }, idx) => ({
+    month: label,
+    revenue: monthScanCounts[idx] * 10,
+  }));
 
   // ── Filter lists for UI ──────────────────────────────────────────────────
   const filterSAList = superAdmins.map((s) => ({ id: s.id, name: s.full_name }));
@@ -442,23 +399,6 @@ export default async function FondateurDashboardPage({
         </CardHeader>
         <CardContent>
           <RevenueLineChart data={revenueChartData} />
-        </CardContent>
-      </Card>
-
-      {/* ── Daily platform chart ── */}
-      <Card>
-        <CardHeader className="pb-2">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
-            <CardTitle className="text-base">Recettes journalières — Frais Plateforme</CardTitle>
-            <p className="text-xs text-muted-foreground">
-              {new Date(chartFrom + "T12:00:00").toLocaleDateString("fr-FR", { day: "2-digit", month: "short" })}
-              {" → "}
-              {new Date(chartTo + "T12:00:00").toLocaleDateString("fr-FR", { day: "2-digit", month: "short" })}
-            </p>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <FraisPlateformeChart data={dailyPlatformData} />
         </CardContent>
       </Card>
 
