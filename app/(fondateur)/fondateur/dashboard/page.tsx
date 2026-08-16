@@ -6,6 +6,7 @@ import { formatFCFA } from "@/lib/format";
 import { RevenueLineChart } from "./revenue-line-chart";
 import { FraisPlateformeChart } from "./frais-plateforme-chart";
 import { FondateurFilters } from "./fondateur-filters";
+import { fetchAll } from "@/lib/supabase/paginate";
 import { Suspense } from "react";
 
 export const metadata = { title: "Dashboard Fondateur" };
@@ -213,6 +214,64 @@ export default async function FondateurDashboardPage({
     demoMonthReg = dMonReg.count || 0;
   }
 
+  // ── Per-organisateur breakdown for selected date ──────────────────────────
+  const [dailyBilScansDetail, dailyRegScansDetail] = await Promise.all([
+    fetchAll<{ match_id: string }>((from, to) =>
+      withScopeFilter(
+        supabase.from("billeterie_scans").select("match_id")
+          .gte("scanned_at", todayStart).lt("scanned_at", tomorrowStart)
+      ).range(from, to)
+    ),
+    fetchAll<{ match_id: string }>((from, to) =>
+      withScopeFilter(
+        supabase.from("tickets").select("match_id")
+          .eq("status", "scanne").eq("counts_as_revenue", true)
+          .gte("scanned_at", todayStart).lt("scanned_at", tomorrowStart)
+      ).range(from, to)
+    ),
+  ]);
+
+  // Build match → zone/c3 lookup from already-fetched allMatches
+  const matchMetaMap: Record<string, { zone_id: string | null; c3_id: string | null }> = {};
+  allMatches.forEach((m: any) => {
+    matchMetaMap[m.id as string] = {
+      zone_id: (m.zone_id as string | null) ?? null,
+      c3_id: (m.c3_account_id as string | null) ?? null,
+    };
+  });
+
+  const zoneScansDay: Record<string, number> = {};
+  const c3ScansDay: Record<string, number> = {};
+
+  const accumulateDayScans = (rows: { match_id: string }[]) => {
+    rows.forEach((s) => {
+      const meta = matchMetaMap[s.match_id];
+      if (!meta) return;
+      if (meta.zone_id && !demoZoneIdsSet.has(meta.zone_id)) {
+        zoneScansDay[meta.zone_id] = (zoneScansDay[meta.zone_id] || 0) + 1;
+      } else if (!meta.zone_id && meta.c3_id && meta.c3_id !== DEMO_ACCOUNT_ID) {
+        c3ScansDay[meta.c3_id] = (c3ScansDay[meta.c3_id] || 0) + 1;
+      }
+    });
+  };
+  accumulateDayScans(dailyBilScansDetail);
+  accumulateDayScans(dailyRegScansDetail);
+
+  const zoneNameMap: Record<string, string> = {};
+  allZones.forEach((z) => { zoneNameMap[z.id] = z.name; });
+  const c3NameMap: Record<string, string> = {};
+  allC3Profiles.forEach((c) => { c3NameMap[c.id] = c.full_name; });
+
+  type OrgEntry = { type: "zone" | "c3"; name: string; scans: number; frais: number };
+  const orgListDay: OrgEntry[] = [
+    ...Object.entries(zoneScansDay).map(([id, scans]): OrgEntry => ({
+      type: "zone", name: zoneNameMap[id] || id, scans, frais: scans * 10,
+    })),
+    ...Object.entries(c3ScansDay).map(([id, scans]): OrgEntry => ({
+      type: "c3", name: c3NameMap[id] || id, scans, frais: scans * 10,
+    })),
+  ].sort((a, b) => b.scans - a.scans);
+
   // ── Revenue cards (scans × 10 FCFA — même modèle pour les 3 cartes) ──────
   const totalAllScanned = (regularScannedRes.count || 0) + totalBilScans;
   const totalNonDemoScanned = Math.max(0, totalAllScanned - demoRegScanned - demoBilScanned);
@@ -400,6 +459,68 @@ export default async function FondateurDashboardPage({
         </CardHeader>
         <CardContent>
           <FraisPlateformeChart data={dailyPlatformData} />
+        </CardContent>
+      </Card>
+
+      {/* ── Organisateurs actifs — frais du jour ── */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">
+            Organisateurs actifs — {dateLabel}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          {orgListDay.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-8">
+              Aucun scan enregistré le {dateLabel}
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-xs text-muted-foreground">
+                    <th className="text-left px-4 py-2 font-medium">Organisateur</th>
+                    <th className="text-left px-4 py-2 font-medium hidden sm:table-cell">Type</th>
+                    <th className="text-right px-4 py-2 font-medium">Scans</th>
+                    <th className="text-right px-4 py-2 font-medium">Frais billetterie</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {orgListDay.map((org, i) => (
+                    <tr key={i} className="hover:bg-muted/30 transition-colors">
+                      <td className="px-4 py-2.5 font-medium">{org.name}</td>
+                      <td className="px-4 py-2.5 hidden sm:table-cell">
+                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                          org.type === "zone"
+                            ? "bg-blue-100 text-blue-700"
+                            : "bg-purple-100 text-purple-700"
+                        }`}>
+                          {org.type === "zone" ? "Zone" : "C3"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2.5 text-right tabular-nums">
+                        {org.scans.toLocaleString("fr-FR")}
+                      </td>
+                      <td className="px-4 py-2.5 text-right tabular-nums font-bold text-brand">
+                        {formatFCFA(org.frais)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t bg-muted/30 text-sm font-bold">
+                    <td className="px-4 py-2.5" colSpan={2}>Total</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums">
+                      {orgListDay.reduce((s, o) => s + o.scans, 0).toLocaleString("fr-FR")}
+                    </td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-brand">
+                      {formatFCFA(orgListDay.reduce((s, o) => s + o.frais, 0))}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
         </CardContent>
       </Card>
 
