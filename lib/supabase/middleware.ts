@@ -64,7 +64,7 @@ export async function updateSession(request: NextRequest) {
         .single();
 
       if (profile?.role === "fondateur") {
-        return NextResponse.redirect(new URL("/fondateur/dashboard", request.url));
+        return NextResponse.redirect(new URL("/fondateur/finances", request.url));
       }
     }
     return supabaseResponse;
@@ -81,10 +81,10 @@ export async function updateSession(request: NextRequest) {
 
       if (!profile) return supabaseResponse;
 
-      let redirectUrl = "/dashboard";
+      let redirectUrl = "/finances";
       if (profile.role === "caissier") redirectUrl = "/vente";
       if (profile.role === "portier") redirectUrl = "/scanner";
-      if (["fondateur", "assistant_fondateur", "billetterie_fondateur"].includes(profile.role)) redirectUrl = "/fondateur/dashboard";
+      if (["fondateur", "assistant_fondateur", "billetterie_fondateur"].includes(profile.role)) redirectUrl = "/fondateur/finances";
       return NextResponse.redirect(new URL(redirectUrl, request.url));
     }
     return supabaseResponse;
@@ -168,9 +168,9 @@ export async function updateSession(request: NextRequest) {
     "/invendus", "/cartes", "/parametres-odcav", "/parametres-c3", "/billeterie",
   ];
 
-  // Fondateur roles have their own dashboard — redirect them away from admin /dashboard
+  // Fondateur roles have their own finances page — redirect them away from admin /dashboard
   if (isFondateurRole && pathname === "/dashboard") {
-    return NextResponse.redirect(new URL("/fondateur/dashboard", request.url));
+    return NextResponse.redirect(new URL("/fondateur/finances", request.url));
   }
 
   // Fondateur roles may access /fondateur/* OR shared admin routes (/matchs, etc.)
@@ -178,7 +178,7 @@ export async function updateSession(request: NextRequest) {
   const fondateurAllowedAdminRoutes = adminRoutes.filter((r) => r !== "/dashboard");
   const isAdminRouteForFondateur = fondateurAllowedAdminRoutes.some((r) => pathname.startsWith(r));
   if (isFondateurRole && !isFondateurRoute && !isAdminRouteForFondateur) {
-    return NextResponse.redirect(new URL("/fondateur/dashboard", request.url));
+    return NextResponse.redirect(new URL("/fondateur/finances", request.url));
   }
   const caissierRoutes = ["/vente", "/mes-ventes"];
   const portierRoutes = ["/scanner"];
@@ -207,20 +207,21 @@ export async function updateSession(request: NextRequest) {
     !isFondateurRoute &&
     !isAdminRoute
   ) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+    return NextResponse.redirect(new URL("/finances", request.url));
   }
 
   if (
     isCaissierRoute &&
     !["caissier", "admin_zone", "super_admin", "c3"].includes(profile.role)
   ) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+    return NextResponse.redirect(new URL("/finances", request.url));
   }
 
   if (pathname === "/") {
-    let redirectUrl = "/dashboard";
+    let redirectUrl = "/finances";
     if (profile.role === "caissier") redirectUrl = "/vente";
-    if (isFondateurRole) redirectUrl = "/fondateur/dashboard";
+    if (profile.role === "portier") redirectUrl = "/scanner";
+    if (isFondateurRole) redirectUrl = "/fondateur/finances";
     return NextResponse.redirect(new URL(redirectUrl, request.url));
   }
 

@@ -5,7 +5,6 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
-  LayoutDashboard,
   Users,
   MapPin,
   Trophy,
@@ -35,10 +34,9 @@ interface SidebarProps {
 }
 
 const adminLinks = [
-  { href: "/dashboard", label: "Tableau de bord", icon: LayoutDashboard },
+  { href: "/finances", label: "Finances", icon: Wallet },
   { href: "/equipes", label: "Équipes", icon: Shield },
   { href: "/matchs", label: "Matchs", icon: Trophy },
-  { href: "/finances", label: "Finances", icon: Wallet },
   { href: "/invendus", label: "Invendus", icon: PackageX },
   { href: "/rapports", label: "Rapports", icon: FileText },
   { href: "/utilisateurs", label: "Utilisateurs", icon: Users },
@@ -54,10 +52,9 @@ const superAdminLinks = [
 
 // C3 has no zone, no cartes, no Paramètre Zone — their own settings
 const c3Links = [
-  { href: "/dashboard",      label: "Tableau de bord",  icon: LayoutDashboard },
+  { href: "/finances",       label: "Finances",          icon: Wallet },
   { href: "/equipes",        label: "Équipes",           icon: Shield },
   { href: "/matchs",         label: "Matchs",            icon: Trophy },
-  { href: "/finances",       label: "Finances",          icon: Wallet },
   { href: "/invendus",       label: "Invendus",          icon: PackageX },
   { href: "/rapports",       label: "Rapports",          icon: FileText },
   { href: "/utilisateurs",   label: "Utilisateurs",      icon: Users },
@@ -83,7 +80,7 @@ export function SidebarAdmin({ userName, userRole, zoneName, permittedModules }:
     permittedModules && permittedModules.length > 0
       ? baseLinks.filter((l) => {
           const key = l.href.replace(/^\//, "");
-          return key === "dashboard" || permittedModules.includes(key);
+          return key === "finances" || permittedModules.includes(key);
         })
       : baseLinks;
 
