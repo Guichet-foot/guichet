@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { Users, LogOut, Menu, X, Settings2, Trophy, IdCard, Shield, TicketCheck, UserCog, PackageX, Wallet } from "lucide-react";
+import { LayoutDashboard, Users, LogOut, Menu, X, Settings2, Trophy, IdCard, Shield, TicketCheck, UserCog, PackageX, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { ROLE_LABELS } from "@/lib/constants";
@@ -16,13 +16,14 @@ interface SidebarFondateurProps {
 }
 
 const ALL_LINKS = [
-  { key: "finances",     href: "/fondateur/finances",     label: "Finances",       icon: Wallet },
+  { key: "dashboard",    href: "/fondateur/dashboard",    label: "Dashboard",      icon: LayoutDashboard },
   { key: "super-admins", href: "/fondateur/super-admins", label: "Super Admins",   icon: Users },
   { key: "matchs",       href: "/fondateur/matchs",       label: "Matchs",         icon: Trophy },
   { key: "cartes",       href: "/fondateur/cartes",       label: "Cartes d'accès", icon: IdCard },
   { key: "equipes",      href: "/fondateur/equipes",      label: "Équipes",        icon: Shield },
   { key: "billeterie",   href: "/fondateur/billeterie",   label: "Billetterie",    icon: TicketCheck },
   { key: "invendus",     href: "/fondateur/invendus",     label: "Invendus",       icon: PackageX, fondateurOnly: true },
+  { key: "finances",     href: "/fondateur/finances",     label: "Finances",       icon: Wallet, fondateurOnly: true },
   { key: "parametres",   href: "/fondateur/parametres",   label: "Paramètres",     icon: Settings2 },
   // Utilisateurs: visible only to the fondateur role itself
   { key: "utilisateurs", href: "/fondateur/utilisateurs", label: "Utilisateurs",   icon: UserCog, fondateurOnly: true },
@@ -42,8 +43,10 @@ export function SidebarFondateur({ userName, userRole, permittedModules }: Sideb
 
   // Filter visible links
   const visibleLinks = ALL_LINKS.filter((link) => {
-    // "fondateurOnly" links are exclusive to the fondateur role
+    // "utilisateurs" is exclusive to the fondateur role
     if ("fondateurOnly" in link && link.fondateurOnly && !isFondateur) return false;
+    // Dashboard is always visible
+    if (link.key === "dashboard") return true;
     // Fondateur sees everything
     if (isFondateur) return true;
     // Sub-roles see only permitted modules
