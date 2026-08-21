@@ -302,14 +302,19 @@ export default async function FinancesPage({
   const balance = totalRevenue - totalExpenses - odcavCommission - fraisPlateformePeriod;
 
   // ── Matches for filter dropdown ───────────────────────────────────
+  // For C3: only show their own billeterie matches (not affiliated zone matches)
   let matchesListQuery = supabase
     .from("matches")
     .select("id, home_team, away_team")
     .order("match_date", { ascending: false });
-  if (c3AllMatchIds !== null) {
+  if (c3AccountId) {
+    matchesListQuery = (matchesListQuery as any).eq("c3_account_id", c3AccountId);
+  } else if (c3AllMatchIds !== null) {
     if (c3AllMatchIds.length > 0) matchesListQuery = (matchesListQuery as any).in("id", c3AllMatchIds);
     else matchesListQuery = (matchesListQuery as any).eq("id", "00000000-0000-0000-0000-000000000000");
-  } else if (zoneId) matchesListQuery = matchesListQuery.eq("zone_id", zoneId);
+  } else if (zoneId) {
+    matchesListQuery = matchesListQuery.eq("zone_id", zoneId);
+  }
   const { data: matchesList } = await matchesListQuery;
   const filterMatches = (matchesList || []).map((m: any) => ({
     id: m.id,
