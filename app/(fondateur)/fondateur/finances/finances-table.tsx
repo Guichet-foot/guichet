@@ -22,6 +22,8 @@ import {
   Clock,
   Filter,
   Layers,
+  FileDown,
+  Loader2,
 } from "lucide-react";
 import { formatFCFA } from "@/lib/format";
 import { toast } from "sonner";
@@ -57,6 +59,7 @@ export function FinancesTable({ rows }: Props) {
   const [filterPaid, setFilterPaid] = useState<"all" | "paid" | "unpaid">("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [pdfLoading, setPdfLoading] = useState(false);
 
   // ── Totaux (toujours sur l'ensemble) ──────────────────────────────
   const totalRevenus = rows.reduce((s, r) => s + r.frais, 0);
@@ -78,6 +81,34 @@ export function FinancesTable({ rows }: Props) {
   });
 
   const hasFilter = filterType !== "all" || filterPaid !== "all" || !!search || !!dateFrom || !!dateTo;
+
+  async function handlePdf() {
+    setPdfLoading(true);
+    try {
+      const res = await fetch("/api/reports/fondateur", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          from: dateFrom || undefined,
+          to: dateTo || undefined,
+          type: filterType === "odcav" ? "all" : filterType,
+        }),
+      });
+      if (!res.ok) { toast.error("Erreur lors de la génération du rapport"); return; }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `rapport-financier${dateFrom ? `-${dateFrom}` : ""}${dateTo ? `-au-${dateTo}` : ""}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("Rapport PDF téléchargé");
+    } catch {
+      toast.error("Erreur réseau");
+    } finally {
+      setPdfLoading(false);
+    }
+  }
 
   function handleToggle(row: FinanceRow) {
     setPendingKey(row.accountKey);
@@ -163,14 +194,28 @@ export function FinancesTable({ rows }: Props) {
             </button>
           ))}
 
-          {hasFilter && (
-            <button
-              className="text-xs text-muted-foreground underline ml-auto"
-              onClick={() => { setFilterType("all"); setFilterPaid("all"); setSearch(""); setDateFrom(""); setDateTo(""); }}
+          <div className="ml-auto flex items-center gap-2">
+            {hasFilter && (
+              <button
+                className="text-xs text-muted-foreground underline"
+                onClick={() => { setFilterType("all"); setFilterPaid("all"); setSearch(""); setDateFrom(""); setDateTo(""); }}
+              >
+                Effacer
+              </button>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handlePdf}
+              disabled={pdfLoading}
+              className="h-8 text-xs"
             >
-              Effacer
-            </button>
-          )}
+              {pdfLoading
+                ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                : <FileDown className="h-3.5 w-3.5 mr-1.5" />}
+              Télécharger PDF
+            </Button>
+          </div>
         </div>
 
         <div className="flex flex-wrap gap-3">

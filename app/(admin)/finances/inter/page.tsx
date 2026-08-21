@@ -6,6 +6,7 @@ import { Banknote, TrendingDown, TrendingUp, Landmark, PackageX, Layers, ScanLin
 import { formatFCFA, formatDate } from "@/lib/format";
 import { FinancesOdcavTabs } from "@/app/(admin)/finances/finances-odcav-tabs";
 import { InterFilters } from "./inter-filters";
+import { InterPdfButton } from "./pdf-button";
 import { fetchAll } from "@/lib/supabase/paginate";
 
 export const metadata = { title: "Finances Inter-Zones" };
@@ -429,6 +430,7 @@ export default async function FinancesInterPage({
           <h1 className="text-2xl font-bold font-heading">Finances {tabLabel}</h1>
           <p className="text-muted-foreground">{periodLabel}</p>
         </div>
+        <InterPdfButton from={params.from} to={params.to} />
       </div>
 
       <InterFilters
