@@ -17,6 +17,7 @@ import { FinancesOdcavTabs } from "./finances-odcav-tabs";
 import { fetchAll } from "@/lib/supabase/paginate";
 import { ExpenseRowActions } from "./expense-row-actions";
 import { FicheRecettesButton } from "./fiche-recettes-button";
+import { ZonePdfButton } from "./zone-pdf-button";
 
 export const metadata = { title: "Finances" };
 
@@ -339,6 +340,13 @@ export default async function FinancesPage({
           <p className="text-muted-foreground print:hidden">{periodLabel}</p>
         </div>
         <div className="flex flex-wrap gap-2 print:hidden">
+          <ZonePdfButton
+            fromIso={dateStart.toISOString()}
+            toIso={dateEnd.toISOString()}
+            zoneId={zoneId}
+            c3AccountId={c3AccountId}
+            matchId={filterMatchId}
+          />
           <FicheRecettesButton
             date={period === "jour" ? (params.date || today) : today}
             zoneId={zoneId}
