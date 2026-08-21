@@ -89,24 +89,15 @@ export async function POST(request: Request) {
       ? `Le ${format(dateStart, "d MMMM yyyy", { locale: fr })}`
       : `Du ${format(dateStart, "d MMMM yyyy", { locale: fr })} au ${format(dateEnd, "d MMMM yyyy", { locale: fr })}`;
 
-    // C3 match IDs (own matches + affiliated zone matches)
-    // Affiliated zones are stored in profiles.c3_zone_ids, NOT via zones.created_by
+    // C3 match IDs: only their own billeterie matches (c3_account_id),
+    // zone matches from affiliated zones are separate competitions and are excluded.
     let c3AllMatchIds: string[] | null = null;
     if (c3AccountId) {
-      const [c3MatchRes, c3ProfileRes] = await Promise.all([
-        adminSupabase.from("matches").select("id").eq("c3_account_id", c3AccountId),
-        adminSupabase.from("profiles").select("c3_zone_ids").eq("id", c3AccountId).single(),
-      ]);
-      const c3ZoneIds: string[] = (c3ProfileRes.data as any)?.c3_zone_ids || [];
-      const ids: string[] = ((c3MatchRes.data || []) as any[]).map((m: any) => m.id as string);
-      if (c3ZoneIds.length > 0) {
-        const { data: zoneMatchData } = await adminSupabase
-          .from("matches")
-          .select("id")
-          .in("zone_id", c3ZoneIds);
-        ids.push(...((zoneMatchData || []) as any[]).map((m: any) => m.id as string));
-      }
-      c3AllMatchIds = [...new Set(ids)];
+      const { data: c3MatchRes } = await adminSupabase
+        .from("matches")
+        .select("id")
+        .eq("c3_account_id", c3AccountId);
+      c3AllMatchIds = ((c3MatchRes || []) as any[]).map((m: any) => m.id as string);
     }
 
     // Matches in period
@@ -286,7 +277,7 @@ export async function POST(request: Request) {
     const fraisPlateformePeriod = totalScanned * 10;
     const recetteNette = totalRevenue - odcavCommission - fraisPlateformePeriod;
 
-    // ── Per-match rows ────────────────────────────────────────────────────────
+    // ── Per-match rows — only matches that have been scanned (exclude future/unplayed) ──
     const matchRows: ZoneReportMatch[] = matchIdsInPeriod
       .map((mid) => ({
         label: matchLabelMap.get(mid) || mid,
@@ -294,6 +285,7 @@ export async function POST(request: Request) {
         scanned: (matchRegScanned.get(mid) || 0) + (matchBilScanned.get(mid) || 0),
         revenue: (matchRegRevenue.get(mid) || 0) + (matchBilRevenue.get(mid) || 0),
       }))
+      .filter((m) => m.scanned > 0)
       .sort((a, b) => b.revenue - a.revenue);
 
     const reportData = {

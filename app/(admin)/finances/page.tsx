@@ -57,19 +57,15 @@ export default async function FinancesPage({
   const adminSupabase = await createAdminClient();
   const zoneId = effectiveZoneId;
 
-  // C3 voit ses propres matchs + matchs des zones affiliées
+  // C3 voit uniquement ses propres matchs billeterie (c3_account_id),
+  // pas les matchs des zones affiliées qui sont des compétitions séparées.
   let c3AllMatchIds: string[] | null = null;
   if (c3AccountId) {
-    const queries: any[] = [
-      adminSupabase.from("matches").select("id").eq("c3_account_id", c3AccountId),
-    ];
-    if (c3ZoneIds.length > 0) {
-      queries.push(adminSupabase.from("matches").select("id").in("zone_id", c3ZoneIds));
-    }
-    const results: any[] = await Promise.all(queries);
-    c3AllMatchIds = [...new Set(
-      results.flatMap((r) => (r.data || []).map((m: any) => m.id as string))
-    )];
+    const { data: c3Matches } = await adminSupabase
+      .from("matches")
+      .select("id")
+      .eq("c3_account_id", c3AccountId);
+    c3AllMatchIds = ((c3Matches || []) as any[]).map((m: any) => m.id as string);
   }
 
   const today = new Date().toISOString().split("T")[0];
@@ -302,10 +298,12 @@ export default async function FinancesPage({
   const balance = totalRevenue - totalExpenses - odcavCommission - fraisPlateformePeriod;
 
   // ── Matches for filter dropdown ───────────────────────────────────
-  // For C3: only show their own billeterie matches (not affiliated zone matches)
+  // Only show past matches (match_date <= today) with the right scope
+  const todayIso = new Date().toISOString();
   let matchesListQuery = supabase
     .from("matches")
-    .select("id, home_team, away_team")
+    .select("id, home_team, away_team, match_date")
+    .lte("match_date", todayIso)
     .order("match_date", { ascending: false });
   if (c3AccountId) {
     matchesListQuery = (matchesListQuery as any).eq("c3_account_id", c3AccountId);
