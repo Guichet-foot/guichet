@@ -238,7 +238,7 @@ export default async function FinancesPage({
               .range(from, to)
           ),
           fetchAll<any>((from, to) =>
-            adminSupabase.from("billeterie_scans").select("ticket_id, scanned_at")
+            adminSupabase.from("billeterie_scans").select("ticket_id, scanned_at, match_id")
               .in("match_id", allBilMatchIds).range(from, to)
           ),
         ]);
@@ -255,7 +255,11 @@ export default async function FinancesPage({
         });
 
         const bilTicketIdSet = new Set(Object.keys(ticketIdToBilId));
-        const relevantScans = allBilScans.filter((s: any) => bilTicketIdSet.has(s.ticket_id as string));
+        // Limit to scans for this zone's own matches — prevents cross-zone billeteries
+        // from inflating counts with scans that belong to other zones.
+        const relevantScans = allBilScans.filter((s: any) =>
+          bilTicketIdSet.has(s.ticket_id as string) && scanMatchIdSet.has(s.match_id as string)
+        );
 
         const dateStartMs = dateStart.getTime();
         const dateEndMs = dateEnd.getTime();

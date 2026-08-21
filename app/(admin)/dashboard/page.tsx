@@ -689,12 +689,16 @@ export default async function DashboardPage({
         ])];
         const allBilScans = allBilMatchIds2.length > 0
           ? await fetchAll<any>((from, to) =>
-              adminClient.from("billeterie_scans").select("ticket_id, scanned_at")
+              adminClient.from("billeterie_scans").select("ticket_id, scanned_at, match_id")
                 .in("match_id", allBilMatchIds2).range(from, to)
             )
           : [];
 
-        const relevantScans = allBilScans.filter((s: any) => bilTicketIdSet.has(s.ticket_id as string));
+        // Limit to scans for this zone's own matches — prevents cross-zone billeteries
+        // from inflating counts with scans that belong to other zones.
+        const relevantScans = allBilScans.filter((s: any) =>
+          bilTicketIdSet.has(s.ticket_id as string) && scanMatchIdSet.has(s.match_id as string)
+        );
 
         const dateStartMs = dateStart2.getTime();
         const dateEndMs = dateEnd2.getTime();
