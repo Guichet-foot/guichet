@@ -586,160 +586,74 @@ export default async function DashboardPage({
     );
   }
 
-  let bilPrinted = 0, bilScanned = 0, bilRevenue = 0;
+  let bilPrinted = 0, bilAllTimeScanned = 0, bilScanned = 0, bilRevenue = 0;
   {
-    // Pour les scans : utiliser TOUS les matchs C3 (pas seulement ceux de la période)
-    // car le scan peut être attribué à un match antérieur encore en_cours via la chaîne.
-    // C3 accounts: their own match list. Zone accounts: ALL zone matches so the
-    // billeterie is found even when today's new match isn't in its match_ids yet.
+    // Scans billeterie filtrés par date de scan (scanned_at) pour les matchs de la zone
     const scanMatchIds = c3AllMatchIds !== null ? c3AllMatchIds : allScopeMatchIds;
     if (scanMatchIds.length > 0) {
       const scanMatchIdSet = new Set(scanMatchIds);
-      const { data: allBilsRaw } = await adminClient.from("billeterie").select("id, price, match_ids, categories, zone_id");
-      const allBils = (allBilsRaw || []) as any[];
 
-      // Toutes les billeteries C3 (pour la couverture des scans)
-      // Si une billeterie a un zone_id explicite appartenant à une autre zone, on l'exclut
-      // pour éviter la contamination croisée entre zones.
-      const allC3Bils = allBils.filter((b: any) => {
-        // zone_id d'une AUTRE zone → toujours exclure (source de vérité explicite)
+      // Billeteries de la zone (pour bilPrinted + lookup prix)
+      const { data: allBilsRaw } = await adminClient
+        .from("billeterie").select("id, price, match_ids, categories, zone_id");
+      const zoneBils = (allBilsRaw || []).filter((b: any) => {
         if (b.zone_id && zoneFilter && b.zone_id !== zoneFilter) return false;
-        const matchIds: string[] = b.match_ids || [];
-        // Doit avoir au moins un match_id dans le scope courant
-        // (les billeteries sans match_ids sont gérées par le bloc supplémentaire)
-        if (!matchIds.some((id) => scanMatchIdSet.has(id))) return false;
-        // On n'applique plus de check cross-zone strict sur les match_ids hors-scope :
-        // certains matchs n'ont pas encore zone_id dans la DB, ce qui ferait exclure
-        // à tort des billeteries légitimes. La protection se fait via zone_id explicite.
-        return true;
+        return (b.match_ids || []).some((id: string) => scanMatchIdSet.has(id));
       });
-      const allC3BilIds = allC3Bils.map((b: any) => b.id as string);
+      const zoneBilIds = zoneBils.map((b: any) => b.id as string);
       const bilPriceMap: Record<string, number> = {};
-      const bilCatMap2: Record<string, Array<{name: string; price: number}>> = {};
-      allC3Bils.forEach((b: any) => {
+      const bilCatMap2: Record<string, Array<{ name: string; price: number }>> = {};
+      zoneBils.forEach((b: any) => {
         bilPriceMap[b.id] = b.price || 0;
         if (b.categories) bilCatMap2[b.id] = b.categories;
       });
 
-      // C3: billeteries matching period matches → bilPrinted reflects period window
-      // Zone: all found billeteries — scanned_at is the temporal anchor, not match_date
-      const periodMatchSet = new Set(matchIdsInPeriod);
-      const bilsInPeriod = c3AllMatchIds !== null
-        ? allC3Bils.filter((b: any) => (b.match_ids || []).some((id: string) => periodMatchSet.has(id)))
-        : allC3Bils;
-      const periodBilIdSet = new Set(bilsInPeriod.map((b: any) => b.id as string));
-
-      // Partenaires indirects : billeteries partageant des matchs avec bilsInPeriod
-      const periodBilMatchIds2 = new Set<string>(
-        bilsInPeriod.flatMap((b: any) => (b.match_ids || []) as string[])
-      );
-      const allC3BilIdSet2 = new Set(allC3BilIds);
-      // a) dans allC3Bils mais pas dans periodBilIdSet
-      const indirectFromC3 = allC3Bils.filter((b: any) => {
-        if (periodBilIdSet.has(b.id)) return false;
-        const bm: string[] = b.match_ids || [];
-        if (bm.some((id: string) => periodMatchSet.has(id))) return false;
-        return bm.some((id: string) => periodBilMatchIds2.has(id));
-      });
-      // b) hors de allC3Bils, partageant des matchs avec bilsInPeriod
-      const indirectOutside2 = allBils.filter((b: any) => {
-        if (allC3BilIdSet2.has(b.id)) return false;
-        if (b.zone_id && zoneFilter && b.zone_id !== zoneFilter) return false;
-        const bm: string[] = b.match_ids || [];
-        if (bm.some((id: string) => scanMatchIdSet.has(id))) return false;
-        return bm.some((id: string) => periodBilMatchIds2.has(id));
-      });
-      const indirectBilIds2 = [
-        ...indirectFromC3.map((b: any) => b.id as string),
-        ...indirectOutside2.map((b: any) => b.id as string),
-      ];
-      indirectOutside2.forEach((b: any) => {
-        bilPriceMap[b.id] = b.price || 0;
-        if (b.categories) bilCatMap2[b.id] = b.categories;
-      });
-      const outsideIds2 = indirectOutside2.map((b: any) => b.id as string);
-      const allFetchBilIds2 = [...allC3BilIds, ...outsideIds2];
-
-      if (allFetchBilIds2.length > 0) {
-        // Step 1: fetch tickets first to get ticket IDs
-        const bilAllTickets = await fetchAll<any>((from, to) =>
-          adminClient.from("billeterie_tickets").select("id, billeterie_id, withdrawn, category_name")
-            .in("billeterie_id", allFetchBilIds2).range(from, to)
+      if (zoneBilIds.length > 0) {
+        // Tickets billeterie : pour bilPrinted + lookup prix revenue
+        const allBilTickets = await fetchAll<any>((from, to) =>
+          adminClient.from("billeterie_tickets")
+            .select("id, billeterie_id, withdrawn, category_name")
+            .in("billeterie_id", zoneBilIds).range(from, to)
         );
-
-        const nonWithdrawnByBil: Record<string, number> = {};
-        const bilTicketIdMap: Record<string, string> = {};
-        const bilTicketCatMap2: Record<string, string | null> = {};
-        bilAllTickets.forEach((t: any) => {
-          bilTicketIdMap[t.id as string] = t.billeterie_id as string;
-          bilTicketCatMap2[t.id as string] = t.category_name ?? null;
-          if (!t.withdrawn) {
-            nonWithdrawnByBil[t.billeterie_id] = (nonWithdrawnByBil[t.billeterie_id] || 0) + 1;
-          }
+        const ticketToBilId: Record<string, string> = {};
+        const ticketToCat: Record<string, string | null> = {};
+        allBilTickets.forEach((t: any) => {
+          ticketToBilId[t.id] = t.billeterie_id;
+          ticketToCat[t.id] = t.category_name ?? null;
+          if (!t.withdrawn) bilPrinted++;
         });
 
-        const bilTicketIdSet = new Set(Object.keys(bilTicketIdMap));
+        // Scans total (toutes dates) — pour le calcul invendus
+        const { count: atCount } = await adminClient
+          .from("billeterie_scans")
+          .select("*", { count: "exact", head: true })
+          .in("match_id", [...scanMatchIds]);
+        bilAllTimeScanned = atCount || 0;
 
-        // Step 2: fetch scans by match_id (like Finance page) — avoids .in() on thousands of
-        // ticket_ids which can exceed Supabase URL limits. allBilMatchIds contains only
-        // the match_ids from the billeteries themselves (typically < 100).
-        const allBilMatchIds2 = [...new Set([
-          ...allC3Bils.flatMap((b: any) => (b.match_ids || []) as string[]),
-          ...indirectOutside2.flatMap((b: any) => (b.match_ids || []) as string[]),
-        ])];
-        const allBilScans = allBilMatchIds2.length > 0
-          ? await fetchAll<any>((from, to) =>
-              adminClient.from("billeterie_scans").select("ticket_id, scanned_at, match_id")
-                .in("match_id", allBilMatchIds2).range(from, to)
-            )
-          : [];
-
-        // Limit to scans for this zone's own matches — prevents cross-zone billeteries
-        // from inflating counts with scans that belong to other zones.
-        const relevantScans = allBilScans.filter((s: any) =>
-          bilTicketIdSet.has(s.ticket_id as string) && scanMatchIdSet.has(s.match_id as string)
-        );
-
-        const dateStartMs = dateStart2.getTime();
-        const dateEndMs = dateEnd2.getTime();
-
-        // Comptes totaux et période par billeterie (pour calcul bilPrinted)
-        const totalScansByBil: Record<string, number> = {};
-        const periodScansByBil: Record<string, number> = {};
-        relevantScans.forEach((s: any) => {
-          const bId = bilTicketIdMap[s.ticket_id as string];
-          if (!bId) return;
-          totalScansByBil[bId] = (totalScansByBil[bId] || 0) + 1;
-          const scannedAtMs = new Date(s.scanned_at as string).getTime();
-          if (scannedAtMs >= dateStartMs && scannedAtMs <= dateEndMs) {
-            periodScansByBil[bId] = (periodScansByBil[bId] || 0) + 1;
-          }
-        });
-
-        // bilPrinted = billets disponibles pour période + partenaires indirects
-        bilPrinted = [...periodBilIdSet, ...indirectBilIds2].reduce((sum: number, bId: string) => {
-          const nw = nonWithdrawnByBil[bId] || 0;
-          const ts = totalScansByBil[bId] || 0;
-          const ps = periodScansByBil[bId] || 0;
-          return sum + Math.max(0, nw - (ts - ps));
-        }, 0);
-
-        // bilScanned/bilRevenue = tous les scans de la période (toutes billeteries C3 confondues)
-        const periodBilScans = relevantScans.filter((s: any) => {
-          const scannedAtMs = new Date(s.scanned_at as string).getTime();
-          return scannedAtMs >= dateStartMs && scannedAtMs <= dateEndMs;
+        // Scans de la période — filtre uniquement sur la date du scan (scanned_at)
+        const periodBilScans = await fetchAll<any>((from, to) => {
+          const q = adminClient.from("billeterie_scans")
+            .select("ticket_id")
+            .in("match_id", [...scanMatchIds]);
+          return filterMatchId
+            ? q.range(from, to)
+            : q.gte("scanned_at", dateStart2.toISOString())
+                .lte("scanned_at", dateEnd2.toISOString())
+                .range(from, to);
         });
         bilScanned = periodBilScans.length;
-        bilRevenue = periodBilScans.reduce((s: number, sc: any) => {
-          const bId = bilTicketIdMap[sc.ticket_id as string];
-          if (!bId) return s;
-          const catName = bilTicketCatMap2[sc.ticket_id as string];
+
+        // Revenus : sum des prix des tickets scannés dans la période
+        bilRevenue = periodBilScans.reduce((sum: number, s: any) => {
+          const bId = ticketToBilId[s.ticket_id as string];
+          if (!bId) return sum;
+          const catName = ticketToCat[s.ticket_id as string];
           const cats = bilCatMap2[bId];
           if (cats && catName) {
             const cat = cats.find((c) => c.name === catName);
-            return s + (cat ? cat.price : 0);
+            return sum + (cat ? cat.price : 0);
           }
-          return s + (bilPriceMap[bId] || 0);
+          return sum + (bilPriceMap[bId] || 0);
         }, 0);
       }
     }
@@ -835,7 +749,7 @@ export default async function DashboardPage({
   const allTimeScopeScanned = allScopeTickets.filter((t: any) => t.status === "scanne").length;
   const totalScanned    = periodScannedTickets.length + bilScanned;
   // Unsold = all printed - all ever scanned (remaining blocs in circulation)
-  const totalUnsold     = Math.max(0, totalPrinted - allTimeScopeScanned - bilScanned);
+  const totalUnsold     = Math.max(0, totalPrinted - allTimeScopeScanned - bilAllTimeScanned);
   // Blocs imprimés = total imprimé / 100 (comme la page Finances)
   const totalBlocs      = Math.floor(totalPrinted / 100);
   const totalUnsoldValue = printedTickets

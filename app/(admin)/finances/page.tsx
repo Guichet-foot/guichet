@@ -164,140 +164,80 @@ export default async function FinancesPage({
     );
   }
 
-  // ── Billeterie tickets covering matches for this account ─────────────
+  // ── Billeterie — scans filtrés par date de scan pour les matchs de la zone ──
   let bilPrinted = 0;
+  let bilAllTimeScanned = 0;
   let bilScanned = 0;
   let bilRevenue = 0;
 
   {
-    // C3: own match list. Zone: ALL zone matches so billeterie is found even when
-    // today's new match isn't in its match_ids array yet.
     const scanMatchIds = c3AllMatchIds !== null ? c3AllMatchIds : allScopeMatchIds;
+
     if (scanMatchIds.length > 0) {
       const scanMatchIdSet = new Set(scanMatchIds);
-      const { data: allBils } = await adminSupabase.from("billeterie").select("id, price, match_ids, categories");
 
-      const allC3Bils = (allBils || []).filter((b: any) =>
+      // Billeteries de la zone (pour bilPrinted + lookup prix)
+      const { data: allBilsRaw } = await adminSupabase
+        .from("billeterie").select("id, price, match_ids, categories");
+      const zoneBils = (allBilsRaw || []).filter((b: any) =>
         (b.match_ids || []).some((id: string) => scanMatchIdSet.has(id))
       );
-      const allC3BilIds = allC3Bils.map((b: any) => b.id as string);
+      const zoneBilIds = zoneBils.map((b: any) => b.id as string);
+
       const bilPriceMap: Record<string, number> = {};
-      const bilCatMapF: Record<string, Array<{name: string; price: number}>> = {};
-      allC3Bils.forEach((b: any) => {
+      const bilCatMap: Record<string, Array<{ name: string; price: number }>> = {};
+      zoneBils.forEach((b: any) => {
         bilPriceMap[b.id] = b.price || 0;
-        if (b.categories) bilCatMapF[b.id] = b.categories;
+        if (b.categories) bilCatMap[b.id] = b.categories;
       });
 
-      // C3: billeteries matching period matches. Zone: all found billeteries —
-      // scanned_at is the temporal anchor, not match_date.
-      const periodMatchSet = new Set(matchIdsInPeriod);
-      const bilsInPeriod = c3AllMatchIds !== null
-        ? allC3Bils.filter((b: any) => (b.match_ids || []).some((id: string) => periodMatchSet.has(id)))
-        : allC3Bils;
-      const periodBilIdSet = new Set(bilsInPeriod.map((b: any) => b.id as string));
-
-      // Partenaires indirects : billeteries partageant des matchs avec bilsInPeriod
-      const periodBilMatchIdsF = new Set<string>(
-        bilsInPeriod.flatMap((b: any) => (b.match_ids || []) as string[])
-      );
-      const allC3BilIdSetF = new Set(allC3BilIds);
-      const indirectFromC3F = allC3Bils.filter((b: any) => {
-        if (periodBilIdSet.has(b.id)) return false;
-        const bm: string[] = b.match_ids || [];
-        if (bm.some((id: string) => periodMatchSet.has(id))) return false;
-        return bm.some((id: string) => periodBilMatchIdsF.has(id));
-      });
-      const indirectOutsideF = ((allBils || []) as any[]).filter((b: any) => {
-        if (allC3BilIdSetF.has(b.id)) return false;
-        const bm: string[] = b.match_ids || [];
-        if (bm.some((id: string) => scanMatchIdSet.has(id))) return false;
-        return bm.some((id: string) => periodBilMatchIdsF.has(id));
-      });
-      const indirectBilIdsF = [
-        ...indirectFromC3F.map((b: any) => b.id as string),
-        ...indirectOutsideF.map((b: any) => b.id as string),
-      ];
-      indirectOutsideF.forEach((b: any) => {
-        bilPriceMap[b.id] = b.price || 0;
-        if (b.categories) bilCatMapF[b.id] = b.categories;
-      });
-      const outsideIdsF = indirectOutsideF.map((b: any) => b.id as string);
-      const allFetchBilIdsF = [...allC3BilIds, ...outsideIdsF];
-
-      if (allFetchBilIdsF.length > 0) {
-        const allBilMatchIds = [...new Set([
-          ...allC3Bils.flatMap((b: any) => (b.match_ids || []) as string[]),
-          ...indirectOutsideF.flatMap((b: any) => (b.match_ids || []) as string[]),
-        ])];
-
-        const [bilAllTickets, allBilScans] = await Promise.all([
-          fetchAll<any>((from, to) =>
-            adminSupabase.from("billeterie_tickets")
-              .select("id, billeterie_id, withdrawn, category_name")
-              .in("billeterie_id", allFetchBilIdsF)
-              .range(from, to)
-          ),
-          fetchAll<any>((from, to) =>
-            adminSupabase.from("billeterie_scans").select("ticket_id, scanned_at, match_id")
-              .in("match_id", allBilMatchIds).range(from, to)
-          ),
-        ]);
-
-        const nonWithdrawnByBil: Record<string, number> = {};
-        const ticketIdToBilId: Record<string, string> = {};
-        const ticketCatMapF: Record<string, string | null> = {};
-        bilAllTickets.forEach((t: any) => {
-          ticketIdToBilId[t.id as string] = t.billeterie_id as string;
-          ticketCatMapF[t.id as string] = t.category_name ?? null;
-          if (!t.withdrawn) {
-            nonWithdrawnByBil[t.billeterie_id] = (nonWithdrawnByBil[t.billeterie_id] || 0) + 1;
-          }
-        });
-
-        const bilTicketIdSet = new Set(Object.keys(ticketIdToBilId));
-        // Limit to scans for this zone's own matches — prevents cross-zone billeteries
-        // from inflating counts with scans that belong to other zones.
-        const relevantScans = allBilScans.filter((s: any) =>
-          bilTicketIdSet.has(s.ticket_id as string) && scanMatchIdSet.has(s.match_id as string)
+      if (zoneBilIds.length > 0) {
+        // Tickets billeterie : pour bilPrinted + lookup prix par revenue
+        const allBilTickets = await fetchAll<any>((from, to) =>
+          adminSupabase.from("billeterie_tickets")
+            .select("id, billeterie_id, withdrawn, category_name")
+            .in("billeterie_id", zoneBilIds).range(from, to)
         );
 
-        const dateStartMs = dateStart.getTime();
-        const dateEndMs = dateEnd.getTime();
-
-        const totalScansByBil: Record<string, number> = {};
-        const periodScansByBil: Record<string, number> = {};
-        relevantScans.forEach((s: any) => {
-          const bilId = ticketIdToBilId[s.ticket_id as string];
-          if (!bilId) return;
-          totalScansByBil[bilId] = (totalScansByBil[bilId] || 0) + 1;
-          const scannedAtMs = new Date(s.scanned_at as string).getTime();
-          if (scannedAtMs >= dateStartMs && scannedAtMs <= dateEndMs) {
-            periodScansByBil[bilId] = (periodScansByBil[bilId] || 0) + 1;
-          }
+        const ticketToBilId: Record<string, string> = {};
+        const ticketToCat: Record<string, string | null> = {};
+        allBilTickets.forEach((t: any) => {
+          ticketToBilId[t.id] = t.billeterie_id;
+          ticketToCat[t.id] = t.category_name ?? null;
+          if (!t.withdrawn) bilPrinted++;
         });
 
-        bilPrinted = [...periodBilIdSet, ...indirectBilIdsF].reduce((sum: number, bilId: string) => {
-          const nonWithdrawn = nonWithdrawnByBil[bilId] || 0;
-          const totalScans = totalScansByBil[bilId] || 0;
-          const periodScansCount = periodScansByBil[bilId] || 0;
-          return sum + Math.max(0, nonWithdrawn - (totalScans - periodScansCount));
-        }, 0);
+        // Scans total (toutes dates) — pour le calcul invendus
+        const { count: allTimeCount } = await adminSupabase
+          .from("billeterie_scans")
+          .select("*", { count: "exact", head: true })
+          .in("match_id", [...scanMatchIds]);
+        bilAllTimeScanned = allTimeCount || 0;
 
-        const periodScans = relevantScans.filter((s: any) => {
-          const scannedAtMs = new Date(s.scanned_at as string).getTime();
-          return scannedAtMs >= dateStartMs && scannedAtMs <= dateEndMs;
+        // Scans de la période — filtre uniquement sur la date du scan (scanned_at)
+        const periodBilScans = await fetchAll<any>((from, to) => {
+          const q = adminSupabase.from("billeterie_scans")
+            .select("ticket_id")
+            .in("match_id", [...scanMatchIds]);
+          return filterMatchId
+            ? q.range(from, to)
+            : q.gte("scanned_at", dateStart.toISOString())
+                .lte("scanned_at", dateEnd.toISOString())
+                .range(from, to);
         });
-        bilScanned = periodScans.length;
-        bilRevenue = periodScans.reduce((s: number, scan: any) => {
-          const bilId = ticketIdToBilId[scan.ticket_id as string];
-          if (!bilId) return s;
-          const catName = ticketCatMapF[scan.ticket_id as string];
-          const cats = bilCatMapF[bilId];
+        bilScanned = periodBilScans.length;
+
+        // Revenus : sum des prix des tickets scannés dans la période
+        bilRevenue = periodBilScans.reduce((sum: number, s: any) => {
+          const bilId = ticketToBilId[s.ticket_id as string];
+          if (!bilId) return sum;
+          const catName = ticketToCat[s.ticket_id as string];
+          const cats = bilCatMap[bilId];
           if (cats && catName) {
             const cat = cats.find((c) => c.name === catName);
-            return s + (cat ? cat.price : 0);
+            return sum + (cat ? cat.price : 0);
           }
-          return s + (bilPriceMap[bilId] || 0);
+          return sum + (bilPriceMap[bilId] || 0);
         }, 0);
       }
     }
@@ -323,7 +263,7 @@ export default async function FinancesPage({
 
   const regularScanned = periodScannedTickets.length;
   const totalScanned = regularScanned + bilScanned;
-  const totalUnsold = Math.max(0, totalPrinted - allTimeScopeScanned - bilScanned);
+  const totalUnsold = Math.max(0, totalPrinted - allTimeScopeScanned - bilAllTimeScanned);
   const totalUnsoldValue = printedTickets
     .filter((t: any) => t.status !== "scanne")
     .reduce((sum: number, t: any) => sum + (t.price || 0), 0);
