@@ -251,7 +251,6 @@ export default async function FinancesPage({
   const allTimeScopeScanned = allScopeTickets.filter((t: any) => t.status === "scanne").length;
   const regularPrinted = printedTickets.length;
   const totalPrinted = regularPrinted + bilPrinted;
-  const totalBlocs = Math.floor(totalPrinted / 100);
 
   const periodScannedTickets = filterMatchId
     ? allScopeTickets.filter((t: any) => t.status === "scanne")
@@ -264,6 +263,8 @@ export default async function FinancesPage({
   const regularScanned = periodScannedTickets.length;
   const totalScanned = regularScanned + bilScanned;
   const totalUnsold = Math.max(0, totalPrinted - allTimeScopeScanned - bilAllTimeScanned);
+  // Blocs = billets non encore scannés (pas d'accumulation historique)
+  const totalBlocs = Math.floor(totalUnsold / 100);
   const totalUnsoldValue = printedTickets
     .filter((t: any) => t.status !== "scanne")
     .reduce((sum: number, t: any) => sum + (t.price || 0), 0);
@@ -370,12 +371,12 @@ export default async function FinancesPage({
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Blocs imprimés</p>
+                <p className="text-sm text-muted-foreground">Blocs disponibles</p>
                 <p className="text-2xl font-bold">{totalBlocs}</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {totalPrinted} billet{totalPrinted !== 1 ? "s" : ""}
-                  {totalPrinted % 100 !== 0 && totalPrinted > 0 && (
-                    <span className="text-orange-500"> · {totalPrinted % 100} hors bloc</span>
+                  {totalUnsold} billet{totalUnsold !== 1 ? "s" : ""} non scannés
+                  {totalUnsold % 100 !== 0 && totalUnsold > 0 && (
+                    <span className="text-orange-500"> · {totalUnsold % 100} hors bloc</span>
                   )}
                 </p>
               </div>

@@ -750,8 +750,8 @@ export default async function DashboardPage({
   const totalScanned    = periodScannedTickets.length + bilScanned;
   // Unsold = all printed - all ever scanned (remaining blocs in circulation)
   const totalUnsold     = Math.max(0, totalPrinted - allTimeScopeScanned - bilAllTimeScanned);
-  // Blocs imprimés = total imprimé / 100 (comme la page Finances)
-  const totalBlocs      = Math.floor(totalPrinted / 100);
+  // Blocs = billets non encore scannés (pas d'accumulation historique)
+  const totalBlocs      = Math.floor(totalUnsold / 100);
   const totalUnsoldValue = printedTickets
     .filter((t: any) => t.status !== "scanne")
     .reduce((s: number, t: any) => s + (t.price || 0), 0);
@@ -872,8 +872,8 @@ export default async function DashboardPage({
       <DashboardFilters matches={filterMatches} />
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <StatCard title="Blocs imprimés" value={totalBlocs}
-          subtitle={`${totalPrinted.toLocaleString("fr-FR")} billets${totalPrinted % 100 !== 0 && totalPrinted > 0 ? ` · ${totalPrinted % 100} hors bloc` : ""}`}
+        <StatCard title="Blocs disponibles" value={totalBlocs}
+          subtitle={`${totalUnsold.toLocaleString("fr-FR")} billets non scannés${totalUnsold % 100 !== 0 && totalUnsold > 0 ? ` · ${totalUnsold % 100} hors bloc` : ""}`}
           icon={<Layers className="h-5 w-5 text-brand" />} iconBg="bg-brand/10" />
         <StatCard title="Validés par scan" value={totalScanned.toLocaleString("fr-FR")}
           subtitle={totalPrinted > 0 ? `${Math.round((totalScanned / totalPrinted) * 100)}% des imprimés` : "0% des imprimés"}
