@@ -244,11 +244,15 @@ export function ZoneReport({ data }: { data: ZoneReportData }) {
         {data.matches.length > 0 && (
           <View>
             <Text style={s.sectionTitle}>
-              Détail des matchs — {data.matches.length} match{data.matches.length > 1 ? "s" : ""}
+              {data.organisateurType === "c3"
+                ? `Détail par journée — ${data.matches.length} journée${data.matches.length > 1 ? "s" : ""}`
+                : `Détail des matchs — ${data.matches.length} match${data.matches.length > 1 ? "s" : ""}`}
             </Text>
 
             <View style={s.thRow}>
-              <Text style={[s.thText, { flex: 3 }]}>Match</Text>
+              <Text style={[s.thText, { flex: 3 }]}>
+                {data.organisateurType === "c3" ? "Journée" : "Match"}
+              </Text>
               <Text style={[s.thText, { flex: 1.4 }]}>Date</Text>
               <Text style={[s.thText, { flex: 1, textAlign: "right" }]}>Scannés</Text>
               <Text style={[s.thText, { flex: 2, textAlign: "right" }]}>Recettes brutes</Text>
@@ -270,7 +274,9 @@ export function ZoneReport({ data }: { data: ZoneReportData }) {
             <View style={s.totRow}>
               <Text style={[s.totCell, { flex: 3 }]}>TOTAL</Text>
               <Text style={[s.totCell, { flex: 1.4 }]}>
-                {data.matches.length} match{data.matches.length > 1 ? "s" : ""}
+                {data.organisateurType === "c3"
+                  ? `${data.matches.length} journée${data.matches.length > 1 ? "s" : ""}`
+                  : `${data.matches.length} match${data.matches.length > 1 ? "s" : ""}`}
               </Text>
               <Text style={[s.totCell, { flex: 1, textAlign: "right" }]}>
                 {fmtN(data.totalScanned)}

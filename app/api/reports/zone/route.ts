@@ -195,6 +195,8 @@ export async function POST(request: Request) {
     let bilScanned = 0;
     const matchBilRevenue = new Map<string, number>();
     const matchBilScanned = new Map<string, number>();
+    // For C3: group by scanned_at date so totals match the platform's day filter
+    const bilScansByDate = new Map<string, { scanned: number; revenue: number }>();
 
     {
       const scanMatchIds = c3AllMatchIds !== null ? c3AllMatchIds : allScopeMatchIds;
@@ -228,7 +230,7 @@ export async function POST(request: Request) {
             fetchAll<any>((from, to) => {
               const q = adminSupabase
                 .from("billeterie_scans")
-                .select("ticket_id, match_id")
+                .select("ticket_id, match_id, scanned_at")
                 .in("match_id", [...scanMatchIds]);
               return filterMatchId
                 ? q.range(from, to)
@@ -246,11 +248,11 @@ export async function POST(request: Request) {
             ticketToCat[t.id] = t.category_name ?? null;
           });
 
-          bilScanned = periodBilScans.length;
-
           for (const s of periodBilScans) {
             const bilId = ticketToBilId[s.ticket_id as string];
             if (!bilId) continue;
+
+            bilScanned++;
             const mid = s.match_id as string;
             matchBilScanned.set(mid, (matchBilScanned.get(mid) || 0) + 1);
 
@@ -265,6 +267,13 @@ export async function POST(request: Request) {
             }
             bilRevenue += price;
             matchBilRevenue.set(mid, (matchBilRevenue.get(mid) || 0) + price);
+
+            // Per-date grouping (for C3: matches platform day-filter exactly)
+            if (c3AccountId && s.scanned_at) {
+              const dateStr = (s.scanned_at as string).split("T")[0];
+              const prev = bilScansByDate.get(dateStr) || { scanned: 0, revenue: 0 };
+              bilScansByDate.set(dateStr, { scanned: prev.scanned + 1, revenue: prev.revenue + price });
+            }
           }
         }
       }
@@ -277,16 +286,32 @@ export async function POST(request: Request) {
     const fraisPlateformePeriod = totalScanned * 10;
     const recetteNette = totalRevenue - odcavCommission - fraisPlateformePeriod;
 
-    // ── Per-match rows — only matches that have been scanned (exclude future/unplayed) ──
-    const matchRows: ZoneReportMatch[] = matchIdsInPeriod
-      .map((mid) => ({
-        label: matchLabelMap.get(mid) || mid,
-        date: matchDateMap.get(mid) || "",
-        scanned: (matchRegScanned.get(mid) || 0) + (matchBilScanned.get(mid) || 0),
-        revenue: (matchRegRevenue.get(mid) || 0) + (matchBilRevenue.get(mid) || 0),
-      }))
-      .filter((m) => m.scanned > 0)
-      .sort((a, b) => b.revenue - a.revenue);
+    // ── Rows ─────────────────────────────────────────────────────────────────
+    // For C3: group by scan date (matches platform day-filter view exactly)
+    // For Zone: group by match (regular tickets map cleanly to single-day events)
+    let matchRows: ZoneReportMatch[];
+
+    if (c3AccountId) {
+      matchRows = [...bilScansByDate.entries()]
+        .filter(([_, v]) => v.scanned > 0)
+        .map(([dateStr, v]) => ({
+          label: format(new Date(dateStr + "T12:00:00"), "EEE d MMM yyyy", { locale: fr }),
+          date: format(new Date(dateStr + "T12:00:00"), "dd/MM/yy"),
+          scanned: v.scanned,
+          revenue: v.revenue,
+        }))
+        .sort((a, b) => a.date.localeCompare(b.date));
+    } else {
+      matchRows = matchIdsInPeriod
+        .map((mid) => ({
+          label: matchLabelMap.get(mid) || mid,
+          date: matchDateMap.get(mid) || "",
+          scanned: (matchRegScanned.get(mid) || 0) + (matchBilScanned.get(mid) || 0),
+          revenue: (matchRegRevenue.get(mid) || 0) + (matchBilRevenue.get(mid) || 0),
+        }))
+        .filter((m) => m.scanned > 0)
+        .sort((a, b) => b.revenue - a.revenue);
+    }
 
     const reportData = {
       organisateurName,
