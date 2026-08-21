@@ -90,14 +90,15 @@ export async function POST(request: Request) {
       : `Du ${format(dateStart, "d MMMM yyyy", { locale: fr })} au ${format(dateEnd, "d MMMM yyyy", { locale: fr })}`;
 
     // C3 match IDs (own matches + affiliated zone matches)
+    // Affiliated zones are stored in profiles.c3_zone_ids, NOT via zones.created_by
     let c3AllMatchIds: string[] | null = null;
     if (c3AccountId) {
-      const [c3Matches, c3Zones] = await Promise.all([
+      const [c3MatchRes, c3ProfileRes] = await Promise.all([
         adminSupabase.from("matches").select("id").eq("c3_account_id", c3AccountId),
-        adminSupabase.from("zones").select("id").eq("created_by", c3AccountId),
+        adminSupabase.from("profiles").select("c3_zone_ids").eq("id", c3AccountId).single(),
       ]);
-      const c3ZoneIds = ((c3Zones.data || []) as any[]).map((z: any) => z.id as string);
-      const ids: string[] = ((c3Matches.data || []) as any[]).map((m: any) => m.id as string);
+      const c3ZoneIds: string[] = (c3ProfileRes.data as any)?.c3_zone_ids || [];
+      const ids: string[] = ((c3MatchRes.data || []) as any[]).map((m: any) => m.id as string);
       if (c3ZoneIds.length > 0) {
         const { data: zoneMatchData } = await adminSupabase
           .from("matches")
