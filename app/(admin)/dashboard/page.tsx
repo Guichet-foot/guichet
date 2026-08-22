@@ -367,7 +367,7 @@ export default async function DashboardPage({
     // ── Render ───────────────────────────────────────────────────────────
     return (
       <div className="space-y-5 sm:space-y-6">
-        <AutoRefresh intervalMs={15_000} />
+        <AutoRefresh intervalMs={3_000} />
         {/* Header */}
         {selectedZone && <ZoneBackHeader zoneName={selectedZone.name} />}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -862,7 +862,7 @@ export default async function DashboardPage({
 
   return (
     <div className="space-y-5 sm:space-y-6">
-      <AutoRefresh intervalMs={15_000} />
+      <AutoRefresh intervalMs={3_000} />
       {selectedZone && <ZoneBackHeader zoneName={selectedZone.name} />}
       <div>
         <h1 className="text-xl sm:text-2xl font-bold font-heading">Tableau de bord</h1>
