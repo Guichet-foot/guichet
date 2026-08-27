@@ -26,6 +26,7 @@ export interface BilleterieItem {
   name: string;
   matchIds: string[];
   price: number;
+  categories: BilCategory[] | null;
   createdAt: string;
   totalTickets: number;
   isDone: boolean;
@@ -295,7 +296,7 @@ export async function getBilleterieList(): Promise<BilleterieItem[]> {
     creatorIds = [ownerId, ...(subAdmins || []).map((p: any) => p.id as string)];
   }
 
-  let query = adminClient.from("billeterie").select("id, name, match_ids, price, created_at, is_done");
+  let query = adminClient.from("billeterie").select("id, name, match_ids, price, categories, created_at, is_done");
   if (profile.role !== "fondateur") {
     query = query.in("created_by", creatorIds);
   }
@@ -318,6 +319,7 @@ export async function getBilleterieList(): Promise<BilleterieItem[]> {
     name: b.name as string,
     matchIds: (b.match_ids || []) as string[],
     price: b.price as number,
+    categories: (b.categories as BilCategory[] | null) ?? null,
     createdAt: b.created_at as string,
     totalTickets: ticketMap[b.id] || 0,
     isDone: (b.is_done as boolean) ?? false,
@@ -846,16 +848,20 @@ export async function addMatchesToBilleterie(
 // ── Modifier un pass billetterie ───────────────────────────────────────────────
 export async function updateBilleterie(
   id: string,
-  formData: { name: string; price: number }
+  formData: { name: string; price: number; matchIds?: string[]; categories?: BilCategory[] | null }
 ): Promise<{ error?: string }> {
   await requireRole(["fondateur", "super_admin", "president_odcav", "tresorier"]);
   const adminClient = await createAdminClient();
 
-  const { error } = await adminClient
-    .from("billeterie")
-    .update({ name: formData.name.trim(), price: formData.price })
-    .eq("id", id);
+  const isMultiCat = formData.categories && formData.categories.length > 0;
+  const update: Record<string, unknown> = {
+    name: formData.name.trim(),
+    price: isMultiCat ? 0 : formData.price,
+  };
+  if (formData.matchIds !== undefined) update.match_ids = formData.matchIds;
+  if (formData.categories !== undefined) update.categories = isMultiCat ? formData.categories : null;
 
+  const { error } = await adminClient.from("billeterie").update(update).eq("id", id);
   if (error) return { error: error.message };
 
   revalidatePath("/billeterie");

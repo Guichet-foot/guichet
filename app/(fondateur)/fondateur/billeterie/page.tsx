@@ -80,8 +80,16 @@ export default async function FondateurBilletteriePage() {
               <div className="absolute top-3 left-3 z-10">
                 <BilleteriedonneToggle id={item.id} isDone={item.isDone} />
               </div>
-              <div className="absolute top-3 right-3 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
-                <BilleterieCardActions item={{ id: item.id, name: item.name, price: item.price }} />
+              <div className="absolute top-3 right-3 z-10 opacity-0 group-hover:opacity-100 transition-opacity sm:opacity-100">
+                <BilleterieCardActions
+                  item={{
+                    id: item.id,
+                    name: item.name,
+                    price: item.price,
+                    categories: item.categories,
+                    matchIds: item.matchIds,
+                  }}
+                />
               </div>
             </div>
           ))}
