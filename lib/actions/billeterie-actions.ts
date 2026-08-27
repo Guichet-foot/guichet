@@ -303,16 +303,19 @@ export async function getBilleterieList(): Promise<BilleterieItem[]> {
   const { data } = await query.order("created_at", { ascending: false });
   if (!data || data.length === 0) return [];
 
-  // Count tickets per billeterie (paginated — avoids server max_rows cap)
+  // Count tickets per billeterie using parallel COUNT-only queries (no data transfer)
   const billIds = data.map((b: any) => b.id as string);
-  const ticketRows = await fetchAll<any>((from, to) =>
-    adminClient.from("billeterie_tickets").select("billeterie_id").in("billeterie_id", billIds).eq("withdrawn", false).range(from, to)
-  );
-
   const ticketMap: Record<string, number> = {};
-  ticketRows.forEach((t: any) => {
-    ticketMap[t.billeterie_id] = (ticketMap[t.billeterie_id] || 0) + 1;
-  });
+  await Promise.all(
+    billIds.map(async (bId) => {
+      const { count } = await adminClient
+        .from("billeterie_tickets")
+        .select("*", { count: "exact", head: true })
+        .eq("billeterie_id", bId)
+        .eq("withdrawn", false);
+      ticketMap[bId] = count || 0;
+    })
+  );
 
   return data.map((b: any) => ({
     id: b.id as string,
