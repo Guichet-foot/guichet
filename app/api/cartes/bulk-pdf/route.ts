@@ -1,13 +1,11 @@
 import { NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
-import { renderToBuffer } from "@react-pdf/renderer";
-import { BulkCardsPDF, CardPDFData } from "@/lib/pdf/card-pdf";
 import QRCode from "qrcode";
 import { readFileSync } from "fs";
 import { join } from "path";
 import React from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import sharp from "sharp";
+import type { CardPDFData } from "@/lib/pdf/card-pdf";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -23,43 +21,23 @@ function extractStoragePath(url: string): string | null {
   return null;
 }
 
-// Fetch image bytes from URL with timeout + retry
-async function fetchBytes(url: string, retries = 2): Promise<ArrayBuffer | null> {
-  for (let attempt = 0; attempt <= retries; attempt++) {
+// Convert image bytes to JPEG data URL via sharp (with plain base64 fallback).
+async function toJpegDataUrl(
+  buf: ArrayBuffer,
+  contentType?: string,
+  sharpMod: any = null
+): Promise<string | null> {
+  if (sharpMod) {
     try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 10_000);
-      const res = await fetch(url, { signal: controller.signal });
-      clearTimeout(timer);
-      if (!res.ok) return null;
-      return await res.arrayBuffer();
-    } catch {
-      if (attempt < retries) {
-        await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
-      }
-    }
+      const jpegBuf = await sharpMod(Buffer.from(buf)).rotate().jpeg({ quality: 88 }).toBuffer();
+      return `data:image/jpeg;base64,${jpegBuf.toString("base64")}`;
+    } catch { /* fall through to raw fallback */ }
   }
-  return null;
-}
-
-// Convert any image format (WebP, HEIC, PNG, JPEG…) to JPEG base64 data URL.
-// Falls back to raw base64 if sharp fails (e.g. unsupported format).
-async function toJpegDataUrl(buf: ArrayBuffer, contentType?: string): Promise<string | null> {
   try {
-    const jpegBuf = await sharp(Buffer.from(buf))
-      .rotate() // auto-rotate from EXIF
-      .jpeg({ quality: 88 })
-      .toBuffer();
-    return `data:image/jpeg;base64,${jpegBuf.toString("base64")}`;
+    const b64 = Buffer.from(buf).toString("base64");
+    return `data:${contentType || "image/jpeg"};base64,${b64}`;
   } catch {
-    // Fallback: pass raw bytes — react-pdf handles JPEG/PNG natively
-    try {
-      const b64 = Buffer.from(buf).toString("base64");
-      const ct = contentType || "image/jpeg";
-      return `data:${ct};base64,${b64}`;
-    } catch {
-      return null;
-    }
+    return null;
   }
 }
 
@@ -77,7 +55,6 @@ async function processInBatches<T, R>(
   return results;
 }
 
-// Pre-sign all photo URLs in one API call
 async function buildSignedPhotoMap(
   adminClient: SupabaseClient,
   cards: any[]
@@ -107,84 +84,94 @@ async function buildSignedPhotoMap(
 
 export async function POST(request: Request) {
   try {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return new NextResponse("Non authentifié", { status: 401 });
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return new NextResponse("Non authentifié", { status: 401 });
 
-  const body = await request.json();
-  const { ids } = body as { ids: string[] };
+    const body = await request.json();
+    const { ids } = body as { ids: string[] };
 
-  if (!ids || ids.length === 0) {
-    return new NextResponse("Aucune carte sélectionnée", { status: 400 });
-  }
+    if (!ids || ids.length === 0) {
+      return new NextResponse("Aucune carte sélectionnée", { status: 400 });
+    }
 
-  const adminClient = await createAdminClient();
-  const { data: cards } = await adminClient
-    .from("access_cards")
-    .select("*")
-    .in("id", ids);
+    const adminClient = await createAdminClient();
+    const { data: cards } = await adminClient
+      .from("access_cards")
+      .select("*")
+      .in("id", ids);
 
-  if (!cards || cards.length === 0) {
-    return new NextResponse("Aucune carte trouvée", { status: 404 });
-  }
+    if (!cards || cards.length === 0) {
+      return new NextResponse("Aucune carte trouvée", { status: 404 });
+    }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://guichet-pi.vercel.app";
-  const logoBuf = readFileSync(join(process.cwd(), "public", "logoodcavdes.png"));
-  const logoDataUrl = `data:image/png;base64,${logoBuf.toString("base64")}`;
+    // Dynamic imports inside try/catch so module-load errors are caught and returned as JSON.
+    const [{ renderToBuffer }, { BulkCardsPDF }] = await Promise.all([
+      import("@react-pdf/renderer"),
+      import("@/lib/pdf/card-pdf"),
+    ]);
 
-  // Step 1: generate all QR codes in parallel (CPU-only)
-  const qrMap = new Map<string, string>();
-  await Promise.all(
-    cards.map(async (card: any) => {
-      const qrDataUrl = await QRCode.toDataURL(`${appUrl}/carte/${card.qr_token}`, {
-        width: 200, margin: 2, errorCorrectionLevel: "M",
-        color: { dark: "#000000", light: "#ffffff" },
-      });
-      qrMap.set(card.id, qrDataUrl);
-    })
-  );
+    // sharp is optional — fall back to raw base64 if unavailable in this environment.
+    const sharpMod = await import("sharp").then((m) => m.default).catch(() => null);
 
-  // Step 2: pre-sign all photo paths in one API call
-  const signedPhotoMap = await buildSignedPhotoMap(adminClient, cards);
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://guichet-pi.vercel.app";
+    const logoBuf = readFileSync(join(process.cwd(), "public", "logoodcavdes.png"));
+    const logoDataUrl = `data:image/png;base64,${logoBuf.toString("base64")}`;
 
-  // Step 3: fetch + convert photos to JPEG in batches
-  const cardData: CardPDFData[] = await processInBatches(
-    cards,
-    10,
-    async (card: any) => {
-      let photoDataUrl: string | null = null;
-      if (card.photo_url) {
-        const url = signedPhotoMap.get(card.id) ?? card.photo_url;
-        const res2 = await (async () => {
+    // Step 1: QR codes (CPU-only, fully parallel)
+    const qrMap = new Map<string, string>();
+    await Promise.all(
+      cards.map(async (card: any) => {
+        const qrDataUrl = await QRCode.toDataURL(`${appUrl}/carte/${card.qr_token}`, {
+          width: 200, margin: 2, errorCorrectionLevel: "M",
+          color: { dark: "#000000", light: "#ffffff" },
+        });
+        qrMap.set(card.id, qrDataUrl);
+      })
+    );
+
+    // Step 2: pre-sign photo URLs (one batch API call)
+    const signedPhotoMap = await buildSignedPhotoMap(adminClient, cards);
+
+    // Step 3: fetch + convert photos in batches of 10
+    const cardData: CardPDFData[] = await processInBatches(
+      cards,
+      10,
+      async (card: any) => {
+        let photoDataUrl: string | null = null;
+        if (card.photo_url) {
+          const url = signedPhotoMap.get(card.id) ?? card.photo_url;
           try {
             const controller = new AbortController();
-            const timer = setTimeout(() => controller.abort(), 10_000);
+            const timer = setTimeout(() => controller.abort(), 8_000);
             const r = await fetch(url, { signal: controller.signal });
             clearTimeout(timer);
-            return r.ok ? { buf: await r.arrayBuffer(), ct: r.headers.get("content-type") || undefined } : null;
-          } catch { return null; }
-        })();
-        if (res2) photoDataUrl = await toJpegDataUrl(res2.buf, res2.ct ?? undefined);
+            if (r.ok) {
+              const buf = await r.arrayBuffer();
+              const ct = r.headers.get("content-type") || undefined;
+              photoDataUrl = await toJpegDataUrl(buf, ct, sharpMod);
+            }
+          } catch { /* skip photo on error */ }
+        }
+        return {
+          ...card,
+          qrDataUrl: qrMap.get(card.id) ?? "",
+          logoDataUrl,
+          photoDataUrl,
+        };
       }
-      return {
-        ...card,
-        qrDataUrl: qrMap.get(card.id) ?? "",
-        logoDataUrl,
-        photoDataUrl,
-      };
-    }
-  );
+    );
 
-  const buffer = await renderToBuffer(
-    React.createElement(BulkCardsPDF, { cards: cardData }) as any
-  );
+    const buffer = await renderToBuffer(
+      React.createElement(BulkCardsPDF, { cards: cardData }) as any
+    );
 
-  return new NextResponse(new Uint8Array(buffer), {
-    headers: {
-      "Content-Type": "application/pdf",
-      "Content-Disposition": `attachment; filename="cartes-acces.pdf"`,
-    },
-  });
+    return new NextResponse(new Uint8Array(buffer), {
+      headers: {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `attachment; filename="cartes-acces.pdf"`,
+      },
+    });
   } catch (err: unknown) {
     const msg = err instanceof Error
       ? `${err.name}: ${err.message || "(no message)"}`
