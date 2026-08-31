@@ -186,7 +186,9 @@ export async function POST(request: Request) {
     },
   });
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Erreur interne";
+    const msg = err instanceof Error
+      ? `${err.name}: ${err.message || "(no message)"}`
+      : String(err) || "Erreur interne";
     console.error("[bulk-pdf] error:", err);
     return new NextResponse(JSON.stringify({ error: msg }), {
       status: 500,
