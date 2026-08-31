@@ -568,7 +568,12 @@ export function CartesClient({ items, zoneLogo, readOnly, odcavOnly }: { items: 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ids }),
       });
-      if (!res.ok) throw new Error("Erreur génération PDF");
+      if (!res.ok) {
+        let detail = "";
+        try { const j = await res.json(); detail = j?.error || ""; } catch { /* no-op */ }
+        toast.error(`Erreur de génération PDF${detail ? ` : ${detail}` : ""}`);
+        return;
+      }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -577,8 +582,9 @@ export function CartesClient({ items, zoneLogo, readOnly, odcavOnly }: { items: 
       a.click();
       URL.revokeObjectURL(url);
       setModalOpen(false);
-    } catch {
-      alert("Erreur lors du téléchargement");
+      toast.success("PDF téléchargé");
+    } catch (err) {
+      toast.error(`Erreur réseau : ${err instanceof Error ? err.message : "inconnu"}`);
     } finally {
       setDownloading(false);
     }

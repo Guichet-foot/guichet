@@ -2,6 +2,8 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   allowedDevOrigins: ["127.0.0.1", "localhost", "192.168.1.7"],
+  // sharp uses native binaries — must not be bundled by webpack
+  serverExternalPackages: ["sharp"],
   experimental: {
     serverActions: {
       bodySizeLimit: "2mb",

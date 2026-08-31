@@ -42,8 +42,9 @@ async function fetchBytes(url: string, retries = 2): Promise<ArrayBuffer | null>
   return null;
 }
 
-// Convert any image format (WebP, HEIC, PNG, JPEG…) to JPEG base64 data URL
-async function toJpegDataUrl(buf: ArrayBuffer): Promise<string | null> {
+// Convert any image format (WebP, HEIC, PNG, JPEG…) to JPEG base64 data URL.
+// Falls back to raw base64 if sharp fails (e.g. unsupported format).
+async function toJpegDataUrl(buf: ArrayBuffer, contentType?: string): Promise<string | null> {
   try {
     const jpegBuf = await sharp(Buffer.from(buf))
       .rotate() // auto-rotate from EXIF
@@ -51,7 +52,14 @@ async function toJpegDataUrl(buf: ArrayBuffer): Promise<string | null> {
       .toBuffer();
     return `data:image/jpeg;base64,${jpegBuf.toString("base64")}`;
   } catch {
-    return null;
+    // Fallback: pass raw bytes — react-pdf handles JPEG/PNG natively
+    try {
+      const b64 = Buffer.from(buf).toString("base64");
+      const ct = contentType || "image/jpeg";
+      return `data:${ct};base64,${b64}`;
+    } catch {
+      return null;
+    }
   }
 }
 
@@ -98,6 +106,7 @@ async function buildSignedPhotoMap(
 }
 
 export async function POST(request: Request) {
+  try {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return new NextResponse("Non authentifié", { status: 401 });
@@ -146,10 +155,16 @@ export async function POST(request: Request) {
       let photoDataUrl: string | null = null;
       if (card.photo_url) {
         const url = signedPhotoMap.get(card.id) ?? card.photo_url;
-        const bytes = await fetchBytes(url);
-        if (bytes) {
-          photoDataUrl = await toJpegDataUrl(bytes);
-        }
+        const res2 = await (async () => {
+          try {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), 10_000);
+            const r = await fetch(url, { signal: controller.signal });
+            clearTimeout(timer);
+            return r.ok ? { buf: await r.arrayBuffer(), ct: r.headers.get("content-type") || undefined } : null;
+          } catch { return null; }
+        })();
+        if (res2) photoDataUrl = await toJpegDataUrl(res2.buf, res2.ct ?? undefined);
       }
       return {
         ...card,
@@ -170,4 +185,12 @@ export async function POST(request: Request) {
       "Content-Disposition": `attachment; filename="cartes-acces.pdf"`,
     },
   });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Erreur interne";
+    console.error("[bulk-pdf] error:", err);
+    return new NextResponse(JSON.stringify({ error: msg }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
 }
