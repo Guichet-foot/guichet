@@ -569,9 +569,12 @@ export function CartesClient({ items, zoneLogo, readOnly, odcavOnly }: { items: 
         body: JSON.stringify({ ids }),
       });
       if (!res.ok) {
-        let detail = "";
-        try { const j = await res.json(); detail = j?.error || ""; } catch { /* no-op */ }
-        toast.error(`Erreur de génération PDF${detail ? ` : ${detail}` : ""}`);
+        let detail = `HTTP ${res.status}`;
+        try {
+          const text = await res.text();
+          try { detail = JSON.parse(text)?.error || text.slice(0, 200); } catch { detail = text.slice(0, 200); }
+        } catch { /* no-op */ }
+        toast.error(`PDF : ${detail}`, { duration: 15000 });
         return;
       }
       const blob = await res.blob();
