@@ -6,7 +6,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Banknote, TrendingDown, TrendingUp, Landmark, PackageX, Layers, ScanLine, ReceiptText } from "lucide-react";
+import { Plus, Banknote, TrendingDown, TrendingUp, Landmark, PackageX, ScanLine, ReceiptText } from "lucide-react";
 import { formatFCFA, formatDate } from "@/lib/format";
 import { EXPENSE_CATEGORY_LABELS } from "@/lib/constants";
 import { buildZoneUrl } from "@/lib/zone-utils";
@@ -18,6 +18,7 @@ import { fetchAll } from "@/lib/supabase/paginate";
 import { ExpenseRowActions } from "./expense-row-actions";
 import { FicheRecettesButton } from "./fiche-recettes-button";
 import { ZonePdfButton } from "./zone-pdf-button";
+import { AutoRefresh } from "@/components/auto-refresh";
 
 export const metadata = { title: "Finances" };
 
@@ -321,6 +322,7 @@ export default async function FinancesPage({
 
   return (
     <div className="space-y-6 min-w-0">
+      <AutoRefresh intervalMs={3_000} />
       {isOdcavRole && <FinancesOdcavTabs active="zone" />}
       {/* Print-only header */}
       <div className="hidden print:block border-b-2 border-gray-800 pb-4 mb-6">
@@ -376,25 +378,8 @@ export default async function FinancesPage({
         />
       </div>
 
-      {/* Blocs imprimés + Validés + Invendus */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Blocs disponibles</p>
-                <p className="text-2xl font-bold">{totalBlocs}</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {totalUnsold} billet{totalUnsold !== 1 ? "s" : ""} non scannés
-                  {totalUnsold % 100 !== 0 && totalUnsold > 0 && (
-                    <span className="text-orange-500"> · {totalUnsold % 100} hors bloc</span>
-                  )}
-                </p>
-              </div>
-              <Layers className="h-8 w-8 text-accent/60" />
-            </div>
-          </CardContent>
-        </Card>
+      {/* Validés par scan + Invendus */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
