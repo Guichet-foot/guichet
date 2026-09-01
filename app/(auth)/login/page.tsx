@@ -86,6 +86,7 @@ function LoginForm() {
     let destination = "/dashboard";
     if (profile.role === "caissier") destination = "/vente";
     if (profile.role === "portier") destination = "/scanner";
+    if (profile.role === "admin_zone" || profile.role === "c3") destination = "/finances";
     router.push(destination);
     router.refresh();
   }
