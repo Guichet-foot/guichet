@@ -18,8 +18,9 @@ import { fetchAll } from "@/lib/supabase/paginate";
 import { ExpenseRowActions } from "./expense-row-actions";
 import { FicheRecettesButton } from "./fiche-recettes-button";
 import { ZonePdfButton } from "./zone-pdf-button";
-import { AutoRefresh } from "@/components/auto-refresh";
+import { FinancesRealtimeRefresh } from "@/components/finances-realtime-refresh";
 
+export const dynamic = "force-dynamic";
 export const metadata = { title: "Finances" };
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -322,7 +323,7 @@ export default async function FinancesPage({
 
   return (
     <div className="space-y-6 min-w-0">
-      <AutoRefresh intervalMs={3_000} />
+      <FinancesRealtimeRefresh />
       {isOdcavRole && <FinancesOdcavTabs active="zone" />}
       {/* Print-only header */}
       <div className="hidden print:block border-b-2 border-gray-800 pb-4 mb-6">
