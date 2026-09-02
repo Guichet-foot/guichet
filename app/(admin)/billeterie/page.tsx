@@ -4,7 +4,7 @@ import { BilleterieCardActions } from "./billeterie-card-actions";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Ticket, Plus } from "lucide-react";
+import { Ticket, Plus, Package } from "lucide-react";
 import Link from "next/link";
 import { formatFCFA } from "@/lib/format";
 import { format } from "date-fns";
@@ -70,6 +70,17 @@ export default async function BilletteriePage() {
                         {item.totalTickets} billet{item.totalTickets !== 1 ? "s" : ""}
                       </span>
                     </div>
+                    {!!item.blocksOrdered && item.blocksOrdered > 0 && (
+                      <div className="flex items-center justify-between pt-1 border-t border-border">
+                        <span className="text-xs text-muted-foreground flex items-center gap-1">
+                          <Package className="h-3 w-3" />
+                          Blocs commandés
+                        </span>
+                        <span className="text-xs font-medium">
+                          {item.blocksOrdered}
+                        </span>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </Link>
