@@ -8,6 +8,7 @@ import { FinancesOdcavTabs } from "@/app/(admin)/finances/finances-odcav-tabs";
 import { InterFilters } from "./inter-filters";
 import { InterPdfButton } from "./pdf-button";
 import { fetchAll } from "@/lib/supabase/paginate";
+import { computeBlocksOrderedFee } from "@/lib/actions/billeterie-actions";
 
 export const metadata = { title: "Finances Inter-Zones" };
 
@@ -113,12 +114,13 @@ export default async function FinancesInterPage({
   // ── Platform settings ────────────────────────────────────────────
   const { data: platformData } = await adminSupabase
     .from("platform_settings")
-    .select("odcav_rate")
+    .select("odcav_rate, fee_per_block")
     .lte("effective_date", settingsDate)
     .order("effective_date", { ascending: false })
     .limit(1)
     .single();
   const odcavRate = platformData?.odcav_rate ?? 0.05;
+  const feePerBlock = platformData?.fee_per_block ?? 1000;
 
   // ── Matches in period ────────────────────────────────────────────
   // 1. ODCAV inter-matches (communal or departmental)
@@ -178,6 +180,7 @@ export default async function FinancesInterPage({
   let bilScanned = 0;
   let bilRevenue = 0;
   let c3StatsMapResult: Record<string, { printed: number; scanned: number; revenue: number }> = {};
+  let allInterMatchIds: string[] = [];
   {
     // Tous les matchs C3 (toutes périodes confondues) pour découvrir les billeteries
     let allC3MatchIdsEver: string[] = [];
@@ -196,7 +199,7 @@ export default async function FinancesInterPage({
       allOdcavMatchIdsEver = ((odmd || []) as any[]).map((m: any) => m.id as string);
     }
 
-    const allInterMatchIds = [...new Set([...allOdcavMatchIdsEver, ...allC3MatchIdsEver])];
+    allInterMatchIds = [...new Set([...allOdcavMatchIdsEver, ...allC3MatchIdsEver])];
     if (allInterMatchIds.length > 0) {
       const allInterMatchIdSet = new Set(allInterMatchIds);
 
@@ -377,7 +380,14 @@ export default async function FinancesInterPage({
     .reduce((sum: number, t: any) => sum + t.price, 0) + bilRevenue;
 
   const odcavCommission = Math.round(totalRevenue * odcavRate);
-  const fraisPlateformePeriod = totalScanned * 10;
+  // Frais billetterie = blocs commandés (pas billets scannés) × tarif/bloc
+  const { blocksOrdered: blocksOrderedInter, fee: fraisPlateformePeriod } = await computeBlocksOrderedFee({
+    scopeMatchIds: allInterMatchIds,
+    zoneId: null,
+    dateStart: filterMatchId ? null : dateStart,
+    dateEnd: filterMatchId ? null : dateEnd,
+    feePerBlock,
+  });
 
   // ── Expenses for these inter-matches ────────────────────────────
   let expenses: any[] = [];
@@ -541,7 +551,7 @@ export default async function FinancesInterPage({
               <div>
                 <p className="text-sm text-orange-700 font-medium">Frais billetterie</p>
                 <p className="text-xl font-bold text-orange-800">{formatFCFA(fraisPlateformePeriod)}</p>
-                <p className="text-xs text-orange-600 mt-0.5">{totalScanned} billet{totalScanned !== 1 ? "s" : ""} validé{totalScanned !== 1 ? "s" : ""} × 10 FCFA</p>
+                <p className="text-xs text-orange-600 mt-0.5">{blocksOrderedInter} bloc{blocksOrderedInter !== 1 ? "s" : ""} commandé{blocksOrderedInter !== 1 ? "s" : ""} × {formatFCFA(feePerBlock)}</p>
               </div>
               <ReceiptText className="h-7 w-7 text-orange-400" />
             </div>

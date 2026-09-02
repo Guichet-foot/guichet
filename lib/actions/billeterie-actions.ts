@@ -30,6 +30,8 @@ export interface BilleterieItem {
   createdAt: string;
   totalTickets: number;
   isDone: boolean;
+  blocksOrdered: number | null;
+  blockOrderDate: string | null;
 }
 
 // ── Matches disponibles pour créer un billetterie ─────────────────────────────
@@ -144,6 +146,8 @@ export async function createBilleterie(formData: {
   categories?: BilCategory[];
   showMatchesOnTicket?: boolean;
   zoneId?: string;
+  blocksOrdered?: number | null;
+  blockOrderDate?: string | null;
 }): Promise<{ error?: string; billeterieId?: string; batchId?: string }> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -181,6 +185,8 @@ export async function createBilleterie(formData: {
     created_by: user.id,
     show_matches_on_ticket: formData.showMatchesOnTicket !== false,
     zone_id: bilZoneId,
+    blocks_ordered: formData.blocksOrdered ?? null,
+    block_order_date: formData.blockOrderDate ?? null,
   };
   if (isMultiCat) insertData.categories = formData.categories;
 
@@ -296,7 +302,7 @@ export async function getBilleterieList(): Promise<BilleterieItem[]> {
     creatorIds = [ownerId, ...(subAdmins || []).map((p: any) => p.id as string)];
   }
 
-  let query = adminClient.from("billeterie").select("id, name, match_ids, price, categories, created_at, is_done");
+  let query = adminClient.from("billeterie").select("id, name, match_ids, price, categories, created_at, is_done, blocks_ordered, block_order_date");
   if (profile.role !== "fondateur") {
     query = query.in("created_by", creatorIds);
   }
@@ -326,6 +332,8 @@ export async function getBilleterieList(): Promise<BilleterieItem[]> {
     createdAt: b.created_at as string,
     totalTickets: ticketMap[b.id] || 0,
     isDone: (b.is_done as boolean) ?? false,
+    blocksOrdered: (b.blocks_ordered as number | null) ?? null,
+    blockOrderDate: (b.block_order_date as string | null) ?? null,
   }));
 }
 
@@ -358,12 +366,14 @@ export async function getBilleterieDetails(id: string): Promise<{
   totalScans: number;
   attributedBillets: number;
   attributedScans: number;
+  blocksOrdered: number | null;
+  blockOrderDate: string | null;
 } | null> {
   const adminClient = await createAdminClient();
 
   const { data: bil } = await adminClient
     .from("billeterie")
-    .select("id, name, match_ids, price, categories, created_at, zone_id")
+    .select("id, name, match_ids, price, categories, created_at, zone_id, blocks_ordered, block_order_date")
     .eq("id", id)
     .single();
 
@@ -561,6 +571,8 @@ export async function getBilleterieDetails(id: string): Promise<{
     totalScans: ownScanCount,
     attributedBillets,
     attributedScans,
+    blocksOrdered: (bil as any).blocks_ordered ?? null,
+    blockOrderDate: (bil as any).block_order_date ?? null,
   };
 }
 
@@ -851,7 +863,14 @@ export async function addMatchesToBilleterie(
 // ── Modifier un pass billetterie ───────────────────────────────────────────────
 export async function updateBilleterie(
   id: string,
-  formData: { name: string; price: number; matchIds?: string[]; categories?: BilCategory[] | null }
+  formData: {
+    name: string;
+    price: number;
+    matchIds?: string[];
+    categories?: BilCategory[] | null;
+    blocksOrdered?: number | null;
+    blockOrderDate?: string | null;
+  }
 ): Promise<{ error?: string }> {
   await requireRole(["fondateur", "super_admin", "president_odcav", "tresorier"]);
   const adminClient = await createAdminClient();
@@ -863,6 +882,8 @@ export async function updateBilleterie(
   };
   if (formData.matchIds !== undefined) update.match_ids = formData.matchIds;
   if (formData.categories !== undefined) update.categories = isMultiCat ? formData.categories : null;
+  if (formData.blocksOrdered !== undefined) update.blocks_ordered = formData.blocksOrdered;
+  if (formData.blockOrderDate !== undefined) update.block_order_date = formData.blockOrderDate;
 
   const { error } = await adminClient.from("billeterie").update(update).eq("id", id);
   if (error) return { error: error.message };
@@ -1107,4 +1128,40 @@ export async function autoAttributeMatchToBilleteries(
   revalidatePath("/fondateur/invendus");
   revalidatePath("/invendus");
   revalidatePath("/fondateur/billeterie");
+}
+
+// ── Frais billetterie basés sur les blocs commandés (remplace le calcul par scan) ──
+// Pour une zone/C3 donnée, somme des blocs commandés (billeterie.blocks_ordered) dont
+// la date de commande tombe dans la période, × tarif par bloc (platform_settings.fee_per_block).
+export async function computeBlocksOrderedFee(params: {
+  scopeMatchIds: string[];
+  zoneId?: string | null;
+  dateStart?: Date | null;
+  dateEnd?: Date | null;
+  feePerBlock: number;
+}): Promise<{ blocksOrdered: number; fee: number }> {
+  const adminClient = await createAdminClient();
+  const { data: allBils } = await adminClient
+    .from("billeterie")
+    .select("blocks_ordered, block_order_date, zone_id, match_ids");
+
+  const matchIdSet = new Set(params.scopeMatchIds);
+  const scoped = ((allBils || []) as any[]).filter((b) => {
+    if (params.zoneId && b.zone_id === params.zoneId) return true;
+    return ((b.match_ids as string[]) || []).some((id: string) => matchIdSet.has(id));
+  });
+
+  let blocksOrdered = 0;
+  for (const b of scoped) {
+    const n = (b.blocks_ordered as number) || 0;
+    if (n <= 0) continue;
+    if (params.dateStart && params.dateEnd) {
+      if (!b.block_order_date) continue;
+      const d = new Date(`${b.block_order_date}T12:00:00`);
+      if (d < params.dateStart || d > params.dateEnd) continue;
+    }
+    blocksOrdered += n;
+  }
+
+  return { blocksOrdered, fee: blocksOrdered * params.feePerBlock };
 }

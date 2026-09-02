@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Loader2, Check, Trophy, Plus, Trash2, Layers, MapPin } from "lucide-react";
+import { ArrowLeft, Loader2, Check, Trophy, Plus, Trash2, Layers, MapPin, Package } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
 import { formatFCFA, fmtZone } from "@/lib/format";
@@ -41,6 +41,8 @@ export default function NouveauBilletteriePage() {
   const [price, setPrice] = useState("");
   const [multiCat, setMultiCat] = useState(false);
   const [categories, setCategories] = useState<BilCategory[]>([{ name: "", price: 0 }]);
+  const [blocksOrdered, setBlocksOrdered] = useState("");
+  const [blockOrderDate, setBlockOrderDate] = useState(() => format(new Date(), "yyyy-MM-dd"));
 
   // Mode : "matches" (sélection manuelle) | "zone" (toute la zone de l'admin)
   const [scopeMode, setScopeMode] = useState<"matches" | "zone">("matches");
@@ -115,6 +117,8 @@ export default function NouveauBilletteriePage() {
       price: multiCat ? 0 : parseInt(price),
       categories: multiCat ? categories : undefined,
       showMatchesOnTicket: scopeMode !== "zone",
+      blocksOrdered: blocksOrdered ? parseInt(blocksOrdered) : null,
+      blockOrderDate: blocksOrdered ? blockOrderDate : null,
     });
     setLoading(false);
 
@@ -256,6 +260,40 @@ export default function NouveauBilletteriePage() {
                 </Button>
               </div>
             )}
+
+            {/* Blocs commandés — base de calcul des frais de billetterie */}
+            <div className="space-y-3 rounded-lg border p-3 bg-muted/30">
+              <p className="text-sm font-medium flex items-center gap-1.5">
+                <Package className="h-3.5 w-3.5 text-brand" />
+                Blocs commandés
+              </p>
+              <p className="text-xs text-muted-foreground -mt-2">
+                Les frais de billetterie sont calculés sur le nombre de blocs commandés, pas sur les billets scannés.
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="blocksOrdered" className="text-xs">Nombre de blocs</Label>
+                  <Input
+                    id="blocksOrdered"
+                    type="number"
+                    min="0"
+                    value={blocksOrdered}
+                    onChange={(e) => setBlocksOrdered(e.target.value)}
+                    placeholder="Ex: 20"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="blockOrderDate" className="text-xs">Date de la commande</Label>
+                  <Input
+                    id="blockOrderDate"
+                    type="date"
+                    value={blockOrderDate}
+                    onChange={(e) => setBlockOrderDate(e.target.value)}
+                    disabled={!blocksOrdered}
+                  />
+                </div>
+              </div>
+            </div>
           </CardContent>
         </Card>
 

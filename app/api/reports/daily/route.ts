@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { renderToBuffer } from "@react-pdf/renderer";
 import { DailyReport } from "@/lib/pdf/daily-report";
+import { computeBlocksOrderedFee } from "@/lib/actions/billeterie-actions";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { EXPENSE_CATEGORY_LABELS } from "@/lib/constants";
@@ -45,7 +46,7 @@ export async function POST(request: Request) {
       .limit(1)
       .maybeSingle();
 
-    const fraisPlateforme = platformData?.fee_per_block ?? 5000;
+    const feePerBlock = platformData?.fee_per_block ?? 1000;
     const odcavRate = platformData?.odcav_rate ?? 0.05;
 
     // Pour C3 : récupérer tous les match IDs visibles (propres + communaux non assignés)
@@ -61,6 +62,13 @@ export async function POST(request: Request) {
       ])];
     }
     const c3MatchSet = c3AllMatchIds ? new Set(c3AllMatchIds) : null;
+
+    // Tous les matchs de la zone (toutes périodes), pour rattacher les blocs commandés
+    let zoneAllMatchIds: string[] = [];
+    if (effectiveZoneId) {
+      const { data: zoneMatchData } = await adminSupabase.from("matches").select("id").eq("zone_id", effectiveZoneId);
+      zoneAllMatchIds = ((zoneMatchData || []) as any[]).map((m: any) => m.id as string);
+    }
 
     // Tickets du jour (sans match_time qui n'existe pas)
     const { data: tickets } = await supabase
@@ -146,6 +154,17 @@ export async function POST(request: Request) {
       : undefined;
 
     const odcavCommission = Math.round(totalRevenue * odcavRate);
+    // Frais billetterie = blocs commandés ce jour-là (pas billets scannés) × tarif/bloc
+    const feeMatchIds = c3AllMatchIds !== null ? c3AllMatchIds : zoneAllMatchIds;
+    const dayStart = new Date(`${date}T00:00:00`);
+    const dayEnd = new Date(`${date}T23:59:59.999`);
+    const { fee: fraisPlateforme } = await computeBlocksOrderedFee({
+      scopeMatchIds: feeMatchIds,
+      zoneId: effectiveZoneId,
+      dateStart: dayStart,
+      dateEnd: dayEnd,
+      feePerBlock,
+    });
     const netZone = totalRevenue - totalExpenses - odcavCommission - fraisPlateforme;
 
     const reportData = {

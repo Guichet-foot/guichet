@@ -17,6 +17,7 @@ import { StatCard } from "./stat-card";
 import { ZoneDonutChart } from "./zone-donut-chart";
 import { ZonePerformanceTable } from "./zone-performance-table";
 import { AutoRefresh } from "@/components/auto-refresh";
+import { computeBlocksOrderedFee } from "@/lib/actions/billeterie-actions";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -104,6 +105,16 @@ export default async function DashboardPage({
 
   const adminClient = await createAdminClient();
   const { dateStart, dateEnd, prevDateStart, prevDateEnd, periodLabel } = parsePeriod(params);
+
+  // Tarif par bloc (frais billetterie = blocs commandés × ce tarif)
+  const { data: platformFeeData } = await adminClient
+    .from("platform_settings")
+    .select("fee_per_block")
+    .lte("effective_date", new Date().toISOString().split("T")[0])
+    .order("effective_date", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const feePerBlock = platformFeeData?.fee_per_block ?? 1000;
 
   // ── ODCAV Global Dashboard ─────────────────────────────────────────────────
   if (isOdcavRole) {
@@ -362,7 +373,14 @@ export default async function DashboardPage({
 
     const unsoldRate   = totalPrinted > 0 ? (totalUnsold / totalPrinted) * 100 : 0;
     const fraisODCAV   = Math.round(grossRevenue * 0.05);
-    const fraisBil     = totalScanned * 10;
+    // Frais billetterie = blocs commandés (pas billets scannés) × tarif/bloc
+    const { blocksOrdered: blocksOrderedGlobal, fee: fraisBil } = await computeBlocksOrderedFee({
+      scopeMatchIds: matchIds,
+      zoneId: zoneFilter,
+      dateStart,
+      dateEnd,
+      feePerBlock,
+    });
 
     // ── Render ───────────────────────────────────────────────────────────
     return (
@@ -443,7 +461,7 @@ export default async function DashboardPage({
               <div>
                 <p className="text-sm text-orange-700 font-medium">Frais billetterie</p>
                 <p className="text-2xl font-bold text-orange-800 tabular-nums">{formatFCFA(fraisBil)}</p>
-                <p className="text-xs text-orange-600">{totalScanned.toLocaleString("fr-FR")} billets validés × 10 FCFA</p>
+                <p className="text-xs text-orange-600">{blocksOrderedGlobal} bloc{blocksOrderedGlobal !== 1 ? "s" : ""} commandé{blocksOrderedGlobal !== 1 ? "s" : ""} × {formatFCFA(feePerBlock)}</p>
               </div>
             </CardContent>
           </Card>
@@ -759,7 +777,15 @@ export default async function DashboardPage({
     .filter((t: any) => t.counts_as_revenue)
     .reduce((s: number, t: any) => s + (t.price || 0), 0) + bilRevenue;
   const fraisODCAV      = Math.round(grossRevenue * 0.05);
-  const fraisBilleterie = totalScanned * 10;
+  // Frais billetterie = blocs commandés (pas billets scannés) × tarif/bloc
+  const feeMatchIds2 = c3AllMatchIds !== null ? c3AllMatchIds : allScopeMatchIds;
+  const { blocksOrdered: blocksOrdered2, fee: fraisBilleterie } = await computeBlocksOrderedFee({
+    scopeMatchIds: feeMatchIds2,
+    zoneId: zoneFilter,
+    dateStart: filterMatchId ? null : dateStart2,
+    dateEnd: filterMatchId ? null : dateEnd2,
+    feePerBlock,
+  });
 
   // Upcoming matches
   const now = new Date().toISOString();
@@ -901,7 +927,7 @@ export default async function DashboardPage({
             <div>
               <p className="text-sm text-orange-700">Frais billetterie</p>
               <p className="text-2xl font-bold text-orange-800 tabular-nums">{formatFCFA(fraisBilleterie)}</p>
-              <p className="text-xs text-orange-600 mt-0.5">{totalScanned.toLocaleString("fr-FR")} billets validés × 10 FCFA</p>
+              <p className="text-xs text-orange-600 mt-0.5">{blocksOrdered2} bloc{blocksOrdered2 !== 1 ? "s" : ""} commandé{blocksOrdered2 !== 1 ? "s" : ""} × {formatFCFA(feePerBlock)}</p>
             </div>
             <ReceiptText className="h-8 w-8 text-orange-400/60" />
           </CardContent>

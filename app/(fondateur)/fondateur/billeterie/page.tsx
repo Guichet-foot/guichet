@@ -88,6 +88,8 @@ export default async function FondateurBilletteriePage() {
                     price: item.price,
                     categories: item.categories,
                     matchIds: item.matchIds,
+                    blocksOrdered: item.blocksOrdered,
+                    blockOrderDate: item.blockOrderDate,
                   }}
                 />
               </div>

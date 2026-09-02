@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { renderToBuffer } from "@react-pdf/renderer";
 import { FinancialReport } from "@/lib/pdf/financial-report";
+import { computeBlocksOrderedFee } from "@/lib/actions/billeterie-actions";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { EXPENSE_CATEGORY_LABELS } from "@/lib/constants";
@@ -66,6 +67,13 @@ export async function POST(request: Request) {
     ])];
   }
   const c3MatchSet = c3AllMatchIds ? new Set(c3AllMatchIds) : null;
+
+  // Tous les matchs de la zone (toutes périodes), pour rattacher les blocs commandés
+  let zoneAllMatchIds: string[] = [];
+  if (zoneId) {
+    const { data: zoneMatchData } = await adminSupabase.from("matches").select("id").eq("zone_id", zoneId);
+    zoneAllMatchIds = ((zoneMatchData || []) as any[]).map((m: any) => m.id as string);
+  }
 
   // Infos ODCAV pour le PDF
   // For super_admin/C3: their own settings row (id = user.id)
@@ -182,9 +190,16 @@ export async function POST(request: Request) {
     return { ...m, matchExpenses, solde: m.revenue - matchExpenses };
   });
 
-  const totalScanned = filteredTickets.filter((t: any) => t.status === "scanne").length;
   const odcavCommission = Math.round(totalRevenue * odcavRate);
-  const fraisPlateforme = Math.round(totalScanned / 100) * fraisParBloc;
+  // Frais billetterie = blocs commandés (pas billets scannés) × tarif/bloc
+  const feeMatchIds = c3AllMatchIds !== null ? c3AllMatchIds : zoneAllMatchIds;
+  const { fee: fraisPlateforme } = await computeBlocksOrderedFee({
+    scopeMatchIds: feeMatchIds,
+    zoneId,
+    dateStart: matchId ? null : new Date(`${startDate}T00:00:00`),
+    dateEnd: matchId ? null : new Date(`${endDate}T23:59:59`),
+    feePerBlock: fraisParBloc,
+  });
   const netZone = totalRevenue - totalExpenses - odcavCommission - fraisPlateforme;
 
   const reportData = {

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Pencil, Trash2, Loader2, Plus, Check, Trophy, Layers } from "lucide-react";
+import { Pencil, Trash2, Loader2, Plus, Check, Trophy, Layers, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -40,6 +40,8 @@ interface Props {
     price: number;
     categories?: BilCategory[] | null;
     matchIds?: string[];
+    blocksOrdered?: number | null;
+    blockOrderDate?: string | null;
   };
 }
 
@@ -57,6 +59,12 @@ export function BilleterieCardActions({ item }: Props) {
   );
   const [selectedIds, setSelectedIds] = useState<Set<string>>(
     new Set(item.matchIds || [])
+  );
+  const [blocksOrdered, setBlocksOrdered] = useState(
+    item.blocksOrdered ? String(item.blocksOrdered) : ""
+  );
+  const [blockOrderDate, setBlockOrderDate] = useState(
+    item.blockOrderDate || format(new Date(), "yyyy-MM-dd")
   );
 
   // Available matches (loaded on open)
@@ -84,6 +92,8 @@ export function BilleterieCardActions({ item }: Props) {
     setMultiCat(hasCats);
     setCategories(hasCats ? item.categories! : [{ name: "", price: 0 }]);
     setSelectedIds(new Set(item.matchIds || []));
+    setBlocksOrdered(item.blocksOrdered ? String(item.blocksOrdered) : "");
+    setBlockOrderDate(item.blockOrderDate || format(new Date(), "yyyy-MM-dd"));
     setEditOpen(true);
   }
 
@@ -133,6 +143,8 @@ export function BilleterieCardActions({ item }: Props) {
       price: multiCat ? 0 : Number(price),
       matchIds: Array.from(selectedIds),
       categories: multiCat ? categories : null,
+      blocksOrdered: blocksOrdered ? parseInt(blocksOrdered) : null,
+      blockOrderDate: blocksOrdered ? blockOrderDate : null,
     });
     setSaving(false);
 
@@ -301,6 +313,40 @@ export function BilleterieCardActions({ item }: Props) {
                   </Button>
                 </div>
               )}
+
+              {/* ── Blocs commandés ── */}
+              <div className="space-y-3 rounded-lg border p-3 bg-muted/30">
+                <p className="text-sm font-medium flex items-center gap-1.5">
+                  <Package className="h-3.5 w-3.5 text-brand" />
+                  Blocs commandés
+                </p>
+                <p className="text-xs text-muted-foreground -mt-2">
+                  Les frais de billetterie sont calculés sur le nombre de blocs commandés, pas sur les billets scannés.
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="bil-blocks" className="text-xs">Nombre de blocs</Label>
+                    <Input
+                      id="bil-blocks"
+                      type="number"
+                      min="0"
+                      value={blocksOrdered}
+                      onChange={(e) => setBlocksOrdered(e.target.value)}
+                      placeholder="Ex: 20"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="bil-block-date" className="text-xs">Date de la commande</Label>
+                    <Input
+                      id="bil-block-date"
+                      type="date"
+                      value={blockOrderDate}
+                      onChange={(e) => setBlockOrderDate(e.target.value)}
+                      disabled={!blocksOrdered}
+                    />
+                  </div>
+                </div>
+              </div>
 
               {/* ── Matchs ── */}
               <div className="space-y-3">

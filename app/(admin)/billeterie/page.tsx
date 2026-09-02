@@ -81,6 +81,8 @@ export default async function BilletteriePage() {
                     price: item.price,
                     categories: item.categories,
                     matchIds: item.matchIds,
+                    blocksOrdered: item.blocksOrdered,
+                    blockOrderDate: item.blockOrderDate,
                   }}
                 />
               </div>

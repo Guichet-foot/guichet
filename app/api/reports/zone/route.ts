@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { renderToBuffer } from "@react-pdf/renderer";
 import { ZoneReport, type ZoneReportMatch } from "@/lib/pdf/zone-report";
 import { fetchAll } from "@/lib/supabase/paginate";
+import { computeBlocksOrderedFee } from "@/lib/actions/billeterie-actions";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import React from "react";
@@ -54,12 +55,13 @@ export async function POST(request: Request) {
     // Platform settings
     const { data: platformData } = await adminSupabase
       .from("platform_settings")
-      .select("odcav_rate")
+      .select("odcav_rate, fee_per_block")
       .lte("effective_date", toIso.split("T")[0])
       .order("effective_date", { ascending: false })
       .limit(1)
       .maybeSingle();
     const odcavRate: number = platformData?.odcav_rate ?? 0.05;
+    const feePerBlock: number = platformData?.fee_per_block ?? 1000;
 
     // Organisateur name
     let organisateurName = "Organisateur";
@@ -283,7 +285,15 @@ export async function POST(request: Request) {
     const totalRevenue = totalRegRevenue + bilRevenue;
     const totalScanned = totalRegScanned + bilScanned;
     const odcavCommission = Math.round(totalRevenue * odcavRate);
-    const fraisPlateformePeriod = totalScanned * 10;
+    // Frais billetterie = blocs commandés (pas billets scannés) × tarif/bloc
+    const feeMatchIds = c3AllMatchIds !== null ? c3AllMatchIds : allScopeMatchIds;
+    const { fee: fraisPlateformePeriod } = await computeBlocksOrderedFee({
+      scopeMatchIds: feeMatchIds,
+      zoneId,
+      dateStart: filterMatchId ? null : dateStart,
+      dateEnd: filterMatchId ? null : dateEnd,
+      feePerBlock,
+    });
     const recetteNette = totalRevenue - odcavCommission - fraisPlateformePeriod;
 
     // ── Rows ─────────────────────────────────────────────────────────────────

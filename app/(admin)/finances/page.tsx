@@ -19,6 +19,7 @@ import { ExpenseRowActions } from "./expense-row-actions";
 import { FicheRecettesButton } from "./fiche-recettes-button";
 import { ZonePdfButton } from "./zone-pdf-button";
 import { FinancesRealtimeRefresh } from "@/components/finances-realtime-refresh";
+import { computeBlocksOrderedFee } from "@/lib/actions/billeterie-actions";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Finances" };
@@ -111,12 +112,13 @@ export default async function FinancesPage({
   // ── Platform settings ────────────────────────────────────────────
   const { data: platformData } = await adminSupabase
     .from("platform_settings")
-    .select("odcav_rate")
+    .select("odcav_rate, fee_per_block")
     .lte("effective_date", settingsDate)
     .order("effective_date", { ascending: false })
     .limit(1)
     .single();
   const odcavRate = platformData?.odcav_rate ?? 0.05;
+  const feePerBlock = platformData?.fee_per_block ?? 1000;
 
   // ── Matches in period (zone-scoped) — source of truth for period filter ──
   let matchesPeriodQuery = adminSupabase
@@ -274,7 +276,15 @@ export default async function FinancesPage({
     .reduce((sum: number, t: any) => sum + t.price, 0) + bilRevenue;
 
   const odcavCommission = Math.round(totalRevenue * odcavRate);
-  const fraisPlateformePeriod = totalScanned * 10;
+  // Frais billetterie = blocs commandés (pas billets scannés) × tarif/bloc
+  const feeMatchIds = c3AllMatchIds !== null ? c3AllMatchIds : allScopeMatchIds;
+  const { blocksOrdered: blocksOrderedPeriod, fee: fraisPlateformePeriod } = await computeBlocksOrderedFee({
+    scopeMatchIds: feeMatchIds,
+    zoneId,
+    dateStart: filterMatchId ? null : dateStart,
+    dateEnd: filterMatchId ? null : dateEnd,
+    feePerBlock,
+  });
 
   // ── Expenses ─────────────────────────────────────────────────────
   const expenseFrom = dateStart.toISOString().split("T")[0];
@@ -458,7 +468,7 @@ export default async function FinancesPage({
               <div>
                 <p className="text-sm text-orange-700 font-medium">Frais billetterie</p>
                 <p className="text-xl font-bold text-orange-800">{formatFCFA(fraisPlateformePeriod)}</p>
-                <p className="text-xs text-orange-600 mt-0.5">{totalScanned} billet{totalScanned !== 1 ? "s" : ""} validé{totalScanned !== 1 ? "s" : ""} × 10 FCFA</p>
+                <p className="text-xs text-orange-600 mt-0.5">{blocksOrderedPeriod} bloc{blocksOrderedPeriod !== 1 ? "s" : ""} commandé{blocksOrderedPeriod !== 1 ? "s" : ""} × {formatFCFA(feePerBlock)}</p>
               </div>
               <ReceiptText className="h-7 w-7 text-orange-400" />
             </div>
