@@ -4,6 +4,16 @@ const nextConfig: NextConfig = {
   allowedDevOrigins: ["127.0.0.1", "localhost", "192.168.1.7"],
   // sharp uses native binaries; @react-pdf/renderer uses yoga-wasm — both must not be bundled by webpack
   serverExternalPackages: ["sharp", "@react-pdf/renderer"],
+  // sharp's native libvips .so files (loaded via dlopen, not require()) aren't reliably
+  // picked up by Next.js's file tracer for a dynamically-imported package — force-include
+  // them so the serverless function actually has them at runtime (was failing with
+  // ERR_DLOPEN_FAILED: libvips-cpp.so.*: cannot open shared object file).
+  outputFileTracingIncludes: {
+    "/*": [
+      "node_modules/sharp/**/*",
+      "node_modules/@img/**/*",
+    ],
+  },
   experimental: {
     serverActions: {
       bodySizeLimit: "2mb",
