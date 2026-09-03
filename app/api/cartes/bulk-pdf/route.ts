@@ -44,21 +44,62 @@ async function fetchBytesWithRetry(
   return null;
 }
 
-// Convert image bytes to JPEG data URL via sharp (with plain base64 fallback).
+// Strip APPn (EXIF/ICC/JFIF-extension) and COM segments from a JPEG buffer.
+// react-pdf's built-in JPEG marker parser ("jay-peg") throws "Unknown version" on certain
+// uncommon metadata segments (e.g. embedded ICC color profiles) — react-pdf then silently
+// renders a blank image instead of surfacing the error. Metadata isn't needed to render
+// the photo, so stripping it is safe and doesn't touch pixel data.
+function stripJpegMetadata(buf: Buffer): Buffer {
+  if (buf.length < 4 || buf.readUInt16BE(0) !== 0xffd8) return buf; // not a JPEG
+  const out: number[] = [0xff, 0xd8];
+  let i = 2;
+  while (i < buf.length - 1) {
+    if (buf[i] !== 0xff) { i++; continue; }
+    const marker = buf[i + 1];
+    if (marker === 0xd8 || marker === 0xd9 || (marker >= 0xd0 && marker <= 0xd7) || marker === 0x01) {
+      i += 2;
+      continue;
+    }
+    if (i + 3 >= buf.length) break;
+    const len = buf.readUInt16BE(i + 2);
+    if (marker === 0xda) {
+      // Start of scan — copy everything to EOI verbatim (entropy-coded data; progressive
+      // JPEGs repeat DHT/SOS pairs, all preserved as-is here).
+      let end = buf.length;
+      if (buf[end - 2] === 0xff && buf[end - 1] === 0xd9) end -= 2;
+      for (let k = i; k < end; k++) out.push(buf[k]);
+      out.push(0xff, 0xd9);
+      return Buffer.from(out);
+    }
+    const isMetadata = (marker >= 0xe0 && marker <= 0xef) || marker === 0xfe;
+    if (!isMetadata) {
+      for (let k = i; k < i + 2 + len; k++) out.push(buf[k]);
+    }
+    i += 2 + len;
+  }
+  out.push(0xff, 0xd9);
+  return Buffer.from(out);
+}
+
+// Convert image bytes to a data URL. Prefers sharp (full re-encode, fixes malformed JPEGs
+// too), falling back to metadata-stripped raw bytes when sharp is unavailable.
 async function toJpegDataUrl(
   buf: ArrayBuffer,
   contentType?: string,
   sharpMod: any = null
 ): Promise<string | null> {
+  const original = Buffer.from(buf);
+  const isJpeg = original.length >= 2 && original.readUInt16BE(0) === 0xffd8;
+  const cleaned = isJpeg ? stripJpegMetadata(original) : original;
+
   if (sharpMod) {
     try {
-      const jpegBuf = await sharpMod(Buffer.from(buf)).rotate().jpeg({ quality: 88 }).toBuffer();
+      const jpegBuf = await sharpMod(cleaned).rotate().jpeg({ quality: 88 }).toBuffer();
       return `data:image/jpeg;base64,${jpegBuf.toString("base64")}`;
     } catch { /* fall through to raw fallback */ }
   }
   try {
-    const b64 = Buffer.from(buf).toString("base64");
-    return `data:${contentType || "image/jpeg"};base64,${b64}`;
+    return `data:${isJpeg ? "image/jpeg" : (contentType || "image/jpeg")};base64,${cleaned.toString("base64")}`;
   } catch {
     return null;
   }
