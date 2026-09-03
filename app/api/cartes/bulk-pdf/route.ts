@@ -44,12 +44,15 @@ async function fetchBytesWithRetry(
   return null;
 }
 
-// Strip APPn (EXIF/ICC/JFIF-extension) and COM segments from a JPEG buffer.
-// react-pdf's built-in JPEG marker parser ("jay-peg") throws "Unknown version" on certain
-// uncommon metadata segments (e.g. embedded ICC color profiles) — react-pdf then silently
-// renders a blank image instead of surfacing the error. Metadata isn't needed to render
-// the photo, so stripping it is safe and doesn't touch pixel data.
-function stripJpegMetadata(buf: Buffer): Buffer {
+// Sanitize a JPEG buffer for react-pdf's built-in decoder ("jay-peg"), which throws
+// "Unknown version" (and silently renders a blank image) on two confirmed real-world cases:
+//  1. APPn/COM metadata segments it can't parse (e.g. an embedded ICC color profile).
+//  2. 16-bit precision DQT (quantization) tables — jay-peg hardcodes 64-byte (8-bit) table
+//     entries, so a 128-byte 16-bit table desyncs its marker parser for the rest of the file.
+// Fix: drop APPn/COM segments, and downgrade any 16-bit DQT table to 8-bit (clamped — pixel
+// data is untouched, only quantization coefficients are truncated to a byte, imperceptible
+// for a small ID photo). Verified against real failing photos: fixes both cases.
+function sanitizeJpegForReactPdf(buf: Buffer): Buffer {
   if (buf.length < 4 || buf.readUInt16BE(0) !== 0xffd8) return buf; // not a JPEG
   const out: number[] = [0xff, 0xd8];
   let i = 2;
@@ -72,9 +75,41 @@ function stripJpegMetadata(buf: Buffer): Buffer {
       return Buffer.from(out);
     }
     const isMetadata = (marker >= 0xe0 && marker <= 0xef) || marker === 0xfe;
-    if (!isMetadata) {
-      for (let k = i; k < i + 2 + len; k++) out.push(buf[k]);
+    if (isMetadata) {
+      i += 2 + len;
+      continue;
     }
+    if (marker === 0xdb) {
+      // DQT — rewrite, downgrading any 16-bit precision table to 8-bit.
+      const segEnd = i + 2 + len;
+      const newTables: number[] = [];
+      let p = i + 4;
+      let changed = false;
+      while (p < segEnd) {
+        const idByte = buf[p];
+        const precision = idByte >> 4;
+        const tableId = idByte & 0x0f;
+        if (precision === 0) {
+          newTables.push(idByte);
+          for (let k = 0; k < 64; k++) newTables.push(buf[p + 1 + k]);
+          p += 65;
+        } else {
+          changed = true;
+          newTables.push(tableId);
+          for (let k = 0; k < 64; k++) newTables.push(Math.min(255, buf.readUInt16BE(p + 1 + k * 2)));
+          p += 129;
+        }
+      }
+      if (changed) {
+        const newLen = 2 + newTables.length;
+        out.push(0xff, 0xdb, (newLen >> 8) & 0xff, newLen & 0xff, ...newTables);
+      } else {
+        for (let k = i; k < segEnd; k++) out.push(buf[k]);
+      }
+      i = segEnd;
+      continue;
+    }
+    for (let k = i; k < i + 2 + len; k++) out.push(buf[k]);
     i += 2 + len;
   }
   out.push(0xff, 0xd9);
@@ -82,7 +117,7 @@ function stripJpegMetadata(buf: Buffer): Buffer {
 }
 
 // Convert image bytes to a data URL. Prefers sharp (full re-encode, fixes malformed JPEGs
-// too), falling back to metadata-stripped raw bytes when sharp is unavailable.
+// too), falling back to sanitized raw bytes when sharp is unavailable.
 async function toJpegDataUrl(
   buf: ArrayBuffer,
   contentType?: string,
@@ -90,7 +125,7 @@ async function toJpegDataUrl(
 ): Promise<string | null> {
   const original = Buffer.from(buf);
   const isJpeg = original.length >= 2 && original.readUInt16BE(0) === 0xffd8;
-  const cleaned = isJpeg ? stripJpegMetadata(original) : original;
+  const cleaned = isJpeg ? sanitizeJpegForReactPdf(original) : original;
 
   if (sharpMod) {
     try {
