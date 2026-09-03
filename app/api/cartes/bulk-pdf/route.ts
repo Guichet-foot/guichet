@@ -21,6 +21,29 @@ function extractStoragePath(url: string): string | null {
   return null;
 }
 
+// Fetch bytes with retry — transient network errors under concurrent load must not
+// silently drop a photo (previously caused random blank photos in bulk PDFs).
+async function fetchBytesWithRetry(
+  url: string,
+  retries = 2
+): Promise<{ buf: ArrayBuffer; ct?: string } | null> {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 10_000);
+      const r = await fetch(url, { signal: controller.signal });
+      clearTimeout(timer);
+      if (r.ok) {
+        return { buf: await r.arrayBuffer(), ct: r.headers.get("content-type") || undefined };
+      }
+    } catch { /* retry below */ }
+    if (attempt < retries) {
+      await new Promise((res) => setTimeout(res, 400 * (attempt + 1)));
+    }
+  }
+  return null;
+}
+
 // Convert image bytes to JPEG data URL via sharp (with plain base64 fallback).
 async function toJpegDataUrl(
   buf: ArrayBuffer,
@@ -141,17 +164,10 @@ export async function POST(request: Request) {
         let photoDataUrl: string | null = null;
         if (card.photo_url) {
           const url = signedPhotoMap.get(card.id) ?? card.photo_url;
-          try {
-            const controller = new AbortController();
-            const timer = setTimeout(() => controller.abort(), 8_000);
-            const r = await fetch(url, { signal: controller.signal });
-            clearTimeout(timer);
-            if (r.ok) {
-              const buf = await r.arrayBuffer();
-              const ct = r.headers.get("content-type") || undefined;
-              photoDataUrl = await toJpegDataUrl(buf, ct, sharpMod);
-            }
-          } catch { /* skip photo on error */ }
+          const fetched = await fetchBytesWithRetry(url);
+          if (fetched) {
+            photoDataUrl = await toJpegDataUrl(fetched.buf, fetched.ct, sharpMod);
+          }
         }
         return {
           ...card,

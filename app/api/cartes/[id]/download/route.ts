@@ -5,18 +5,26 @@ import { readFileSync } from "fs";
 import { join } from "path";
 import React from "react";
 
-async function fetchBase64(url: string): Promise<{ b64: string; ct: string } | null> {
-  try {
-    const res = await fetch(url);
-    if (!res.ok) return null;
-    const buf = await res.arrayBuffer();
-    return {
-      b64: Buffer.from(buf).toString("base64"),
-      ct: res.headers.get("content-type") || "image/jpeg",
-    };
-  } catch {
-    return null;
+async function fetchBase64(url: string, retries = 2): Promise<{ b64: string; ct: string } | null> {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 10_000);
+      const res = await fetch(url, { signal: controller.signal });
+      clearTimeout(timer);
+      if (res.ok) {
+        const buf = await res.arrayBuffer();
+        return {
+          b64: Buffer.from(buf).toString("base64"),
+          ct: res.headers.get("content-type") || "image/jpeg",
+        };
+      }
+    } catch { /* retry below */ }
+    if (attempt < retries) {
+      await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
+    }
   }
+  return null;
 }
 
 export async function GET(

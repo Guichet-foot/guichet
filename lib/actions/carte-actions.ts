@@ -135,7 +135,7 @@ export async function updateAccessCard(
   data: {
     full_name: string;
     phone: string;
-    zone_id: string;
+    zone_id: string | null;
     zone_name: string;
     poste: string;
     saison?: string;
@@ -158,7 +158,8 @@ export async function updateAccessCard(
   if (!profile || !["super_admin", "admin_zone", "fondateur"].includes(profile.role)) {
     return { error: "Non autorisé" };
   }
-  if (profile.role === "admin_zone" && profile.zone_id !== data.zone_id) {
+  const isOdcavCard = data.card_type === "odcav";
+  if (profile.role === "admin_zone" && !isOdcavCard && profile.zone_id !== data.zone_id) {
     return { error: "Vous ne pouvez modifier des cartes que pour votre zone" };
   }
 

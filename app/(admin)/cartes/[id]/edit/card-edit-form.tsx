@@ -25,6 +25,20 @@ const CARD_TYPES = [
   { value: "vendeur",            label: "Vendeurs",           paid: true  },
   { value: "spectateur",         label: "Spectateurs",        paid: true  },
   { value: "personne_ressource", label: "Personne ressource", paid: false },
+  { value: "odcav",              label: "ODCAV",               paid: false },
+];
+
+const ODCAV_FONCTIONS = [
+  "Président ODCAV",
+  "Vice-Président ODCAV",
+  "Secrétaire Général",
+  "Secrétaire Général Adjoint",
+  "Trésorier Général",
+  "Trésorier Général Adjoint",
+  "Commissaire aux Comptes",
+  "Membre du Bureau",
+  "Responsable Technique",
+  "Délégué ODCAV",
 ];
 
 interface CardEditFormProps {
@@ -56,6 +70,16 @@ export function CardEditForm({ card, zones, isSuperAdmin, initialTeams, returnUr
   const [ascManual, setAscManual] = useState(card.asc_name || "");
   const [teams, setTeams] = useState(initialTeams);
 
+  const [fonctionMode, setFonctionMode] = useState<"list" | "manual">(
+    card.card_type === "odcav" && card.poste && !ODCAV_FONCTIONS.includes(card.poste) ? "manual" : "list"
+  );
+  const [fonctionSelected, setFonctionSelected] = useState(
+    card.card_type === "odcav" && ODCAV_FONCTIONS.includes(card.poste) ? card.poste : ""
+  );
+  const [fonctionManual, setFonctionManual] = useState(
+    card.card_type === "odcav" && !ODCAV_FONCTIONS.includes(card.poste) ? card.poste : ""
+  );
+
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(card.photo_url);
   const [photoRemoved, setPhotoRemoved] = useState(false);
@@ -67,7 +91,8 @@ export function CardEditForm({ card, zones, isSuperAdmin, initialTeams, returnUr
 
   const isPaidType = CARD_TYPES.find((t) => t.value === cardType)?.paid ?? false;
   const isPersonneRessource = cardType === "personne_ressource";
-  const hasPoste = !isPaidType && !isPersonneRessource;
+  const isOdcav = cardType === "odcav";
+  const hasPoste = !isPaidType && !isPersonneRessource && !isOdcav;
 
   useEffect(() => {
     if (!isSuperAdmin || !zoneId) return;
@@ -77,8 +102,8 @@ export function CardEditForm({ card, zones, isSuperAdmin, initialTeams, returnUr
 
   useEffect(() => {
     if (!isPaidType) setPrice("");
-    if (isPaidType || isPersonneRessource) setPoste("");
-  }, [isPaidType, isPersonneRessource]);
+    if (isPaidType || isPersonneRessource || isOdcav) setPoste("");
+  }, [isPaidType, isPersonneRessource, isOdcav]);
 
   function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -103,11 +128,16 @@ export function CardEditForm({ card, zones, isSuperAdmin, initialTeams, returnUr
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!fullName.trim() || !phone.trim() || (!isPersonneRessource && !zoneId)) {
+    const fonction = fonctionMode === "manual" ? fonctionManual.trim() : fonctionSelected;
+    if (!fullName.trim() || !phone.trim() || (!isPersonneRessource && !isOdcav && !zoneId)) {
       toast.error("Remplissez tous les champs obligatoires");
       return;
     }
     if (hasPoste && !poste.trim()) {
+      toast.error("Remplissez tous les champs obligatoires");
+      return;
+    }
+    if (isOdcav && !fonction) {
       toast.error("Remplissez tous les champs obligatoires");
       return;
     }
@@ -142,11 +172,11 @@ export function CardEditForm({ card, zones, isSuperAdmin, initialTeams, returnUr
     const result = await updateAccessCard(card.id, {
       full_name: fullName.trim(),
       phone: phone.trim(),
-      zone_id: zoneId,
-      zone_name: zoneName,
-      poste: poste.trim(),
+      zone_id: isOdcav ? null : zoneId,
+      zone_name: isOdcav ? "ODCAV" : zoneName,
+      poste: isOdcav ? fonction : poste.trim(),
       saison: saison.trim() || undefined,
-      asc_name: ascName || null,
+      asc_name: isOdcav ? null : (ascName || null),
       photo_url: finalPhotoUrl,
       card_type: cardType,
       price: isPaidType && price ? parseInt(price) : null,
@@ -271,7 +301,7 @@ export function CardEditForm({ card, zones, isSuperAdmin, initialTeams, returnUr
               <Input id="phone" value={phone} onChange={(e) => setPhone(e.target.value)} required />
             </div>
 
-            {isSuperAdmin && !isPersonneRessource && (
+            {isSuperAdmin && !isPersonneRessource && !isOdcav && (
               <div className="space-y-1.5">
                 <Label htmlFor="zone">Zone *</Label>
                 <select id="zone" value={zoneId}
@@ -295,31 +325,61 @@ export function CardEditForm({ card, zones, isSuperAdmin, initialTeams, returnUr
               </div>
             )}
 
+            {isOdcav && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label>Fonction *</Label>
+                  <button type="button" className="text-xs text-purple-700 underline"
+                    onClick={() => setFonctionMode(fonctionMode === "list" ? "manual" : "list")}>
+                    {fonctionMode === "list" ? "Saisir manuellement" : "Choisir dans la liste"}
+                  </button>
+                </div>
+                {fonctionMode === "list" ? (
+                  <select
+                    value={fonctionSelected}
+                    onChange={(e) => setFonctionSelected(e.target.value)}
+                    required
+                    className="h-10 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <option value="">Sélectionner une fonction…</option>
+                    {ODCAV_FONCTIONS.map((f) => (
+                      <option key={f} value={f}>{f}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <Input value={fonctionManual} onChange={(e) => setFonctionManual(e.target.value)}
+                    placeholder="ex : Chargé de Communication" required />
+                )}
+              </div>
+            )}
+
             <div className="space-y-1.5">
               <Label htmlFor="saison">Saison</Label>
               <Input id="saison" value={saison} onChange={(e) => setSaison(e.target.value)}
                 placeholder="ex : 2025 - 2026" />
             </div>
 
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label>ASC (optionnel)</Label>
-                <button type="button" className="text-xs text-green-700 underline"
-                  onClick={() => setAscMode(ascMode === "list" ? "manual" : "list")}>
-                  {ascMode === "list" ? "Saisir manuellement" : "Choisir dans la liste"}
-                </button>
+            {!isOdcav && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label>ASC (optionnel)</Label>
+                  <button type="button" className="text-xs text-green-700 underline"
+                    onClick={() => setAscMode(ascMode === "list" ? "manual" : "list")}>
+                    {ascMode === "list" ? "Saisir manuellement" : "Choisir dans la liste"}
+                  </button>
+                </div>
+                {ascMode === "list" ? (
+                  <select value={ascSelected} onChange={(e) => setAscSelected(e.target.value)}
+                    className="h-10 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+                    <option value="">Aucune ASC</option>
+                    {teams.map((t) => <option key={t.id} value={t.name}>{t.name}</option>)}
+                  </select>
+                ) : (
+                  <Input value={ascManual} onChange={(e) => setAscManual(e.target.value)}
+                    placeholder="Nom de l'ASC…" />
+                )}
               </div>
-              {ascMode === "list" ? (
-                <select value={ascSelected} onChange={(e) => setAscSelected(e.target.value)}
-                  className="h-10 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-ring">
-                  <option value="">Aucune ASC</option>
-                  {teams.map((t) => <option key={t.id} value={t.name}>{t.name}</option>)}
-                </select>
-              ) : (
-                <Input value={ascManual} onChange={(e) => setAscManual(e.target.value)}
-                  placeholder="Nom de l'ASC…" />
-              )}
-            </div>
+            )}
           </CardContent>
         </Card>
 
