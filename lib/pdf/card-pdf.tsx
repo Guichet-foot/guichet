@@ -176,8 +176,12 @@ export function CardPDFView({ card }: { card: CardPDFData }) {
     ...(!isPaid && !isOdcav && !isPersonneRessource
       ? [{ label: "ZONE", value: card.zone_name, icon: <IconMapPin /> }]
       : []),
-    ...(!isPaid && card.poste
-      ? [{ label: isOdcav ? "FONCTION" : "POSTE", value: card.poste, icon: <IconBriefcase /> }]
+    ...(!isPaid && (card.poste || isPersonneRessource)
+      ? [{
+          label: isOdcav ? "FONCTION" : "POSTE",
+          value: isPersonneRessource ? "Personne Ressource" : (card.poste || ""),
+          icon: <IconBriefcase />,
+        }]
       : []),
     ...(!isOdcav && card.asc_name
       ? [{ label: "ASC", value: card.asc_name, icon: <IconShield /> }]

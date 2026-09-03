@@ -111,7 +111,7 @@ function CardDesign({ card, qrDataUrl, zoneLogo }: { card: AccessCard; qrDataUrl
     { Icon: User,  label: "NOM COMPLET", value: card.full_name },
     { Icon: Phone, label: "TÉLÉPHONE",   value: card.phone },
     ...(!isPaidCard && !isOdcavCard && !isPersonneRessource ? [{ Icon: MapPin, label: "ZONE", value: card.zone_name }] : []),
-    ...(!isPaidCard ? [{ Icon: Briefcase, label: isOdcavCard ? "FONCTION" : "POSTE", value: card.poste }] : []),
+    ...(!isPaidCard ? [{ Icon: Briefcase, label: isOdcavCard ? "FONCTION" : "POSTE", value: isPersonneRessource ? "Personne Ressource" : card.poste }] : []),
     ...(!isOdcavCard && card.asc_name ? [{ Icon: Shield, label: "ASC", value: card.asc_name }] : []),
     ...(price != null && price > 0 && !isPersonneRessource
       ? [{ Icon: Tag, label: "MONTANT", value: `${price.toLocaleString("fr-FR")} FCFA` }]

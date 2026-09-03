@@ -96,14 +96,16 @@ function sanitizeJpegForReactPdf(buf: Buffer): Buffer {
 async function toPhotoDataUrl(buf: ArrayBuffer, contentType: string | undefined, sharpMod: any): Promise<string | null> {
   const original = Buffer.from(buf);
   const isJpeg = original.length >= 2 && original.readUInt16BE(0) === 0xffd8;
-  const cleaned = isJpeg ? sanitizeJpegForReactPdf(original) : original;
 
   if (sharpMod) {
     try {
-      const jpegBuf = await sharpMod(cleaned).rotate().jpeg({ quality: 88 }).toBuffer();
+      // Feed sharp the ORIGINAL bytes (EXIF intact) so .rotate() can read the orientation
+      // tag and physically bake the rotation in — sanitizing first would strip that tag.
+      const jpegBuf = await sharpMod(original).rotate().jpeg({ quality: 88 }).toBuffer();
       return `data:image/jpeg;base64,${jpegBuf.toString("base64")}`;
-    } catch { /* fall through to raw fallback */ }
+    } catch { /* fall through to sanitized raw fallback */ }
   }
+  const cleaned = isJpeg ? sanitizeJpegForReactPdf(original) : original;
   try {
     return `data:${isJpeg ? "image/jpeg" : (contentType || "image/jpeg")};base64,${cleaned.toString("base64")}`;
   } catch {
