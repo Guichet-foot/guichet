@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, usePathname } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -40,6 +40,17 @@ export function InterFilters({
   const [to, setTo] = useState(currentTo || "");
   const [match, setMatch] = useState(currentMatch || "");
   const [c3Account, setC3Account] = useState(currentC3);
+
+  // Re-sync local state whenever the server-computed props change (e.g. a client-side
+  // navigation back to a bare URL with no date param reuses this component instance —
+  // useState's initial value only applies on mount, so without this the date input
+  // stays stuck on a stale value while the page itself correctly shows "today").
+  useEffect(() => { setPeriod(currentPeriod ?? "24h"); }, [currentPeriod]);
+  useEffect(() => { setDate(currentDate || todayStr); }, [currentDate]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setFrom(currentFrom || ""); }, [currentFrom]);
+  useEffect(() => { setTo(currentTo || ""); }, [currentTo]);
+  useEffect(() => { setMatch(currentMatch || ""); }, [currentMatch]);
+  useEffect(() => { setC3Account(currentC3); }, [currentC3]);
 
   function buildUrl(p: Period, d?: string, f?: string, t?: string, m?: string, c3?: string) {
     const params = new URLSearchParams();

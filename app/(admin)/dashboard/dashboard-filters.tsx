@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MapPin, CalendarDays, RotateCcw, Filter, X, Building2 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 interface Zone { id: string; name: string; }
 
@@ -62,6 +62,17 @@ export function DashboardFilters({
   const [c3Account, setC3Account] = useState(currentC3);
   const [matchId, setMatchId] = useState(currentMatch);
   const [showLegacy, setShowLegacy] = useState(!!(legacyDate || legacyYear || currentMatch));
+
+  // Re-sync local state whenever the URL-derived values change (e.g. a client-side
+  // navigation back to a bare /dashboard reuses this component instance — useState's
+  // initial value only applies on mount, so without this the filters stay stuck on a
+  // stale selection while the page itself correctly re-renders for the new period).
+  useEffect(() => { setPeriod(currentPeriod); }, [currentPeriod]);
+  useEffect(() => { setStart(currentStart); }, [currentStart]);
+  useEffect(() => { setEnd(currentEnd); }, [currentEnd]);
+  useEffect(() => { setZone(currentZone); }, [currentZone]);
+  useEffect(() => { setC3Account(currentC3); }, [currentC3]);
+  useEffect(() => { setMatchId(currentMatch); }, [currentMatch]);
 
   const isCustom = period === "custom";
 
