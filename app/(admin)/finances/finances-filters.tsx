@@ -70,9 +70,8 @@ export function FinancesFilters({
     // custom: wait for dates
   }
 
-  function handleDateChange(d: string) {
-    setDate(d);
-    if (period === "jour") router.push(buildUrl("jour", d, undefined, undefined, ""));
+  function applyDate() {
+    router.push(buildUrl("jour", date, undefined, undefined, ""));
   }
 
   function handleMatchChange(m: string) {
@@ -119,9 +118,17 @@ export function FinancesFilters({
           <Input
             type="date"
             value={date}
-            onChange={(e) => handleDateChange(e.target.value)}
+            onChange={(e) => setDate(e.target.value)}
             className="w-auto"
           />
+          <Button
+            size="sm"
+            onClick={applyDate}
+            disabled={!date}
+            className="bg-brand hover:bg-brand/90"
+          >
+            Appliquer
+          </Button>
         </div>
       )}
 
