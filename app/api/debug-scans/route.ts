@@ -31,18 +31,42 @@ export async function GET() {
     result.dateStartIso = dateStart.toISOString();
     result.dateEndIso = dateEnd.toISOString();
 
-    let lastErr: unknown = null;
-    const periodBilScans = await fetchAll<any>((from, to) => {
-      const q = adminSupabase.from("billeterie_scans")
-        .select("ticket_id")
-        .in("match_id", allScopeMatchIds);
-      return q.gte("scanned_at", dateStart.toISOString())
-        .lte("scanned_at", dateEnd.toISOString())
-        .range(from, to)
-        .then((r) => { if (r.error) lastErr = r.error; return r; });
-    });
-    result.periodBilScansCount = periodBilScans.length;
-    result.lastErr = lastErr;
+    // Replicate the EXACT gate chain from finances/page.tsx
+    const scanMatchIds = allScopeMatchIds;
+    result.scanMatchIdsLength = scanMatchIds.length;
+
+    if (scanMatchIds.length > 0) {
+      const scanMatchIdSet = new Set(scanMatchIds);
+      const { data: allBilsRaw, error: bilsErr } = await adminSupabase
+        .from("billeterie").select("id, price, match_ids, categories");
+      result.bilsErr = bilsErr;
+      result.allBilsRawCount = allBilsRaw?.length ?? null;
+      const zoneBils = (allBilsRaw || []).filter((b: any) =>
+        (b.match_ids || []).some((id: string) => scanMatchIdSet.has(id))
+      );
+      result.zoneBilsCount = zoneBils.length;
+      result.zoneBilIds = zoneBils.map((b: any) => b.id);
+      const zoneBilIds = zoneBils.map((b: any) => b.id as string);
+
+      if (zoneBilIds.length > 0) {
+        let lastErr: unknown = null;
+        const periodBilScans = await fetchAll<any>((from, to) => {
+          const q = adminSupabase.from("billeterie_scans")
+            .select("ticket_id")
+            .in("match_id", [...scanMatchIds]);
+          return q.gte("scanned_at", dateStart.toISOString())
+            .lte("scanned_at", dateEnd.toISOString())
+            .range(from, to)
+            .then((r) => { if (r.error) lastErr = r.error; return r; });
+        });
+        result.periodBilScansCount = periodBilScans.length;
+        result.lastErr = lastErr;
+      } else {
+        result.skippedReason = "zoneBilIds.length === 0";
+      }
+    } else {
+      result.skippedReason = "scanMatchIds.length === 0";
+    }
 
     // All-time count too, for comparison
     const { count: allTimeCount, error: countErr } = await adminSupabase
