@@ -296,15 +296,15 @@ export default async function FondateurDashboardPage({
   const dateLabel = new Date(selectedDate + "T12:00:00").toLocaleDateString("fr-FR", { day: "2-digit", month: "short" });
   const monthLabel = `${monthNames[parseInt(selectedMonth.split("-")[1]) - 1]} ${selectedMonth.split("-")[0]}`;
 
-  // Derive PDF date range from active filters
-  const pdfFrom = params.date || (params.year ? `${params.year}-01-01` : undefined);
-  const pdfTo = params.date || (params.year ? `${params.year}-12-31` : undefined);
+  // Derive PDF date range from active filters: exact date > chart period > year
+  const pdfFrom = params.date || params.chartFrom || (params.year ? `${params.year}-01-01` : undefined);
+  const pdfTo = params.date || params.chartTo || (params.year ? `${params.year}-12-31` : undefined);
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-4">
         <h1 className="text-2xl font-bold font-heading">Dashboard Fondateur</h1>
-        <InterPdfButton from={pdfFrom} to={pdfTo} />
+        <InterPdfButton from={pdfFrom} to={pdfTo} zoneId={params.zone} c3Id={params.c3} saId={params.sa} />
       </div>
 
       <Suspense>

@@ -9,9 +9,12 @@ interface Props {
   from?: string;
   to?: string;
   type?: string;
+  zoneId?: string;
+  c3Id?: string;
+  saId?: string;
 }
 
-export function InterPdfButton({ from, to, type }: Props) {
+export function InterPdfButton({ from, to, zoneId, c3Id, saId }: Props) {
   const [loading, setLoading] = useState(false);
 
   async function handleDownload() {
@@ -20,7 +23,7 @@ export function InterPdfButton({ from, to, type }: Props) {
       const res = await fetch("/api/reports/fondateur", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ from, to, type: "all" }),
+        body: JSON.stringify({ from, to, type: "all", zoneId, c3Id, saId }),
       });
       if (!res.ok) {
         toast.error("Erreur lors de la génération du rapport");

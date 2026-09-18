@@ -27,7 +27,14 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { from, to, type = "all" } = body as { from?: string; to?: string; type?: string };
+    const { from, to, type = "all", zoneId, c3Id, saId } = body as {
+      from?: string;
+      to?: string;
+      type?: string;
+      zoneId?: string;
+      c3Id?: string;
+      saId?: string;
+    };
 
     const adminSupabase = await createAdminClient();
 
@@ -45,15 +52,25 @@ export async function POST(request: Request) {
     const dateStart = from ? new Date(from + "T00:00:00") : new Date("2020-01-01T00:00:00");
     const dateEnd = to ? new Date(to + "T23:59:59.999") : new Date();
 
+    // Dashboard filters (Zone / C3 / Super Admin). A zone or super-admin filter limits the
+    // report to those zones only; a C3 filter limits it to that C3 only; no filter = everyone.
+    const hasZoneScope = !!(zoneId || saId);
+    const includeZones = !c3Id || hasZoneScope;
+    const includeC3 = !!c3Id || !hasZoneScope;
+
     // All zones (excl. demo)
     const { data: zonesData } = await adminSupabase.from("zones").select("id, name, created_by");
-    const zones = ((zonesData || []) as any[]).filter((z) => z.created_by !== DEMO_ACCOUNT_ID);
+    const allZonesNonDemo = ((zonesData || []) as any[]).filter((z) => z.created_by !== DEMO_ACCOUNT_ID);
+    let zones = includeZones ? allZonesNonDemo : [];
+    if (zoneId) zones = zones.filter((z) => z.id === zoneId);
+    else if (saId) zones = zones.filter((z) => z.created_by === saId);
     const zoneMap = new Map<string, string>(zones.map((z) => [z.id as string, z.name as string]));
     const zoneIds = zones.map((z) => z.id as string);
 
     // All C3 profiles
     const { data: c3Data } = await adminSupabase.from("profiles").select("id, full_name").eq("role", "c3");
-    const c3Profiles = (c3Data || []) as { id: string; full_name: string }[];
+    let c3Profiles = (includeC3 ? ((c3Data || []) as { id: string; full_name: string }[]) : []);
+    if (c3Id) c3Profiles = c3Profiles.filter((p) => p.id === c3Id);
     const c3Map = new Map<string, string>(c3Profiles.map((p) => [p.id, p.full_name]));
     const c3Ids = c3Profiles.map((p) => p.id);
 
@@ -102,6 +119,56 @@ export async function POST(request: Request) {
         if (t.counts_as_revenue) {
           zoneRevenue.set(zId, (zoneRevenue.get(zId) || 0) + (t.price || 0));
         }
+      }
+    }
+
+    // ── Zone: billeterie scans with price ────────────────────────────
+    // Zones that sell through billeterie passes have no regular tickets, so their activity
+    // only exists in billeterie_scans. Attributed to a zone by the scan's match (same rule
+    // as the dashboard). The scan → ticket join gives billeterie + category for the price.
+    if (zoneMatchIds.length > 0 && (type === "all" || type === "zone")) {
+      const { data: bilData } = await adminSupabase.from("billeterie").select("id, price, categories");
+      const bilInfo = new Map<string, { price: number; cats: { name: string; price: number }[] | null }>();
+      ((bilData || []) as any[]).forEach((b) =>
+        bilInfo.set(b.id as string, { price: b.price || 0, cats: (b.categories as any) || null })
+      );
+
+      // Chunk match ids so the .in() filter never overflows the request URL
+      const matchChunks: string[][] = [];
+      for (let i = 0; i < zoneMatchIds.length; i += 100) matchChunks.push(zoneMatchIds.slice(i, i + 100));
+
+      const scanChunks = await Promise.all(
+        matchChunks.map((ids) =>
+          fetchAll<any>((from2, to2) =>
+            adminSupabase
+              .from("billeterie_scans")
+              .select("match_id, ticket:billeterie_tickets(billeterie_id, category_name)")
+              .in("match_id", ids)
+              .gte("scanned_at", dateStart.toISOString())
+              .lte("scanned_at", dateEnd.toISOString())
+              .order("id", { ascending: true })
+              .range(from2, to2)
+          )
+        )
+      );
+
+      for (const s of scanChunks.flat()) {
+        const zId = matchToZone.get(s.match_id as string);
+        if (!zId) continue;
+        zoneScanned.set(zId, (zoneScanned.get(zId) || 0) + 1);
+
+        const tk = Array.isArray(s.ticket) ? s.ticket[0] : s.ticket;
+        const info = tk ? bilInfo.get(tk.billeterie_id as string) : undefined;
+        let price = 0;
+        if (info) {
+          if (info.cats && tk.category_name) {
+            const cat = info.cats.find((c) => c.name === tk.category_name);
+            price = cat ? cat.price : 0;
+          } else {
+            price = info.price;
+          }
+        }
+        zoneRevenue.set(zId, (zoneRevenue.get(zId) || 0) + price);
       }
     }
 
@@ -237,7 +304,7 @@ export async function POST(request: Request) {
       { billetsScanned: 0, recettesBrutes: 0, commission: 0, frais: 0, recetteNette: 0 }
     );
 
-    const periodLabel =
+    const basePeriodLabel =
       from && to
         ? `Du ${format(dateStart, "d MMMM yyyy", { locale: fr })} au ${format(dateEnd, "d MMMM yyyy", { locale: fr })}`
         : from
@@ -245,6 +312,16 @@ export async function POST(request: Request) {
           : to
             ? `Jusqu'au ${format(dateEnd, "d MMMM yyyy", { locale: fr })}`
             : "Toutes périodes";
+
+    // Name the scope in the header so the PDF says which account(s) it covers
+    const scopeParts: string[] = [];
+    if (zoneId) scopeParts.push(allZonesNonDemo.find((z) => z.id === zoneId)?.name || "Zone");
+    if (c3Id) scopeParts.push(c3Map.get(c3Id) || "C3");
+    if (saId && !zoneId) {
+      const { data: saProfile } = await adminSupabase.from("profiles").select("full_name").eq("id", saId).maybeSingle();
+      scopeParts.push(`Super Admin : ${saProfile?.full_name || "—"}`);
+    }
+    const periodLabel = scopeParts.length > 0 ? `${scopeParts.join(" · ")} — ${basePeriodLabel}` : basePeriodLabel;
 
     const reportData = {
       periodLabel,
