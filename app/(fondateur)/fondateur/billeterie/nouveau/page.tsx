@@ -6,6 +6,7 @@ import {
   getAllMatchesForBilleterie,
   getAllMatchIdsForScope,
   getZonesForBilleterie,
+  getC3AccountsForBilleterie,
   createBilleterie,
 } from "@/lib/actions/billeterie-actions";
 import type { MatchOption, BilCategory } from "@/lib/actions/billeterie-actions";
@@ -14,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Loader2, Check, Trophy, Plus, Trash2, Layers, MapPin, ChevronDown, Package } from "lucide-react";
+import { ArrowLeft, Loader2, Check, Trophy, Plus, Trash2, Layers, MapPin, ChevronDown, Package, Users, Landmark } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
 import { formatFCFA, fmtZone } from "@/lib/format";
@@ -47,8 +48,12 @@ export default function FondateurNouveauBilletteriePage() {
 
   // Mode : "matches" (sélection manuelle) | "zone" (par zone ou compte)
   const [scopeMode, setScopeMode] = useState<"matches" | "zone">("matches");
+  // Type de compte quand le mode est "zone / compte" : une zone, un compte C3, ou l'ODCAV (matchs directs)
+  const [accountType, setAccountType] = useState<"zone" | "c3" | "odcav">("zone");
   const [zones, setZones] = useState<{ id: string; name: string }[]>([]);
   const [selectedZoneId, setSelectedZoneId] = useState("");
+  const [c3Accounts, setC3Accounts] = useState<{ id: string; name: string; city: string | null }[]>([]);
+  const [selectedC3Id, setSelectedC3Id] = useState("");
   const [zoneMatchIds, setZoneMatchIds] = useState<string[] | null>(null);
   const [loadingZone, setLoadingZone] = useState(false);
 
@@ -57,21 +62,43 @@ export default function FondateurNouveauBilletteriePage() {
   }, []);
 
   useEffect(() => {
-    if (scopeMode === "zone" && zones.length === 0) {
+    if (scopeMode === "zone" && accountType === "zone" && zones.length === 0) {
       getZonesForBilleterie().then((data) => setZones(data));
     }
-  }, [scopeMode, zones.length]);
-
-  useEffect(() => {
-    if (scopeMode === "zone" && selectedZoneId) {
-      setLoadingZone(true);
-      setZoneMatchIds(null);
-      getAllMatchIdsForScope(selectedZoneId).then((ids) => {
-        setZoneMatchIds(ids);
-        setLoadingZone(false);
-      });
+    if (scopeMode === "zone" && accountType === "c3" && c3Accounts.length === 0) {
+      getC3AccountsForBilleterie().then((data) => setC3Accounts(data));
     }
-  }, [scopeMode, selectedZoneId]);
+  }, [scopeMode, accountType, zones.length, c3Accounts.length]);
+
+  // Matchs existants du compte choisi (zone / C3 / ODCAV) — `cancelled` évite qu'une réponse
+  // tardive d'un ancien choix écrase celle du choix courant.
+  useEffect(() => {
+    if (scopeMode !== "zone") return;
+    const ready =
+      accountType === "odcav" ||
+      (accountType === "zone" && !!selectedZoneId) ||
+      (accountType === "c3" && !!selectedC3Id);
+    if (!ready) {
+      setZoneMatchIds(null);
+      setLoadingZone(false);
+      return;
+    }
+    let cancelled = false;
+    setLoadingZone(true);
+    setZoneMatchIds(null);
+    const request =
+      accountType === "zone"
+        ? getAllMatchIdsForScope(selectedZoneId)
+        : accountType === "c3"
+          ? getAllMatchIdsForScope(undefined, selectedC3Id)
+          : getAllMatchIdsForScope(undefined, undefined, true);
+    request.then((ids) => {
+      if (cancelled) return;
+      setZoneMatchIds(ids);
+      setLoadingZone(false);
+    });
+    return () => { cancelled = true; };
+  }, [scopeMode, accountType, selectedZoneId, selectedC3Id]);
 
   function toggleMatch(id: string) {
     setSelectedIds((prev) => {
@@ -121,9 +148,26 @@ export default function FondateurNouveauBilletteriePage() {
     }
 
     let matchIds: string[];
+    let bilZoneId: string | undefined;
     if (scopeMode === "zone") {
-      if (!selectedZoneId) { toast.error("Sélectionnez une zone"); return; }
+      if (accountType === "zone") {
+        if (!selectedZoneId) { toast.error("Sélectionnez une zone"); return; }
+        bilZoneId = selectedZoneId;
+      } else if (accountType === "c3" && !selectedC3Id) {
+        toast.error("Sélectionnez un compte C3");
+        return;
+      }
       matchIds = zoneMatchIds || [];
+      // Une zone est rattachée au pass par son zone_id ; un compte C3 ou l'ODCAV ne le sont
+      // que par leurs matchs, il en faut donc au moins un.
+      if (accountType !== "zone" && matchIds.length === 0) {
+        toast.error(
+          accountType === "c3"
+            ? "Ce compte C3 n'a encore aucun match : créez-lui d'abord un match pour pouvoir lui rattacher un pass."
+            : "Aucun match direct ODCAV existant : créez d'abord un match direct pour pouvoir lui rattacher un pass."
+        );
+        return;
+      }
     } else {
       matchIds = Array.from(selectedIds);
     }
@@ -135,7 +179,7 @@ export default function FondateurNouveauBilletteriePage() {
       price: multiCat ? 0 : parseInt(price),
       categories: multiCat ? categories : undefined,
       showMatchesOnTicket: scopeMode !== "zone",
-      zoneId: scopeMode === "zone" ? selectedZoneId : undefined,
+      zoneId: bilZoneId,
       blocksOrdered: blocksOrdered ? parseInt(blocksOrdered) : null,
       blockOrderDate: blocksOrdered ? blockOrderDate : null,
     });
@@ -148,10 +192,17 @@ export default function FondateurNouveauBilletteriePage() {
   }
 
   const selectedZone = zones.find((z) => z.id === selectedZoneId);
+  const selectedC3 = c3Accounts.find((c) => c.id === selectedC3Id);
+  // Nom du compte ciblé (null tant que rien n'est choisi)
+  const selectedAccountName =
+    accountType === "zone" ? selectedZone?.name ?? null
+    : accountType === "c3" ? selectedC3?.name ?? null
+    : "ODCAV";
+  const accountHasNoMatch = accountType !== "zone" && zoneMatchIds !== null && zoneMatchIds.length === 0;
   const canSubmit =
     scopeMode === "matches"
       ? selectedIds.size > 0
-      : !!selectedZoneId && zoneMatchIds !== null;
+      : !!selectedAccountName && zoneMatchIds !== null && !accountHasNoMatch;
 
   return (
     <div className="max-w-xl mx-auto space-y-6">
@@ -405,32 +456,85 @@ export default function FondateurNouveauBilletteriePage() {
               </>
             )}
 
-            {/* Mode : par zone */}
+            {/* Mode : par zone / compte (zone, C3 ou ODCAV) */}
             {scopeMode === "zone" && (
               <div className="space-y-3">
                 <Label className="text-sm font-semibold">Zone ou compte concerné</Label>
 
-                {/* Sélecteur de zone */}
-                <div className="relative">
-                  <select
-                    value={selectedZoneId}
-                    onChange={(e) => setSelectedZoneId(e.target.value)}
-                    className="w-full appearance-none rounded-lg border border-border bg-background px-3 py-2.5 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-brand/50"
-                  >
-                    <option value="">— Choisir une zone —</option>
-                    {zones.map((z) => (
-                      <option key={z.id} value={z.id}>{z.name}</option>
-                    ))}
-                  </select>
-                  <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                {/* Type de compte */}
+                <div className="grid grid-cols-3 gap-2">
+                  {([
+                    { key: "zone", label: "Zone", Icon: MapPin },
+                    { key: "c3", label: "C3", Icon: Users },
+                    { key: "odcav", label: "ODCAV", Icon: Landmark },
+                  ] as const).map(({ key, label, Icon }) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setAccountType(key)}
+                      className={`flex items-center justify-center gap-1.5 rounded-lg border-2 px-3 py-2 text-sm font-medium transition-colors ${
+                        accountType === key
+                          ? "border-brand bg-brand/5 text-brand"
+                          : "border-border text-muted-foreground hover:border-brand/30"
+                      }`}
+                    >
+                      <Icon className="h-4 w-4" />
+                      {label}
+                    </button>
+                  ))}
                 </div>
 
+                {/* Sélecteur de zone */}
+                {accountType === "zone" && (
+                  <div className="relative">
+                    <select
+                      value={selectedZoneId}
+                      onChange={(e) => setSelectedZoneId(e.target.value)}
+                      className="w-full appearance-none rounded-lg border border-border bg-background px-3 py-2.5 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-brand/50"
+                    >
+                      <option value="">— Choisir une zone —</option>
+                      {zones.map((z) => (
+                        <option key={z.id} value={z.id}>{z.name}</option>
+                      ))}
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  </div>
+                )}
+
+                {/* Sélecteur de compte C3 */}
+                {accountType === "c3" && (
+                  <div className="relative">
+                    <select
+                      value={selectedC3Id}
+                      onChange={(e) => setSelectedC3Id(e.target.value)}
+                      className="w-full appearance-none rounded-lg border border-border bg-background px-3 py-2.5 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-brand/50"
+                    >
+                      <option value="">— Choisir un compte C3 —</option>
+                      {c3Accounts.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}{c.city ? ` — ${c.city}` : ""}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  </div>
+                )}
+
+                {accountType === "odcav" && (
+                  <p className="text-xs text-muted-foreground">
+                    Le pass couvre les matchs directs de l&apos;ODCAV (communaux et départementaux), ceux qui ne
+                    dépendent ni d&apos;une zone ni d&apos;un compte C3.
+                  </p>
+                )}
+
                 {/* Résumé après sélection */}
-                {selectedZone && (
+                {selectedAccountName && (
                   <div className="rounded-lg border border-brand/30 bg-brand/5 p-4 space-y-1.5">
                     <div className="flex items-center gap-2">
-                      <MapPin className="h-4 w-4 text-brand shrink-0" />
-                      <p className="text-sm font-semibold text-brand">{selectedZone.name}</p>
+                      {accountType === "zone" && <MapPin className="h-4 w-4 text-brand shrink-0" />}
+                      {accountType === "c3" && <Users className="h-4 w-4 text-brand shrink-0" />}
+                      {accountType === "odcav" && <Landmark className="h-4 w-4 text-brand shrink-0" />}
+                      <p className="text-sm font-semibold text-brand">{selectedAccountName}</p>
                     </div>
                     {loadingZone ? (
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -442,9 +546,24 @@ export default function FondateurNouveauBilletteriePage() {
                         <p className="text-xs text-muted-foreground">
                           {zoneMatchIds && zoneMatchIds.length > 0
                             ? `${zoneMatchIds.length} match${zoneMatchIds.length !== 1 ? "s" : ""} existant${zoneMatchIds.length !== 1 ? "s" : ""} inclus`
-                            : "Aucun match existant pour cette zone"}
-                          {" — les futurs matchs s'ajouteront automatiquement"}
+                            : accountType === "zone"
+                              ? "Aucun match existant pour cette zone"
+                              : accountType === "c3"
+                                ? "Aucun match existant pour ce compte C3"
+                                : "Aucun match direct ODCAV existant"}
+                          {accountType !== "odcav" && " — les futurs matchs s'ajouteront automatiquement"}
                         </p>
+                        {accountType === "odcav" && zoneMatchIds && zoneMatchIds.length > 0 && (
+                          <p className="text-xs text-muted-foreground">
+                            Les matchs directs créés plus tard ne sont pas ajoutés automatiquement au pass.
+                          </p>
+                        )}
+                        {accountHasNoMatch && (
+                          <p className="text-xs font-medium text-red-600">
+                            Un pass C3 ou ODCAV est rattaché au compte par ses matchs : il faut au moins un match
+                            existant pour pouvoir le créer.
+                          </p>
+                        )}
                         <p className="text-xs font-medium text-amber-700">
                           Les matchs ne seront pas affichés sur le billet imprimé.
                         </p>
@@ -464,8 +583,8 @@ export default function FondateurNouveauBilletteriePage() {
         >
           {loading ? (
             <Loader2 className="h-4 w-4 animate-spin" />
-          ) : scopeMode === "zone" && selectedZone ? (
-            `Créer le pass — ${selectedZone.name}`
+          ) : scopeMode === "zone" && selectedAccountName ? (
+            `Créer le pass — ${selectedAccountName}`
           ) : scopeMode === "zone" ? (
             "Créer le pass"
           ) : (

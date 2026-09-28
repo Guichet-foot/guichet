@@ -106,18 +106,37 @@ export async function getZonesForBilleterie(): Promise<{ id: string; name: strin
   return (data || []) as { id: string; name: string }[];
 }
 
-// ── Tous les match_ids d'un scope (zone ou c3), tous statuts ──────────────────
-// Utilisé pour pré-remplir une billetterie créée "par zone" sans sélection manuelle.
+// ── Comptes C3 disponibles pour le sélecteur "Par zone / compte" (fondateur) ───
+export async function getC3AccountsForBilleterie(): Promise<{ id: string; name: string; city: string | null }[]> {
+  await requireRole(["fondateur", "super_admin", "president_odcav", "tresorier"]);
+  const adminClient = await createAdminClient();
+  const { data } = await adminClient
+    .from("profiles")
+    .select("id, full_name, city")
+    .eq("role", "c3")
+    .order("full_name");
+  return ((data || []) as any[]).map((p) => ({
+    id: p.id as string,
+    name: (p.full_name as string) || "C3",
+    city: (p.city as string | null) ?? null,
+  }));
+}
+
+// ── Tous les match_ids d'un scope (zone, c3 ou odcav), tous statuts ───────────
+// Utilisé pour pré-remplir une billetterie créée "par zone / compte" sans sélection manuelle.
+// odcav = matchs directs de l'ODCAV : ni zone, ni compte C3 (même règle que le module Finances).
 export async function getAllMatchIdsForScope(
   zoneId?: string,
   c3AccountId?: string,
+  odcav?: boolean,
 ): Promise<string[]> {
   await requireRole(["fondateur", "super_admin", "president_odcav", "tresorier", "admin_zone"]);
   const adminClient = await createAdminClient();
-  if (!zoneId && !c3AccountId) return [];
+  if (!zoneId && !c3AccountId && !odcav) return [];
   let query = adminClient.from("matches").select("id");
   if (zoneId) query = query.eq("zone_id", zoneId);
   else if (c3AccountId) query = query.eq("c3_account_id", c3AccountId);
+  else query = query.is("zone_id", null).is("c3_account_id", null);
   const { data } = await query;
   return ((data || []) as any[]).map((m) => m.id as string);
 }
