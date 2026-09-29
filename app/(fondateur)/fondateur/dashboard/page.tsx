@@ -176,14 +176,14 @@ export default async function FondateurDashboardPage({
       withScopeFilter(
         supabase.from("billeterie_scans").select("match_id")
           .gte("scanned_at", todayStart).lt("scanned_at", tomorrowStart)
-      ).range(from, to)
+      ).order("id", { ascending: true }).range(from, to)
     ),
     fetchAll<{ match_id: string }>((from, to) =>
       withScopeFilter(
         supabase.from("tickets").select("match_id")
           .eq("status", "scanne").eq("counts_as_revenue", true)
           .gte("scanned_at", todayStart).lt("scanned_at", tomorrowStart)
-      ).range(from, to)
+      ).order("id", { ascending: true }).range(from, to)
     ),
   ]);
 

@@ -78,7 +78,7 @@ export async function getFinancesData(): Promise<FinanceRow[]> {
         .from("tickets")
         .select("match_id, status, bloc_printed, scanned_at")
         .in("match_id", regularMatchIds)
-        .range(from, to)
+        .order("id", { ascending: true }).range(from, to)
     );
 
     for (const t of allTickets) {
@@ -143,14 +143,14 @@ export async function getFinancesData(): Promise<FinanceRow[]> {
             .from("billeterie_scans")
             .select("match_id, scanned_at")   // pas besoin de ticket_id
             .in("match_id", allBilMatchIds)
-            .range(from, to)
+            .order("id", { ascending: true }).range(from, to)
         ),
         fetchAll<any>((from, to) =>
           supabase
             .from("billeterie_tickets")
             .select("billeterie_id, withdrawn")
             .in("billeterie_id", bilIds)
-            .range(from, to)
+            .order("id", { ascending: true }).range(from, to)
         ),
       ]);
 

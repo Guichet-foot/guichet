@@ -159,7 +159,7 @@ export async function POST(request: Request) {
           .from("tickets")
           .select("price, status, counts_as_revenue, match_id, scanned_at")
           .in("match_id", allScopeMatchIds)
-          .range(from, to)
+          .order("id", { ascending: true }).range(from, to)
       );
     }
 
@@ -227,7 +227,7 @@ export async function POST(request: Request) {
                 .from("billeterie_tickets")
                 .select("id, billeterie_id, category_name")
                 .in("billeterie_id", zoneBilIds)
-                .range(from, to)
+                .order("id", { ascending: true }).range(from, to)
             ),
             fetchAll<any>((from, to) => {
               const q = adminSupabase
@@ -235,11 +235,11 @@ export async function POST(request: Request) {
                 .select("ticket_id, match_id, scanned_at")
                 .in("match_id", [...scanMatchIds]);
               return filterMatchId
-                ? q.range(from, to)
+                ? q.order("id", { ascending: true }).range(from, to)
                 : q
                     .gte("scanned_at", dateStart.toISOString())
                     .lte("scanned_at", dateEnd.toISOString())
-                    .range(from, to);
+                    .order("id", { ascending: true }).range(from, to);
             }),
           ]);
 

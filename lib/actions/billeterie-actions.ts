@@ -405,7 +405,7 @@ export async function getBilleterieDetails(id: string): Promise<{
       ? adminClient.from("matches").select("id, home_team, away_team, venue, match_date, match_type, status, home_team_zone, away_team_zone, zone_id").in("id", matchIds)
       : Promise.resolve({ data: [] as any[] }),
     fetchAll<any>((from, to) =>
-      adminClient.from("billeterie_tickets").select("id, sale_batch_id, created_at, withdrawn, category_name, status").eq("billeterie_id", id).order("created_at").range(from, to)
+      adminClient.from("billeterie_tickets").select("id, sale_batch_id, created_at, withdrawn, category_name, status").eq("billeterie_id", id).order("created_at").order("id", { ascending: true }).range(from, to)
     ),
   ]);
 
@@ -429,7 +429,7 @@ export async function getBilleterieDetails(id: string): Promise<{
       adminClient.from("billeterie_scans")
         .select("ticket_id")
         .in("match_id", matchIds)
-        .range(from, to)
+        .order("id", { ascending: true }).range(from, to)
     );
     ownScanCount = scansAtOwnMatches.filter((s: any) => ownTicketIdSet.has(s.ticket_id as string)).length;
   } else if (matchIds.length === 0) {
@@ -472,13 +472,13 @@ export async function getBilleterieDetails(id: string): Promise<{
           adminClient.from("billeterie_tickets")
             .select("id, billeterie_id, withdrawn")
             .in("billeterie_id", relatedBilIds)
-            .range(from, to)
+            .order("id", { ascending: true }).range(from, to)
         ),
         fetchAll<any>((from, to) =>
           adminClient.from("billeterie_scans")
             .select("ticket_id, match_id")
             .in("match_id", allRelatedMatchIds)
-            .range(from, to)
+            .order("id", { ascending: true }).range(from, to)
         ),
       ]);
 
@@ -536,13 +536,13 @@ export async function getBilleterieDetails(id: string): Promise<{
             adminClient.from("billeterie_tickets")
               .select("id, billeterie_id, withdrawn")
               .in("billeterie_id", indirectBilDetIds)
-              .range(from, to)
+              .order("id", { ascending: true }).range(from, to)
           ),
           fetchAll<any>((from, to) =>
             adminClient.from("billeterie_scans")
               .select("ticket_id, match_id")
               .in("match_id", indirectScanMatchIds)
-              .range(from, to)
+              .order("id", { ascending: true }).range(from, to)
           ),
         ]);
 
@@ -667,7 +667,7 @@ export async function getBilleterieInvendusList(): Promise<BilleterieInvendusIte
     adminClient.from("billeterie_tickets")
       .select("id, billeterie_id, withdrawn")
       .in("billeterie_id", bilIds)
-      .range(from, to)
+      .order("id", { ascending: true }).range(from, to)
   );
   const nonWithdrawnByBil: Record<string, number> = {};
   const ticketToBilId: Record<string, string> = {};
@@ -688,7 +688,7 @@ export async function getBilleterieInvendusList(): Promise<BilleterieInvendusIte
       adminClient.from("billeterie_scans")
         .select("ticket_id, match_id")
         .in("match_id", allMatchIds)
-        .range(from, to)
+        .order("id", { ascending: true }).range(from, to)
     );
     scanRows.forEach((s: any) => {
       scansAtMatch[s.match_id] = (scansAtMatch[s.match_id] || 0) + 1;

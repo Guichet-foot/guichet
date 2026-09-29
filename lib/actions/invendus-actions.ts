@@ -215,7 +215,7 @@ export async function declareUnsoldByCategory(
 
   // Étape 1 : remettre tous les billets annulés de ce match en "vendu"
   const currentAnnule = await fetchAll<{ id: string }>((from, to) =>
-    adminClient.from("tickets").select("id").eq("match_id", matchId).eq("status", "annule").range(from, to)
+    adminClient.from("tickets").select("id").eq("match_id", matchId).eq("status", "annule").order("id", { ascending: true }).range(from, to)
   );
 
   if (currentAnnule.length > 0) {
@@ -237,7 +237,7 @@ export async function declareUnsoldByCategory(
         .eq("match_id", matchId)
         .eq("category_id", categoryId)
         .eq("status", "vendu")
-        .range(from, to)
+        .order("id", { ascending: true }).range(from, to)
     );
     const vendusToAnnul = allVendus.slice(0, count);
 

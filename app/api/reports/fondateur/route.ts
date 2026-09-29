@@ -110,7 +110,7 @@ export async function POST(request: Request) {
           .eq("status", "scanne")
           .gte("scanned_at", dateStart.toISOString())
           .lte("scanned_at", dateEnd.toISOString())
-          .range(from2, to2)
+          .order("id", { ascending: true }).range(from2, to2)
       );
       for (const t of zoneTickets) {
         const zId = matchToZone.get(t.match_id as string);
@@ -147,7 +147,7 @@ export async function POST(request: Request) {
               .gte("scanned_at", dateStart.toISOString())
               .lte("scanned_at", dateEnd.toISOString())
               .order("id", { ascending: true })
-              .range(from2, to2)
+              .order("id", { ascending: true }).range(from2, to2)
           )
         )
       );
@@ -210,7 +210,7 @@ export async function POST(request: Request) {
               .from("billeterie_tickets")
               .select("id, billeterie_id, category_name")
               .in("billeterie_id", bilIds)
-              .range(from2, to2)
+              .order("id", { ascending: true }).range(from2, to2)
           ),
           fetchAll<any>((from2, to2) =>
             adminSupabase
@@ -219,7 +219,7 @@ export async function POST(request: Request) {
               .in("match_id", allBilMatchIds)
               .gte("scanned_at", dateStart.toISOString())
               .lte("scanned_at", dateEnd.toISOString())
-              .range(from2, to2)
+              .order("id", { ascending: true }).range(from2, to2)
           ),
         ]);
 

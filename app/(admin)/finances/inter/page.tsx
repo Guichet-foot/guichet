@@ -168,7 +168,7 @@ export default async function FinancesInterPage({
   let periodTickets: any[] = [];
   if (matchIdsInPeriod.length > 0) {
     periodTickets = await fetchAll<any>((from, to) =>
-      adminSupabase.from("tickets").select("price, status, bloc_printed, counts_as_revenue, match_id").in("match_id", matchIdsInPeriod).range(from, to)
+      adminSupabase.from("tickets").select("price, status, bloc_printed, counts_as_revenue, match_id").in("match_id", matchIdsInPeriod).order("id", { ascending: true }).range(from, to)
     );
   }
 
@@ -264,13 +264,13 @@ export default async function FinancesInterPage({
             adminSupabase.from("billeterie_tickets")
               .select("id, billeterie_id, withdrawn, category_name")
               .in("billeterie_id", allBilIds)
-              .range(from, to)
+              .order("id", { ascending: true }).range(from, to)
           ),
           fetchAll<any>((from, to) =>
             adminSupabase.from("billeterie_scans")
               .select("ticket_id, scanned_at")
               .in("match_id", allBilMatchIds)
-              .range(from, to)
+              .order("id", { ascending: true }).range(from, to)
           ),
         ]);
 

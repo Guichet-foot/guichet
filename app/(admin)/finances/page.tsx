@@ -161,7 +161,7 @@ export default async function FinancesPage({
     allScopeTickets = await fetchAll<any>((from, to) =>
       adminSupabase.from("tickets")
         .select("price, status, bloc_printed, counts_as_revenue, match_id, scanned_at")
-        .in("match_id", allScopeMatchIds).range(from, to)
+        .in("match_id", allScopeMatchIds).order("id", { ascending: true }).range(from, to)
     );
   }
 
@@ -197,7 +197,7 @@ export default async function FinancesPage({
         const allBilTickets = await fetchAll<any>((from, to) =>
           adminSupabase.from("billeterie_tickets")
             .select("id, billeterie_id, withdrawn, category_name")
-            .in("billeterie_id", zoneBilIds).range(from, to)
+            .in("billeterie_id", zoneBilIds).order("id", { ascending: true }).range(from, to)
         );
 
         const ticketToBilId: Record<string, string> = {};
@@ -221,10 +221,10 @@ export default async function FinancesPage({
             .select("ticket_id")
             .in("match_id", [...scanMatchIds]);
           return filterMatchId
-            ? q.range(from, to)
+            ? q.order("id", { ascending: true }).range(from, to)
             : q.gte("scanned_at", dateStart.toISOString())
                 .lte("scanned_at", dateEnd.toISOString())
-                .range(from, to);
+                .order("id", { ascending: true }).range(from, to);
         });
         bilScanned = periodBilScans.length;
 

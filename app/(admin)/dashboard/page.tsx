@@ -190,7 +190,7 @@ export default async function DashboardPage({
               .from("tickets")
               .select("match_id, price, status, bloc_printed, counts_as_revenue")
               .in("match_id", matchIds)
-              .range(from, to)
+              .order("id", { ascending: true }).range(from, to)
           )
         : Promise.resolve([]),
       prevMatchIds.length > 0
@@ -199,7 +199,7 @@ export default async function DashboardPage({
               .from("tickets")
               .select("match_id, price, status, bloc_printed, counts_as_revenue")
               .in("match_id", prevMatchIds)
-              .range(from, to)
+              .order("id", { ascending: true }).range(from, to)
           )
         : Promise.resolve([]),
     ]);
@@ -247,11 +247,11 @@ export default async function DashboardPage({
         const [bilAllTickets, allBilScans] = await Promise.all([
           fetchAll<any>((from, to) =>
             adminClient.from("billeterie_tickets").select("id, billeterie_id, withdrawn, category_name")
-              .in("billeterie_id", allFetchBilIds1).range(from, to)
+              .in("billeterie_id", allFetchBilIds1).order("id", { ascending: true }).range(from, to)
           ),
           fetchAll<any>((from, to) =>
             adminClient.from("billeterie_scans").select("ticket_id, scanned_at")
-              .in("match_id", allBilMatchIds).range(from, to)
+              .in("match_id", allBilMatchIds).order("id", { ascending: true }).range(from, to)
           ),
         ]);
 
@@ -600,7 +600,7 @@ export default async function DashboardPage({
       adminClient.from("tickets")
         .select("price, status, bloc_printed, counts_as_revenue, match_id, scanned_at")
         .in("match_id", allScopeMatchIds)
-        .range(from, to)
+        .order("id", { ascending: true }).range(from, to)
     );
   }
 
@@ -631,7 +631,7 @@ export default async function DashboardPage({
         const allBilTickets = await fetchAll<any>((from, to) =>
           adminClient.from("billeterie_tickets")
             .select("id, billeterie_id, withdrawn, category_name")
-            .in("billeterie_id", zoneBilIds).range(from, to)
+            .in("billeterie_id", zoneBilIds).order("id", { ascending: true }).range(from, to)
         );
         const ticketToBilId: Record<string, string> = {};
         const ticketToCat: Record<string, string | null> = {};
@@ -654,10 +654,10 @@ export default async function DashboardPage({
             .select("ticket_id")
             .in("match_id", [...scanMatchIds]);
           return filterMatchId
-            ? q.range(from, to)
+            ? q.order("id", { ascending: true }).range(from, to)
             : q.gte("scanned_at", dateStart2.toISOString())
                 .lte("scanned_at", dateEnd2.toISOString())
-                .range(from, to);
+                .order("id", { ascending: true }).range(from, to);
         });
         bilScanned = periodBilScans.length;
 
@@ -706,7 +706,7 @@ export default async function DashboardPage({
           .from("billeterie_tickets")
           .select("billeterie_id, withdrawn, status, scanned_at, category_name")
           .in("billeterie_id", uncountedBilIds)
-          .range(from, to)
+          .order("id", { ascending: true }).range(from, to)
       );
 
       const _dsMs = dateStart2.getTime();

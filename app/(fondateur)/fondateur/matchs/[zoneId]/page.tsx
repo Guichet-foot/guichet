@@ -92,7 +92,7 @@ export default async function FondateurZoneMatchsPage({
         adminClient.from("billeterie_tickets")
           .select("id, billeterie_id, withdrawn")
           .in("billeterie_id", bilIds)
-          .range(from, to)
+          .order("id", { ascending: true }).range(from, to)
       );
 
       const bilTicketCountByBilId: Record<string, number> = {};
@@ -109,7 +109,7 @@ export default async function FondateurZoneMatchsPage({
         adminClient.from("billeterie_scans")
           .select("ticket_id, match_id")
           .in("match_id", allBilMatchIds)
-          .range(from, to)
+          .order("id", { ascending: true }).range(from, to)
       );
 
       // Per billeterie: total scans and scans per match
