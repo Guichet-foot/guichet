@@ -155,14 +155,48 @@ export default async function FinancesPage({
     allScopeMatchIds = matchIdsInPeriod;
   }
 
-  // ── Regular tickets across all scope matches (scanned_at used for period filter) ──
-  let allScopeTickets: any[] = [];
+  // ── Regular tickets across all scope matches ──────────────────────
+  // Avoid pulling every ticket ever printed for the zone (can be tens of
+  // thousands of rows) — most of what's needed here is just counts, and the
+  // row-level data (price) is only needed for the narrow unsold/period slices.
+  let regularPrinted = 0;
+  let allTimeScopeScanned = 0;
+  let totalUnsoldValue = 0;
+  let periodScannedTickets: any[] = [];
+
   if (allScopeMatchIds.length > 0) {
-    allScopeTickets = await fetchAll<any>((from, to) =>
+    const [{ count: printedCount }, { count: scannedCount }, unsoldPrintedRows] = await Promise.all([
       adminSupabase.from("tickets")
-        .select("price, status, bloc_printed, counts_as_revenue, match_id, scanned_at")
-        .in("match_id", allScopeMatchIds).order("id", { ascending: true }).range(from, to)
-    );
+        .select("*", { count: "exact", head: true })
+        .in("match_id", allScopeMatchIds)
+        .eq("bloc_printed", true),
+      adminSupabase.from("tickets")
+        .select("*", { count: "exact", head: true })
+        .in("match_id", allScopeMatchIds)
+        .eq("status", "scanne"),
+      fetchAll<any>((from, to) =>
+        adminSupabase.from("tickets")
+          .select("price")
+          .in("match_id", allScopeMatchIds)
+          .eq("bloc_printed", true)
+          .neq("status", "scanne")
+          .order("id", { ascending: true }).range(from, to)
+      ),
+    ]);
+    regularPrinted = printedCount || 0;
+    allTimeScopeScanned = scannedCount || 0;
+    totalUnsoldValue = unsoldPrintedRows.reduce((sum: number, t: any) => sum + (t.price || 0), 0);
+
+    periodScannedTickets = await fetchAll<any>((from, to) => {
+      const q = adminSupabase.from("tickets")
+        .select("price, counts_as_revenue")
+        .in("match_id", allScopeMatchIds);
+      return filterMatchId
+        ? q.eq("status", "scanne").order("id", { ascending: true }).range(from, to)
+        : q.gte("scanned_at", dateStart.toISOString())
+            .lte("scanned_at", dateEnd.toISOString())
+            .order("id", { ascending: true }).range(from, to);
+    });
   }
 
   // ── Billeterie — scans filtrés par date de scan pour les matchs de la zone ──
@@ -193,20 +227,14 @@ export default async function FinancesPage({
       });
 
       if (zoneBilIds.length > 0) {
-        // Tickets billeterie : pour bilPrinted + lookup prix par revenue
-        const allBilTickets = await fetchAll<any>((from, to) =>
-          adminSupabase.from("billeterie_tickets")
-            .select("id, billeterie_id, withdrawn, category_name")
-            .in("billeterie_id", zoneBilIds).order("id", { ascending: true }).range(from, to)
-        );
-
-        const ticketToBilId: Record<string, string> = {};
-        const ticketToCat: Record<string, string | null> = {};
-        allBilTickets.forEach((t: any) => {
-          ticketToBilId[t.id] = t.billeterie_id;
-          ticketToCat[t.id] = t.category_name ?? null;
-          if (!t.withdrawn) bilPrinted++;
-        });
+        // bilPrinted : comptage pur, pas besoin de rapatrier chaque ligne
+        // (évite de tirer des dizaines de milliers de tickets imprimés à chaque chargement)
+        const { count: printedCount } = await adminSupabase
+          .from("billeterie_tickets")
+          .select("*", { count: "exact", head: true })
+          .in("billeterie_id", zoneBilIds)
+          .eq("withdrawn", false);
+        bilPrinted = printedCount || 0;
 
         // Scans total (toutes dates) — pour le calcul invendus
         const { count: allTimeCount } = await adminSupabase
@@ -228,6 +256,29 @@ export default async function FinancesPage({
         });
         bilScanned = periodBilScans.length;
 
+        // Lookup prix/catégorie : uniquement pour les tickets réellement scannés
+        // dans la période (au lieu de tout le pool de tickets imprimés de la zone).
+        // Chunké pour ne jamais construire une URL .in() trop longue.
+        const scannedTicketIds = [...new Set(periodBilScans.map((s: any) => s.ticket_id as string))];
+        const ticketToBilId: Record<string, string> = {};
+        const ticketToCat: Record<string, string | null> = {};
+        const CHUNK = 150;
+        const idChunks: string[][] = [];
+        for (let i = 0; i < scannedTicketIds.length; i += CHUNK) idChunks.push(scannedTicketIds.slice(i, i + CHUNK));
+        const relevantTicketChunks = await Promise.all(
+          idChunks.map((ids) =>
+            adminSupabase.from("billeterie_tickets")
+              .select("id, billeterie_id, category_name")
+              .in("id", ids)
+          )
+        );
+        relevantTicketChunks.forEach(({ data }) => {
+          (data || []).forEach((t: any) => {
+            ticketToBilId[t.id] = t.billeterie_id;
+            ticketToCat[t.id] = t.category_name ?? null;
+          });
+        });
+
         // Revenus : sum des prix des tickets scannés dans la période
         bilRevenue = periodBilScans.reduce((sum: number, s: any) => {
           const bilId = ticketToBilId[s.ticket_id as string];
@@ -245,30 +296,12 @@ export default async function FinancesPage({
   }
 
   // ── Financial metrics (regular tickets + billeterie combinés) ────
-  const dateStartMs2 = dateStart.getTime();
-  const dateEndMs2   = dateEnd.getTime();
-
-  const printedTickets = allScopeTickets.filter((t: any) => t.bloc_printed === true);
-  const allTimeScopeScanned = allScopeTickets.filter((t: any) => t.status === "scanne").length;
-  const regularPrinted = printedTickets.length;
   const totalPrinted = regularPrinted + bilPrinted;
-
-  const periodScannedTickets = filterMatchId
-    ? allScopeTickets.filter((t: any) => t.status === "scanne")
-    : allScopeTickets.filter((t: any) => {
-        if (!t.scanned_at) return false;
-        const ms = new Date(t.scanned_at as string).getTime();
-        return ms >= dateStartMs2 && ms <= dateEndMs2;
-      });
-
   const regularScanned = periodScannedTickets.length;
   const totalScanned = regularScanned + bilScanned;
   const totalUnsold = Math.max(0, totalPrinted - allTimeScopeScanned - bilAllTimeScanned);
   // Blocs = billets non encore scannés (pas d'accumulation historique)
   const totalBlocs = Math.floor(totalUnsold / 100);
-  const totalUnsoldValue = printedTickets
-    .filter((t: any) => t.status !== "scanne")
-    .reduce((sum: number, t: any) => sum + (t.price || 0), 0);
 
   const totalSold = periodScannedTickets.filter((t: any) => t.counts_as_revenue).length;
   const totalRevenue = periodScannedTickets
