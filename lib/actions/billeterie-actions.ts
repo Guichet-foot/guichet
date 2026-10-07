@@ -154,6 +154,22 @@ export async function getMyZoneMatchIds(): Promise<string[]> {
   return ((data || []) as any[]).map((m) => m.id as string);
 }
 
+// ── Numérotation atomique des billets (voir migration-billeterie-serial-sequence.sql) ──
+// Un simple COUNT(*) lu avant l'insertion n'est pas fiable : deux impressions qui se
+// chevauchent peuvent lire le même compteur et générer des numéros de série identiques
+// sur des billets physiques différents (incident constaté Zone 4, oct. 2026). La séquence
+// Postgres est atomique par nature — aucune collision possible, même sous forte concurrence.
+async function reserveBilleterieSerials(
+  adminClient: Awaited<ReturnType<typeof createAdminClient>>,
+  n: number
+): Promise<number[]> {
+  const { data, error } = await adminClient.rpc("reserve_billeterie_serials", { n });
+  if (error || !data) throw new Error(error?.message || "Erreur génération numéros de série");
+  return (data as any[]).map((row) =>
+    typeof row === "object" && row !== null ? Number(Object.values(row)[0]) : Number(row)
+  );
+}
+
 // ── Créer un billetterie + générer les billets ─────────────────────────────────
 export type BilCategory = { name: string; price: number };
 
@@ -222,18 +238,19 @@ export async function createBilleterie(formData: {
 
   if (qty > 0) {
     const today = format(new Date(), "yyyyMMdd");
-    const { count: existingCount } = await adminClient
-      .from("billeterie_tickets")
-      .select("*", { count: "exact", head: true })
-      .like("serial_number", `BIL-${today}-%`);
+    let serials: number[];
+    try {
+      serials = await reserveBilleterieSerials(adminClient, qty);
+    } catch (e) {
+      return { error: e instanceof Error ? e.message : "Erreur génération numéros de série" };
+    }
 
     batchId = crypto.randomUUID();
-    const baseCount = existingCount || 0;
 
     const tickets = Array.from({ length: qty }, (_, i) => ({
       billeterie_id: bil.id,
       qr_token: crypto.randomUUID(),
-      serial_number: `BIL-${today}-${String(baseCount + i + 1).padStart(5, "0")}`,
+      serial_number: `BIL-${today}-${String(serials[i]).padStart(5, "0")}`,
       sale_batch_id: batchId,
       sold_by: user.id,
       status: "actif",
@@ -266,18 +283,19 @@ export async function addTicketsToBilleterie(
   if (!bil) return { error: "Billetterie introuvable" };
 
   const today = format(new Date(), "yyyyMMdd");
-  const { count: existingCount } = await adminClient
-    .from("billeterie_tickets")
-    .select("*", { count: "exact", head: true })
-    .like("serial_number", `BIL-${today}-%`);
+  let serials: number[];
+  try {
+    serials = await reserveBilleterieSerials(adminClient, quantity);
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Erreur génération numéros de série" };
+  }
 
   const batchId = crypto.randomUUID();
-  const baseCount = existingCount || 0;
 
   const tickets = Array.from({ length: quantity }, (_, i) => ({
     billeterie_id: billeterieId,
     qr_token: crypto.randomUUID(),
-    serial_number: `BIL-${today}-${String(baseCount + i + 1).padStart(5, "0")}`,
+    serial_number: `BIL-${today}-${String(serials[i]).padStart(5, "0")}`,
     sale_batch_id: batchId,
     sold_by: user.id,
     status: "actif",
