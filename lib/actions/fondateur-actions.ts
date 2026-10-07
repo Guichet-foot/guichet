@@ -2,6 +2,7 @@
 
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { fetchAll } from "@/lib/supabase/paginate";
 
 export async function createSuperAdmin(formData: {
   email: string;
@@ -438,6 +439,139 @@ export async function fixDuplicateBilleterieScans(): Promise<{
   if (error) return { error: error.message };
   revalidatePath("/fondateur/parametres");
   return { fixed: idsToDelete.length };
+}
+
+// ── Maintenance : numéros de série de billets en double ───────────────────────
+// Un bug de génération (comptage lu avant l'insertion, sans atomicité) a permis à
+// plusieurs impressions rapprochées de générer le même numéro de série sur des
+// billets physiques différents. Le QR code de chaque billet reste unique (le scan
+// n'est pas affecté) — seul le numéro imprimé/affiché peut se répéter, ce qui donne
+// l'impression de billets "déjà scannés" au personnel qui vérifie à l'œil.
+export interface DuplicateSerialGroup {
+  serialNumber: string;
+  billeterieNames: string[];
+  count: number;
+}
+
+export async function detectDuplicateBilleterieSerials(): Promise<{
+  error?: string;
+  groups?: DuplicateSerialGroup[];
+  totalDuplicateTickets?: number;
+}> {
+  const supabase = await createClient();
+  const { data: { user: currentUser } } = await supabase.auth.getUser();
+  if (!currentUser) return { error: "Non authentifié" };
+  const { data: caller } = await supabase.from("profiles").select("role").eq("id", currentUser.id).single();
+  if (caller?.role !== "fondateur") return { error: "Non autorisé" };
+
+  const adminClient = await createAdminClient();
+  // Pas de .eq("billeterie_id", ...) : le bug générait le numéro à partir d'un
+  // comptage GLOBAL (toutes billetteries confondues), donc un doublon peut très
+  // bien exister entre deux billetteries différentes, pas seulement au sein d'une.
+  const allTickets = await fetchAll<{ id: string; billeterie_id: string; serial_number: string | null }>(
+    (from, to) =>
+      adminClient
+        .from("billeterie_tickets")
+        .select("id, billeterie_id, serial_number")
+        .not("serial_number", "is", null)
+        .order("id", { ascending: true })
+        .range(from, to)
+  );
+
+  const byKey: Record<string, Set<string>> = {};
+  for (const t of allTickets) {
+    const key = t.serial_number as string;
+    (byKey[key] ||= new Set()).add(t.billeterie_id);
+  }
+
+  const counts: Record<string, number> = {};
+  for (const t of allTickets) counts[t.serial_number as string] = (counts[t.serial_number as string] || 0) + 1;
+
+  const dupKeys = Object.keys(counts).filter((k) => counts[k] > 1);
+  if (dupKeys.length === 0) return { groups: [], totalDuplicateTickets: 0 };
+
+  const allBilIds = [...new Set(dupKeys.flatMap((k) => [...byKey[k]]))];
+  const { data: bils } = await adminClient.from("billeterie").select("id, name").in("id", allBilIds);
+  const nameMap = new Map((bils || []).map((b: any) => [b.id as string, b.name as string]));
+
+  const groups: DuplicateSerialGroup[] = dupKeys.map((serialNumber) => ({
+    serialNumber,
+    billeterieNames: [...byKey[serialNumber]].map((id) => nameMap.get(id) || "Billetterie inconnue"),
+    count: counts[serialNumber],
+  }));
+  groups.sort((a, b) => b.count - a.count);
+
+  const totalDuplicateTickets = dupKeys.reduce((sum, k) => sum + (counts[k] - 1), 0);
+  return { groups, totalDuplicateTickets };
+}
+
+// Renumérote les billets en double (garde le plus ancien avec son numéro d'origine,
+// réattribue un nouveau numéro unique — via la séquence atomique — aux autres).
+// N'affecte ni le QR code, ni l'historique de scan : seul le champ serial_number
+// change. Les billets déjà imprimés sur papier garderont leur ancien numéro visible —
+// cette correction fiabilise les données en base, pas l'étiquette déjà imprimée.
+export async function fixDuplicateBilleterieSerials(): Promise<{
+  error?: string;
+  fixed?: number;
+}> {
+  const supabase = await createClient();
+  const { data: { user: currentUser } } = await supabase.auth.getUser();
+  if (!currentUser) return { error: "Non authentifié" };
+  const { data: caller } = await supabase.from("profiles").select("role").eq("id", currentUser.id).single();
+  if (caller?.role !== "fondateur") return { error: "Non autorisé" };
+
+  const adminClient = await createAdminClient();
+  const allTickets = await fetchAll<{ id: string; billeterie_id: string; serial_number: string | null; created_at: string }>(
+    (from, to) =>
+      adminClient
+        .from("billeterie_tickets")
+        .select("id, billeterie_id, serial_number, created_at")
+        .not("serial_number", "is", null)
+        .order("created_at", { ascending: true })
+        .range(from, to)
+  );
+
+  // Regroupement global (pas par billetterie) : le bug comptait tous les billets
+  // du jour toutes billetteries confondues, un doublon peut donc traverser deux
+  // billetteries différentes.
+  const byKey: Record<string, typeof allTickets> = {};
+  for (const t of allTickets) {
+    const key = t.serial_number as string;
+    (byKey[key] ||= []).push(t);
+  }
+
+  // Pour chaque groupe en double (déjà trié par created_at asc), le premier garde
+  // son numéro ; les suivants ont besoin d'un nouveau numéro.
+  const toRenumber: { id: string; datePrefix: string }[] = [];
+  for (const rows of Object.values(byKey)) {
+    if (rows.length <= 1) continue;
+    const match = rows[0].serial_number?.match(/^BIL-(\d{8})-\d+$/);
+    const datePrefix = match ? match[1] : null;
+    for (const t of rows.slice(1)) {
+      toRenumber.push({ id: t.id, datePrefix: datePrefix || t.created_at.slice(0, 10).replace(/-/g, "") });
+    }
+  }
+
+  if (toRenumber.length === 0) return { fixed: 0 };
+
+  const { data: serialRows, error: serialErr } = await adminClient.rpc("reserve_billeterie_serials", {
+    n: toRenumber.length,
+  });
+  if (serialErr || !serialRows) return { error: serialErr?.message || "Erreur génération numéros de série" };
+  const serials: number[] = (serialRows as any[]).map((row) =>
+    typeof row === "object" && row !== null ? Number(Object.values(row)[0]) : Number(row)
+  );
+
+  let fixed = 0;
+  for (let i = 0; i < toRenumber.length; i++) {
+    const { id, datePrefix } = toRenumber[i];
+    const newSerial = `BIL-${datePrefix}-${String(serials[i]).padStart(5, "0")}`;
+    const { error } = await adminClient.from("billeterie_tickets").update({ serial_number: newSerial }).eq("id", id);
+    if (!error) fixed++;
+  }
+
+  revalidatePath("/fondateur/parametres");
+  return { fixed };
 }
 
 // ── fondateurUpdateSuperAdminModules ──────────────────────────────

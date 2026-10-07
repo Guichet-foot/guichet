@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Settings2, History, Layers } from "lucide-react";
 import { PlatformFeeForm } from "./platform-fee-form";
 import { MaintenanceSection } from "./maintenance-section";
+import { SerialMaintenanceSection } from "./serial-maintenance-section";
 import { formatFCFA, formatDate } from "@/lib/format";
 
 export const metadata = { title: "Paramètres Plateforme" };
@@ -74,6 +75,7 @@ export default async function ParametresFondateurPage() {
 
       {/* Maintenance */}
       <MaintenanceSection />
+      <SerialMaintenanceSection />
 
       {/* Historique */}
       {history && history.length > 0 && (
