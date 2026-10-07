@@ -99,7 +99,7 @@ export async function createUser(formData: {
     .eq("id", currentUser.id)
     .single();
 
-  if (!caller || !["super_admin", "president_odcav", "admin_zone", "c3"].includes(caller.role)) {
+  if (!caller || !["super_admin", "president_odcav", "admin_zone", "c3", "fondateur"].includes(caller.role)) {
     return { error: "Non autorisé" };
   }
 
@@ -137,9 +137,9 @@ export async function createUser(formData: {
     formData.zoneId = caller.zone_id;
   }
 
-  // Only super_admin/president_odcav may set is_president, and only for admin_zone
+  // Only super_admin/president_odcav/fondateur may set is_president, and only for admin_zone
   const isPresident =
-    (caller.role === "super_admin" || caller.role === "president_odcav") &&
+    (caller.role === "super_admin" || caller.role === "president_odcav" || caller.role === "fondateur") &&
     formData.role === "admin_zone"
       ? (formData.isPresident ?? false)
       : false;
@@ -184,6 +184,7 @@ export async function createUser(formData: {
   }
 
   revalidatePath("/utilisateurs");
+  revalidatePath("/fondateur/utilisateurs");
   return { password: tempPassword };
 }
 
@@ -197,6 +198,7 @@ export async function toggleUserActive(userId: string, active: boolean) {
   if (error) return { error: error.message };
 
   revalidatePath("/utilisateurs");
+  revalidatePath("/fondateur/utilisateurs");
   return { success: true };
 }
 
@@ -218,6 +220,7 @@ export async function updateUserInfo(userId: string, formData: {
   if (error) return { error: error.message };
 
   revalidatePath("/utilisateurs");
+  revalidatePath("/fondateur/utilisateurs");
   return { success: true };
 }
 
@@ -268,6 +271,7 @@ export async function updateSelfInfo(formData: { fullName: string; phone: string
 
   if (error) return { error: error.message };
   revalidatePath("/utilisateurs");
+  revalidatePath("/fondateur/utilisateurs");
   return { success: true };
 }
 
@@ -276,7 +280,7 @@ export async function updateUserPermittedModules(userId: string, modules: string
   const check = await canManage(userId);
   if ("error" in check) return { error: check.error };
 
-  if (check.caller.role !== "president_odcav") {
+  if (check.caller.role !== "president_odcav" && check.caller.role !== "fondateur") {
     return { error: "Non autorisé" };
   }
 
@@ -298,6 +302,7 @@ export async function updateUserPermittedModules(userId: string, modules: string
 
   if (error) return { error: error.message };
   revalidatePath("/utilisateurs");
+  revalidatePath("/fondateur/utilisateurs");
   return { success: true };
 }
 
@@ -336,6 +341,7 @@ export async function updateC3ZoneIds(userId: string, zoneIds: string[]) {
 
   if (error) return { error: error.message };
   revalidatePath("/utilisateurs");
+  revalidatePath("/fondateur/utilisateurs");
   return { success: true };
 }
 
@@ -363,5 +369,6 @@ export async function deleteUser(userId: string) {
   if (authError) return { error: authError.message };
 
   revalidatePath("/utilisateurs");
+  revalidatePath("/fondateur/utilisateurs");
   return { success: true };
 }

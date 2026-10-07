@@ -118,15 +118,18 @@ export function UserActions({
 
   const isSelf = user.id === currentUserId;
 
-  // Président ODCAV can only be managed by fondateur (never shown here, but guard anyway)
-  const isProtectedOdcavPresident = user.role === "president_odcav";
-  // Président de zone can only be managed by super_admin or president_odcav
+  // Président ODCAV can only be managed by fondateur
+  const isProtectedOdcavPresident = user.role === "president_odcav" && currentUserRole !== "fondateur";
+  // Président de zone can only be managed by super_admin, president_odcav or fondateur
   const isProtectedPresident =
     isProtectedOdcavPresident ||
-    (user.is_president && currentUserRole !== "super_admin" && currentUserRole !== "president_odcav");
+    (user.is_president && !["super_admin", "president_odcav", "fondateur"].includes(currentUserRole));
 
   // Roles available in the edit dialog
   const editableRoles = (() => {
+    if (currentUserRole === "fondateur") {
+      return ["portier", "caissier", "admin_zone", "c3", "tresorier", "super_admin", "president_odcav"];
+    }
     if (currentUserRole === "president_odcav") {
       return ["portier", "caissier", "admin_zone", "c3", "tresorier", "super_admin"];
     }
@@ -144,8 +147,8 @@ export function UserActions({
     const result = await updateUserInfo(user.id, { fullName, phone, role });
     if (result.error) { toast.error(result.error); setLoading(null); return; }
 
-    // Save module permissions when president_odcav edits a super_admin
-    if (currentUserRole === "president_odcav" && (user.role === "super_admin" || role === "super_admin")) {
+    // Save module permissions when president_odcav/fondateur edits a super_admin
+    if ((currentUserRole === "president_odcav" || currentUserRole === "fondateur") && (user.role === "super_admin" || role === "super_admin")) {
       const modResult = await updateUserPermittedModules(user.id, selectedModules);
       if (modResult.error) { toast.error(modResult.error); setLoading(null); return; }
     }
@@ -431,6 +434,7 @@ export function UserActions({
                   {editableRoles.includes("c3")          && <SelectItem value="c3">{ROLE_LABELS.c3}</SelectItem>}
                   {editableRoles.includes("tresorier")   && <SelectItem value="tresorier">{ROLE_LABELS.tresorier}</SelectItem>}
                   {editableRoles.includes("super_admin") && <SelectItem value="super_admin">{ROLE_LABELS.super_admin}</SelectItem>}
+                  {editableRoles.includes("president_odcav") && <SelectItem value="president_odcav">{ROLE_LABELS.president_odcav}</SelectItem>}
                 </SelectContent>
               </Select>
             </div>
@@ -467,8 +471,8 @@ export function UserActions({
               </div>
             )}
 
-            {/* Module permissions — only when president_odcav edits a super_admin */}
-            {currentUserRole === "president_odcav" && (user.role === "super_admin" || role === "super_admin") && (
+            {/* Module permissions — only when president_odcav/fondateur edits a super_admin */}
+            {(currentUserRole === "president_odcav" || currentUserRole === "fondateur") && (user.role === "super_admin" || role === "super_admin") && (
               <div className="space-y-2">
                 <Label>Modules autorisés</Label>
                 <p className="text-xs text-muted-foreground">Laissez tout décoché pour accès complet.</p>
