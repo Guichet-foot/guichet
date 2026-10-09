@@ -107,7 +107,7 @@ const FIN_CSS = `
 @font-face { font-family:'Archivo'; font-style:normal; font-weight:500 900; font-display:swap; src:url('/billet-finales/fonts/archivo-var.woff2') format('woff2'); }
 @font-face { font-family:'Oswald'; font-style:normal; font-weight:400 700; font-display:swap; src:url('/billet-finales/fonts/oswald-var.woff2') format('woff2'); }
 @page { size: ${FIN_PAGE_MM_W}mm ${FIN_PAGE_MM_H}mm; margin: 0; }
-* { margin:0; padding:0; box-sizing:border-box; }
+* { margin:0; padding:0; box-sizing:border-box; -webkit-print-color-adjust:exact; print-color-adjust:exact; color-adjust:exact; }
 body { background:#fff; }
 .fin-page { width:${FIN_PAGE_MM_W}mm; height:${FIN_PAGE_MM_H}mm; overflow:hidden; position:relative; break-after: page; }
 .fin-page:last-child { break-after: auto; }
