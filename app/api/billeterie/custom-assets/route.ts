@@ -41,16 +41,25 @@ export async function POST(request: Request) {
   // few hundred CSS px, so an untouched phone photo (often several MB) just
   // bloats every printed ticket for no visible gain. Logos are flattened to
   // white since they're always shown on the ticket's white header area.
+  // Backgrounds get the grayscale/brightness/contrast look baked into the
+  // pixels once here instead of a CSS filter the browser would otherwise
+  // have to recompute on every single printed page of a batch.
   try {
     const sharp = (await import("sharp")).default;
-    const maxWidth = kind === "logo" ? 600 : 1200;
-    const quality = kind === "logo" ? 85 : 78;
-    buffer = await sharp(buffer)
-      .rotate()
-      .resize({ width: maxWidth, withoutEnlargement: true })
-      .flatten({ background: "#ffffff" })
-      .jpeg({ quality, mozjpeg: true })
-      .toBuffer();
+    let pipeline = sharp(buffer).rotate();
+    if (kind === "logo") {
+      pipeline = pipeline
+        .resize({ width: 600, withoutEnlargement: true })
+        .flatten({ background: "#ffffff" });
+    } else {
+      pipeline = pipeline
+        .resize({ width: 1200, withoutEnlargement: true })
+        .flatten({ background: "#ffffff" })
+        .grayscale()
+        .modulate({ brightness: 1.75 })
+        .linear(0.85, 128 * (1 - 0.85));
+    }
+    buffer = await pipeline.jpeg({ quality: kind === "logo" ? 85 : 78, mozjpeg: true }).toBuffer();
     contentType = "image/jpeg";
     ext = "jpg";
   } catch {

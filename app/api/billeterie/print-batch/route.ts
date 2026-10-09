@@ -120,7 +120,6 @@ body { background:#fff; }
 .fin-bg {
   position:absolute; left:0; right:0; top:270px; height:1040px;
   background-color:#fff; background-position:center 62%; background-size:cover; background-repeat:no-repeat;
-  filter: grayscale(1) brightness(1.75) contrast(.85);
 }
 .fin-bg-fade {
   position:absolute; left:0; right:0; top:270px; height:1040px;
@@ -135,7 +134,7 @@ body { background:#fff; }
 
 .fin-title-block { position:absolute; left:0; right:0; top:340px; display:flex; flex-direction:column; align-items:center; }
 .fin-title-row { position:relative; width:100%; display:flex; justify-content:center; }
-.fin-troph { position:absolute; top:6px; width:160px; height:107px; background-image:url('/billet-finales/trophy.jpg'); background-repeat:no-repeat; background-size:200% 100%; }
+.fin-troph { position:absolute; top:6px; width:160px; height:107px; background-image:url('/billet-finales/trophy.png'); background-repeat:no-repeat; background-size:200% 100%; }
 .fin-troph-l { left:84px; background-position:0 0; }
 .fin-troph-r { right:84px; background-position:100% 0; }
 .fin-title-main { font-family:'Anton',sans-serif; font-size:108px; line-height:1; letter-spacing:1px; }
