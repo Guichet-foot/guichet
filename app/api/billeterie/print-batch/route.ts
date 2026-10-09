@@ -38,6 +38,7 @@ const TROPHY_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="#111" stroke-wi
 function renderFinalesTicket(
   ticket: { serial_number: string; created_at: string },
   title: string,
+  dateLabel: string | null,
   priceLabel: string,
   matches: Array<{ home: string; away: string }>,
   venue: string | null,
@@ -85,6 +86,7 @@ function renderFinalesTicket(
         <div class="fin-title-main">${titleMain}</div>
       </div>
       ${titleSub ? `<div class="fin-title-sub">${titleSub}</div>` : ""}
+      ${dateLabel ? `<div class="fin-date">${escapeHtml(dateLabel.toUpperCase())}</div>` : ""}
       <div class="fin-price">${escapeHtml(priceLabel)}</div>
     </div>
 
@@ -145,7 +147,8 @@ body { background:#fff; }
 .fin-troph-r { right:165px; }
 .fin-title-main { font-family:'Anton',sans-serif; font-size:108px; line-height:1; letter-spacing:1px; }
 .fin-title-sub { font-family:'Anton',sans-serif; font-size:84px; line-height:1.05; letter-spacing:.5px; margin-top:6px; }
-.fin-price { margin-top:40px; min-width:510px; padding:0 30px; height:90px; border-radius:12px; background:#111; color:#fff; display:flex; align-items:center; justify-content:center; font-family:'Archivo',sans-serif; font-weight:900; font-size:66px; letter-spacing:1px; white-space:nowrap; }
+.fin-date { font-family:'Archivo',sans-serif; font-weight:600; font-size:28px; letter-spacing:1px; margin-top:14px; color:#333; }
+.fin-price { margin-top:20px; min-width:510px; padding:0 30px; height:90px; border-radius:12px; background:#111; color:#fff; display:flex; align-items:center; justify-content:center; font-family:'Archivo',sans-serif; font-weight:900; font-size:66px; letter-spacing:1px; white-space:nowrap; }
 
 .fin-matches { position:absolute; left:48px; right:44px; top:688px; display:flex; flex-direction:column; gap:14px; }
 .fin-match-row { position:relative; height:72px; border-radius:12px; background:rgba(255,255,255,.93); box-shadow:0 1px 3px rgba(0,0,0,.25); display:grid; grid-template-columns:60px minmax(0,1fr) 92px minmax(0,1fr) 60px; align-items:center; }
@@ -275,7 +278,7 @@ export async function GET(request: Request) {
   const billeterieId = tickets[0].billeterie_id;
   const { data: bil } = await adminClient
     .from("billeterie")
-    .select("name, price, match_ids, categories, show_matches_on_ticket, custom_design, organizer_logo_url, background_image_url")
+    .select("name, price, match_ids, categories, show_matches_on_ticket, custom_design, organizer_logo_url, background_image_url, custom_date, custom_venue")
     .eq("id", billeterieId)
     .single();
 
@@ -308,7 +311,10 @@ export async function GET(request: Request) {
       home: m.home_team_zone ? `${m.home_team} (${fmtZone(m.home_team_zone)})` : m.home_team,
       away: m.away_team_zone ? `${m.away_team} (${fmtZone(m.away_team_zone)})` : m.away_team,
     }));
-    const venue = (matches || []).find((m: any) => m.venue)?.venue ?? null;
+    const venue = (bil as any).custom_venue || null;
+    const dateLabel = (bil as any).custom_date
+      ? format(new Date(`${(bil as any).custom_date}T00:00:00`), "dd MMMM yyyy", { locale: fr })
+      : null;
     const organizerLogoUrl = (bil as any).organizer_logo_url || "";
     const backgroundImageUrl = (bil as any).background_image_url || "";
 
@@ -318,7 +324,7 @@ export async function GET(request: Request) {
           width: 500, margin: 1, errorCorrectionLevel: "M",
           color: { dark: "#000000", light: "#FFFFFF" },
         });
-        return renderFinalesTicket(ticket, displayName, priceLabel, matchList, venue, qrDataUrl, organizerLogoUrl, backgroundImageUrl);
+        return renderFinalesTicket(ticket, displayName, dateLabel, priceLabel, matchList, venue, qrDataUrl, organizerLogoUrl, backgroundImageUrl);
       })
     );
 

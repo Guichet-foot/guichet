@@ -48,6 +48,8 @@ export default function NouveauBilletteriePage() {
   const [customDesign, setCustomDesign] = useState(false);
   const [organizerLogoUrl, setOrganizerLogoUrl] = useState<string | null>(null);
   const [backgroundImageUrl, setBackgroundImageUrl] = useState<string | null>(null);
+  const [customDate, setCustomDate] = useState("");
+  const [customVenue, setCustomVenue] = useState("");
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [uploadingBg, setUploadingBg] = useState(false);
 
@@ -162,6 +164,8 @@ export default function NouveauBilletteriePage() {
       customDesign,
       organizerLogoUrl,
       backgroundImageUrl,
+      customDate: customDate || null,
+      customVenue: customVenue || null,
     });
     setLoading(false);
 
@@ -369,9 +373,30 @@ export default function NouveauBilletteriePage() {
 
               {customDesign && (
                 <div className="space-y-4 pt-1">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="customDate" className="text-xs">Date</Label>
+                      <Input
+                        id="customDate"
+                        type="date"
+                        value={customDate}
+                        onChange={(e) => setCustomDate(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="customVenue" className="text-xs">Stade</Label>
+                      <Input
+                        id="customVenue"
+                        value={customVenue}
+                        onChange={(e) => setCustomVenue(e.target.value)}
+                        placeholder="Stade Caroline Faye"
+                      />
+                    </div>
+                  </div>
+
                   <div className="space-y-1.5">
                     <Label className="text-xs">Logo de l&apos;organisateur</Label>
-                    <p className="text-xs text-muted-foreground">Affiché à côté du logo Guichet Foot (fixe)</p>
+                    <p className="text-xs text-muted-foreground">Affiché en haut du billet</p>
                     <input
                       type="file"
                       accept="image/jpeg,image/png"
