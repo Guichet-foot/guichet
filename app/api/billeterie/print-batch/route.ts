@@ -3,84 +3,168 @@ import { NextResponse } from "next/server";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import QRCode from "qrcode";
-import { readFileSync } from "fs";
-import { join } from "path";
-import React from "react";
 import { getPrintStyles } from "@/lib/ticket-print-template";
 import type { PrintFormat } from "@/lib/ticket-print-template";
 import { fmtZone } from "@/lib/format";
 import { fetchAll } from "@/lib/supabase/paginate";
-import type { CustomTicketPDFData } from "@/lib/pdf/billeterie-custom-ticket-pdf";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-async function fetchImageDataUrl(url: string): Promise<string | null> {
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 10_000);
-    const r = await fetch(url, { signal: controller.signal });
-    clearTimeout(timer);
-    if (!r.ok) return null;
-    const buf = Buffer.from(await r.arrayBuffer());
-    const ct = r.headers.get("content-type") || "image/jpeg";
-    return `data:${ct};base64,${buf.toString("base64")}`;
-  } catch {
-    return null;
-  }
+// ── "Billet personnalisé" (design finales) — poster-style ticket ──────────
+// 1024×1476 design canvas (matches the reference design in
+// public/Billet Finales.html, minus the PASS MULTI-MATCHS bar), scaled down
+// to a printable physical page via CSS transform.
+const FIN_W = 1024;
+const FIN_H = 1476;
+const FIN_PAGE_MM_W = 105;
+const FIN_PAGE_MM_H = (FIN_PAGE_MM_W * FIN_H) / FIN_W;
+const FIN_SCALE = (FIN_PAGE_MM_W * (96 / 25.4)) / FIN_W;
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
-async function renderCustomDesignPdf(
-  tickets: any[],
-  bil: any,
-  matches: Array<{ home_team: string; away_team: string; home_team_zone?: string | null; away_team_zone?: string | null; venue?: string | null }>,
-  effectivePrice: number,
+function renderFinalesTicket(
+  ticket: { serial_number: string; created_at: string },
+  title: string,
+  priceLabel: string,
+  matches: Array<{ home: string; away: string }>,
+  venue: string | null,
   sellerName: string,
-  displayName: string
-): Promise<Buffer> {
-  const [{ renderToBuffer }, { CustomTicketsPDF }] = await Promise.all([
-    import("@react-pdf/renderer"),
-    import("@/lib/pdf/billeterie-custom-ticket-pdf"),
-  ]);
+  qrDataUrl: string,
+  organizerLogoUrl: string,
+  backgroundImageUrl: string
+): string {
+  const words = title.trim().split(/\s+/);
+  const titleMain = escapeHtml(words[0] || title);
+  const titleSub = escapeHtml(words.slice(1).join(" "));
+  const createdAtFmt = format(new Date(ticket.created_at), "dd/MM/yyyy HH:mm", { locale: fr });
 
-  const logoBuf = readFileSync(join(process.cwd(), "public", "logoticket.png"));
-  const gfLogoDataUrl = `data:image/png;base64,${logoBuf.toString("base64")}`;
+  const matchRows = matches.map((m) => `
+    <div class="fin-match-row">
+      <div class="fin-ball"></div>
+      <div class="fin-team">${escapeHtml(m.home)}</div>
+      <div class="fin-vs">VS</div>
+      <div class="fin-team">${escapeHtml(m.away)}</div>
+      <div class="fin-ball"></div>
+    </div>`).join("");
 
-  const [organizerLogoDataUrl, backgroundDataUrl] = await Promise.all([
-    bil.organizer_logo_url ? fetchImageDataUrl(bil.organizer_logo_url) : Promise.resolve(null),
-    bil.background_image_url ? fetchImageDataUrl(bil.background_image_url) : Promise.resolve(null),
-  ]);
+  const venueHtml = venue ? `
+    <div class="fin-venue">
+      <svg width="30" height="38" viewBox="0 0 24 30"><path d="M12 0C5.4 0 0 5.2 0 11.6 0 20.3 12 30 12 30s12-9.7 12-18.4C24 5.2 18.6 0 12 0z" fill="#fff"></path><circle cx="12" cy="11.5" r="4.5" fill="#111"></circle></svg>
+      <span>${escapeHtml(venue.toUpperCase())}</span>
+    </div>` : "";
 
-  const priceLabel = `${new Intl.NumberFormat("fr-FR").format(effectivePrice)} FCFA`;
-  const matchList = matches.map((m) => ({
-    home: m.home_team_zone ? `${m.home_team} (${fmtZone(m.home_team_zone)})` : m.home_team,
-    away: m.away_team_zone ? `${m.away_team} (${fmtZone(m.away_team_zone)})` : m.away_team,
-  }));
-  const venue = matches.find((m) => m.venue)?.venue ?? null;
+  const bgUrl = backgroundImageUrl || "/billet-finales/stade-default.png";
 
-  const ticketData: CustomTicketPDFData[] = await Promise.all(
-    tickets.map(async (ticket: any) => {
-      const qrDataUrl = await QRCode.toDataURL(`BIL-${ticket.qr_token}`, {
-        width: 240, margin: 1, errorCorrectionLevel: "M",
-        color: { dark: "#000000", light: "#FFFFFF" },
-      });
-      return {
-        serialNumber: ticket.serial_number,
-        createdAtLabel: format(new Date(ticket.created_at), "dd/MM/yyyy HH:mm", { locale: fr }),
-        sellerName,
-        qrDataUrl,
-        title: displayName,
-        priceLabel,
-        matches: matchList,
-        venue,
-        gfLogoDataUrl,
-        organizerLogoDataUrl,
-        backgroundDataUrl,
-      };
-    })
-  );
+  return `
+<div class="fin-page">
+  <div class="fin-ticket">
+    <div class="fin-bg" style="background-image:url('${escapeHtml(bgUrl)}');"></div>
+    <div class="fin-bg-fade"></div>
 
-  return renderToBuffer(React.createElement(CustomTicketsPDF, { tickets: ticketData }) as any);
+    <div class="fin-header">
+      <div class="fin-gf-wrap"><img src="/billet-finales/gf-logo.png" alt="Guichet Foot" class="fin-gf-logo"></div>
+      <div class="fin-divider"></div>
+      ${organizerLogoUrl ? `<img src="${escapeHtml(organizerLogoUrl)}" alt="Organisateur" class="fin-org-logo">` : ""}
+    </div>
+    <div class="fin-sep" style="top:322px;"></div>
+
+    <div class="fin-title-block">
+      <div class="fin-title-row">
+        <div class="fin-troph fin-troph-l"></div>
+        <div class="fin-troph fin-troph-r"></div>
+        <div class="fin-title-main">${titleMain}</div>
+      </div>
+      ${titleSub ? `<div class="fin-title-sub">${titleSub}</div>` : ""}
+      <div class="fin-price">${escapeHtml(priceLabel)}</div>
+    </div>
+
+    ${matches.length > 0 ? `<div class="fin-matches">${matchRows}</div>` : ""}
+
+    ${venueHtml}
+
+    <div class="fin-qr-box"><img src="${qrDataUrl}" alt="QR"></div>
+    <div class="fin-issuer">
+      <div class="fin-ticket-id">${escapeHtml(ticket.serial_number)}</div>
+      <div class="fin-issuer-line">${escapeHtml(sellerName)} &middot; ${createdAtFmt}</div>
+    </div>
+
+    <div class="fin-sep" style="top:1306px;"></div>
+    <div class="fin-norefund">Non remboursable</div>
+    <div class="fin-footer">
+      <div class="fin-footer-line"></div>
+      <div class="fin-ball fin-ball-lg"></div>
+      <div class="fin-bonmatch">BON MATCH !</div>
+      <div class="fin-ball fin-ball-lg"></div>
+      <div class="fin-footer-line"></div>
+    </div>
+  </div>
+</div>`;
 }
+
+const FIN_CSS = `
+@font-face { font-family:'Anton'; font-style:normal; font-weight:400; font-display:swap; src:url('/billet-finales/fonts/anton-400.woff2') format('woff2'); }
+@font-face { font-family:'Archivo'; font-style:normal; font-weight:500 900; font-display:swap; src:url('/billet-finales/fonts/archivo-var.woff2') format('woff2'); }
+@font-face { font-family:'Oswald'; font-style:normal; font-weight:400 700; font-display:swap; src:url('/billet-finales/fonts/oswald-var.woff2') format('woff2'); }
+@page { size: ${FIN_PAGE_MM_W}mm ${FIN_PAGE_MM_H}mm; margin: 0; }
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#fff; }
+.fin-page { width:${FIN_PAGE_MM_W}mm; height:${FIN_PAGE_MM_H}mm; overflow:hidden; position:relative; break-after: page; }
+.fin-page:last-child { break-after: auto; }
+.fin-ticket {
+  position:relative; width:${FIN_W}px; height:${FIN_H}px;
+  background:#fff; border:6px solid #111; overflow:hidden;
+  font-family:'Oswald',sans-serif; color:#111;
+  transform-origin: top left; transform: scale(${FIN_SCALE});
+}
+.fin-bg {
+  position:absolute; left:0; right:0; top:270px; height:1040px;
+  background-color:#fff; background-position:center 62%; background-size:cover; background-repeat:no-repeat;
+  filter: grayscale(1) brightness(1.75) contrast(.85);
+}
+.fin-bg-fade {
+  position:absolute; left:0; right:0; top:270px; height:1040px;
+  background: linear-gradient(180deg,#fff 0%,rgba(255,255,255,.55) 18%,rgba(255,255,255,.15) 45%,rgba(255,255,255,.1) 80%,#fff 100%);
+}
+.fin-header { position:absolute; left:0; right:0; top:0; height:320px; display:flex; align-items:center; justify-content:center; gap:40px; }
+.fin-gf-wrap { width:360px; height:220px; overflow:hidden; display:flex; justify-content:center; }
+.fin-gf-logo { width:360px; height:540px; margin-top:-145px; flex:none; object-fit:contain; }
+.fin-divider { width:3px; height:240px; background:#111; }
+.fin-org-logo { max-width:300px; max-height:293px; object-fit:contain; }
+.fin-sep { position:absolute; left:20px; right:20px; border-top:3px dashed #111; }
+
+.fin-title-block { position:absolute; left:0; right:0; top:340px; display:flex; flex-direction:column; align-items:center; }
+.fin-title-row { position:relative; width:100%; display:flex; justify-content:center; }
+.fin-troph { position:absolute; top:6px; width:160px; height:107px; background-image:url('/billet-finales/trophy.png'); background-repeat:no-repeat; background-size:200% 100%; }
+.fin-troph-l { left:84px; background-position:0 0; }
+.fin-troph-r { right:84px; background-position:100% 0; }
+.fin-title-main { font-family:'Anton',sans-serif; font-size:108px; line-height:1; letter-spacing:1px; }
+.fin-title-sub { font-family:'Anton',sans-serif; font-size:84px; line-height:1.05; letter-spacing:.5px; margin-top:6px; }
+.fin-price { margin-top:40px; min-width:510px; padding:0 30px; height:90px; border-radius:12px; background:#111; color:#fff; display:flex; align-items:center; justify-content:center; font-family:'Archivo',sans-serif; font-weight:900; font-size:66px; letter-spacing:1px; white-space:nowrap; }
+
+.fin-matches { position:absolute; left:48px; right:44px; top:688px; display:flex; flex-direction:column; gap:14px; }
+.fin-match-row { position:relative; height:72px; border-radius:12px; background:rgba(255,255,255,.93); box-shadow:0 1px 3px rgba(0,0,0,.25); display:grid; grid-template-columns:60px minmax(0,1fr) 92px minmax(0,1fr) 60px; align-items:center; }
+.fin-ball { justify-self:center; width:48px; height:48px; border-radius:50%; background:#fff url('/billet-finales/ballon.jpg') -20px -43px/125px 125px no-repeat; }
+.fin-team { text-align:center; font-weight:700; font-size:25px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:0 6px; }
+.fin-vs { justify-self:center; width:88px; height:62px; background:#111; color:#fff; clip-path:polygon(22% 0,78% 0,100% 50%,78% 100%,22% 100%,0 50%); display:flex; align-items:center; justify-content:center; font-family:'Archivo',sans-serif; font-weight:900; font-size:30px; }
+
+.fin-venue { position:absolute; left:228px; width:568px; top:948px; height:62px; border-radius:12px; background:#111; color:#fff; display:flex; align-items:center; justify-content:center; gap:22px; }
+.fin-venue span { font-weight:600; font-size:32px; letter-spacing:.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+.fin-qr-box { position:absolute; left:386px; top:1014px; width:252px; height:226px; border-radius:12px; background:#fff; display:flex; align-items:center; justify-content:center; }
+.fin-qr-box img { width:208px; height:208px; image-rendering:pixelated; }
+
+.fin-issuer { position:absolute; left:0; right:0; top:1234px; text-align:center; font-family:'Archivo',sans-serif; }
+.fin-ticket-id { font-weight:800; font-size:23px; letter-spacing:.5px; }
+.fin-issuer-line { font-weight:500; font-size:19px; margin-top:6px; }
+
+.fin-norefund { position:absolute; left:0; right:0; top:1324px; text-align:center; font-family:'Archivo',sans-serif; font-weight:600; font-size:22px; }
+.fin-footer { position:absolute; left:0; right:0; top:1350px; height:100px; display:flex; align-items:center; justify-content:center; gap:16px; }
+.fin-footer-line { width:84px; border-top:2px solid #111; }
+.fin-ball-lg { width:80px; height:80px; border-radius:50%; background:#fff url('/billet-finales/ballon.jpg') -34px -72px/209px 209px no-repeat; }
+.fin-bonmatch { font-family:'Anton',sans-serif; font-size:76px; line-height:1; margin:0 40px; }
+`;
 
 function trunc(s: string, max: number): string {
   return s.length <= max ? s : s.slice(0, max - 1) + "…";
@@ -215,19 +299,45 @@ export async function GET(request: Request) {
   const displayName = categoryName ? `${bil.name} — ${categoryName}` : (bil.name as string);
 
   if ((bil as any).custom_design) {
-    try {
-      const pdfBuffer = await renderCustomDesignPdf(tickets, bil, matches || [], effectivePrice, sellerName, displayName);
-      return new NextResponse(new Uint8Array(pdfBuffer), {
-        headers: {
-          "Content-Type": "application/pdf",
-          "Content-Disposition": `inline; filename="billets-${billeterieId}.pdf"`,
-        },
-      });
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
-      console.error("[print-batch] custom design PDF error:", err);
-      return new NextResponse(`Erreur de génération PDF : ${msg}`, { status: 500 });
-    }
+    const priceLabel = `${new Intl.NumberFormat("fr-FR").format(effectivePrice)} FCFA`;
+    const matchList = (matches || []).map((m: any) => ({
+      home: m.home_team_zone ? `${m.home_team} (${fmtZone(m.home_team_zone)})` : m.home_team,
+      away: m.away_team_zone ? `${m.away_team} (${fmtZone(m.away_team_zone)})` : m.away_team,
+    }));
+    const venue = (matches || []).find((m: any) => m.venue)?.venue ?? null;
+    const organizerLogoUrl = (bil as any).organizer_logo_url || "";
+    const backgroundImageUrl = (bil as any).background_image_url || "";
+
+    const finBlocks = await Promise.all(
+      tickets.map(async (ticket: any) => {
+        const qrDataUrl = await QRCode.toDataURL(`BIL-${ticket.qr_token}`, {
+          width: 416, margin: 1, errorCorrectionLevel: "M",
+          color: { dark: "#000000", light: "#FFFFFF" },
+        });
+        return renderFinalesTicket(ticket, displayName, priceLabel, matchList, venue, sellerName, qrDataUrl, organizerLogoUrl, backgroundImageUrl);
+      })
+    );
+
+    const html = `<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Billetterie — ${escapeHtml(bil.name as string)}</title>
+<style>${FIN_CSS}</style>
+</head>
+<body>
+${finBlocks.join("\n")}
+<script>
+window.onload = function() {
+  setTimeout(function() { window.print(); }, 300);
+  window.addEventListener('afterprint', function() { if (window.opener) window.close(); });
+};
+</script>
+</body>
+</html>`;
+
+    return new NextResponse(html, { headers: { "Content-Type": "text/html; charset=utf-8" } });
   }
 
   const qrPx = fmt === "58" ? 180 : 220;
