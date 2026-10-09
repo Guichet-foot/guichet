@@ -54,7 +54,7 @@ function renderFinalesTicket(
       <span>${escapeHtml(venue.toUpperCase())}</span>
     </div>` : "";
 
-  const bgUrl = backgroundImageUrl || "/billet-finales/stade-default.png";
+  const bgUrl = backgroundImageUrl || "/billet-finales/stade-default.jpg";
 
   return `
 <div class="fin-page">
@@ -63,7 +63,7 @@ function renderFinalesTicket(
     <div class="fin-bg-fade"></div>
 
     <div class="fin-header">
-      <div class="fin-gf-wrap"><img src="/billet-finales/gf-logo.png" alt="Guichet Foot" class="fin-gf-logo"></div>
+      <div class="fin-gf-wrap"><img src="/billet-finales/gf-logo.jpg" alt="Guichet Foot" class="fin-gf-logo"></div>
       <div class="fin-divider"></div>
       ${organizerLogoUrl ? `<img src="${escapeHtml(organizerLogoUrl)}" alt="Organisateur" class="fin-org-logo">` : ""}
     </div>
@@ -135,7 +135,7 @@ body { background:#fff; }
 
 .fin-title-block { position:absolute; left:0; right:0; top:340px; display:flex; flex-direction:column; align-items:center; }
 .fin-title-row { position:relative; width:100%; display:flex; justify-content:center; }
-.fin-troph { position:absolute; top:6px; width:160px; height:107px; background-image:url('/billet-finales/trophy.png'); background-repeat:no-repeat; background-size:200% 100%; }
+.fin-troph { position:absolute; top:6px; width:160px; height:107px; background-image:url('/billet-finales/trophy.jpg'); background-repeat:no-repeat; background-size:200% 100%; }
 .fin-troph-l { left:84px; background-position:0 0; }
 .fin-troph-r { right:84px; background-position:100% 0; }
 .fin-title-main { font-family:'Anton',sans-serif; font-size:108px; line-height:1; letter-spacing:1px; }

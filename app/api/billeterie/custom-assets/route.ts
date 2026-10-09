@@ -33,14 +33,36 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Format d'image invalide (JPEG ou PNG uniquement)" }, { status: 400 });
   }
 
-  const ext = file.type === "image/png" ? "png" : "jpg";
+  let buffer = Buffer.from(await file.arrayBuffer());
+  let contentType = file.type;
+  let ext = file.type === "image/png" ? "png" : "jpg";
+
+  // Downscale + re-encode as JPEG — the ticket only ever displays these at a
+  // few hundred CSS px, so an untouched phone photo (often several MB) just
+  // bloats every printed ticket for no visible gain. Logos are flattened to
+  // white since they're always shown on the ticket's white header area.
+  try {
+    const sharp = (await import("sharp")).default;
+    const maxWidth = kind === "logo" ? 600 : 1200;
+    const quality = kind === "logo" ? 85 : 78;
+    buffer = await sharp(buffer)
+      .rotate()
+      .resize({ width: maxWidth, withoutEnlargement: true })
+      .flatten({ background: "#ffffff" })
+      .jpeg({ quality, mozjpeg: true })
+      .toBuffer();
+    contentType = "image/jpeg";
+    ext = "jpg";
+  } catch {
+    // sharp unavailable in this environment — store the original upload as-is.
+  }
+
   const path = `custom-tickets/${user.id}-${kind}-${Date.now()}.${ext}`;
-  const buffer = Buffer.from(await file.arrayBuffer());
 
   const adminClient = await createAdminClient();
   const { error: uploadError } = await adminClient.storage
     .from("billeterie-assets")
-    .upload(path, buffer, { upsert: true, contentType: file.type });
+    .upload(path, buffer, { upsert: true, contentType });
 
   if (uploadError) {
     return NextResponse.json({ error: uploadError.message }, { status: 500 });
