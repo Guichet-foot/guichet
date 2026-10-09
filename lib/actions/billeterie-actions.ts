@@ -183,6 +183,9 @@ export async function createBilleterie(formData: {
   zoneId?: string;
   blocksOrdered?: number | null;
   blockOrderDate?: string | null;
+  customDesign?: boolean;
+  organizerLogoUrl?: string | null;
+  backgroundImageUrl?: string | null;
 }): Promise<{ error?: string; billeterieId?: string; batchId?: string }> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -207,6 +210,10 @@ export async function createBilleterie(formData: {
     if (formData.price < 0) return { error: "Prix invalide" };
   }
 
+  if (formData.customDesign && (!formData.organizerLogoUrl || !formData.backgroundImageUrl)) {
+    return { error: "Logo organisateur et image d'arrière-plan requis pour un billet personnalisé" };
+  }
+
   // Determine zone_id: explicit param, or auto-detect for admin_zone creators
   const bilZoneId: string | null =
     formData.zoneId ||
@@ -222,6 +229,9 @@ export async function createBilleterie(formData: {
     zone_id: bilZoneId,
     blocks_ordered: formData.blocksOrdered ?? null,
     block_order_date: formData.blockOrderDate ?? null,
+    custom_design: formData.customDesign === true,
+    organizer_logo_url: formData.customDesign ? (formData.organizerLogoUrl || null) : null,
+    background_image_url: formData.customDesign ? (formData.backgroundImageUrl || null) : null,
   };
   if (isMultiCat) insertData.categories = formData.categories;
 

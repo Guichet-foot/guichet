@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Loader2, Check, Trophy, Plus, Trash2, Layers, MapPin, ChevronDown, Package, Users, Landmark } from "lucide-react";
+import { ArrowLeft, Loader2, Check, Trophy, Plus, Trash2, Layers, MapPin, ChevronDown, Package, Users, Landmark, Image as ImageIcon } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
 import { formatFCFA, fmtZone } from "@/lib/format";
@@ -45,6 +45,13 @@ export default function FondateurNouveauBilletteriePage() {
   const [categories, setCategories] = useState<BilCategory[]>([{ name: "", price: 0 }]);
   const [blocksOrdered, setBlocksOrdered] = useState("");
   const [blockOrderDate, setBlockOrderDate] = useState(() => format(new Date(), "yyyy-MM-dd"));
+
+  // Billet personnalisé (design finales) : logo organisateur + image d'arrière-plan
+  const [customDesign, setCustomDesign] = useState(false);
+  const [organizerLogoUrl, setOrganizerLogoUrl] = useState<string | null>(null);
+  const [backgroundImageUrl, setBackgroundImageUrl] = useState<string | null>(null);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [uploadingBg, setUploadingBg] = useState(false);
 
   // Mode : "matches" (sélection manuelle) | "zone" (par zone ou compte)
   const [scopeMode, setScopeMode] = useState<"matches" | "zone">("matches");
@@ -135,6 +142,34 @@ export default function FondateurNouveauBilletteriePage() {
     );
   }
 
+  async function uploadCustomAsset(file: File, kind: "logo" | "background"): Promise<string | null> {
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("kind", kind);
+    const res = await fetch("/api/billeterie/custom-assets", { method: "POST", body: fd });
+    const data = await res.json();
+    if (!res.ok) { toast.error(data.error || "Erreur d'upload"); return null; }
+    return data.url as string;
+  }
+
+  async function handleLogoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingLogo(true);
+    const url = await uploadCustomAsset(file, "logo");
+    if (url) setOrganizerLogoUrl(url);
+    setUploadingLogo(false);
+  }
+
+  async function handleBgChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingBg(true);
+    const url = await uploadCustomAsset(file, "background");
+    if (url) setBackgroundImageUrl(url);
+    setUploadingBg(false);
+  }
+
   async function handleSubmit(e: { preventDefault(): void }) {
     e.preventDefault();
 
@@ -145,6 +180,11 @@ export default function FondateurNouveauBilletteriePage() {
     } else {
       const p = parseInt(price);
       if (isNaN(p) || p < 0) { toast.error("Prix invalide"); return; }
+    }
+
+    if (customDesign && (!organizerLogoUrl || !backgroundImageUrl)) {
+      toast.error("Ajoutez le logo organisateur et l'image d'arrière-plan");
+      return;
     }
 
     let matchIds: string[];
@@ -182,6 +222,9 @@ export default function FondateurNouveauBilletteriePage() {
       zoneId: bilZoneId,
       blocksOrdered: blocksOrdered ? parseInt(blocksOrdered) : null,
       blockOrderDate: blocksOrdered ? blockOrderDate : null,
+      customDesign,
+      organizerLogoUrl,
+      backgroundImageUrl,
     });
     setLoading(false);
 
@@ -367,6 +410,81 @@ export default function FondateurNouveauBilletteriePage() {
                   />
                 </div>
               </div>
+            </div>
+
+            {/* Billet personnalisé (design finales) */}
+            <div className="space-y-3 rounded-lg border p-3 bg-muted/30">
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={customDesign}
+                  onClick={() => setCustomDesign((v) => !v)}
+                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
+                    customDesign ? "bg-brand" : "bg-muted-foreground/30"
+                  }`}
+                >
+                  <span
+                    className={`pointer-events-none block h-4 w-4 rounded-full bg-white shadow-lg transform transition-transform ${
+                      customDesign ? "translate-x-4" : "translate-x-0"
+                    }`}
+                  />
+                </button>
+                <div>
+                  <p className="text-sm font-medium flex items-center gap-1.5">
+                    <ImageIcon className="h-3.5 w-3.5 text-brand" />
+                    Billet personnalisé
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Design affiche (logo organisateur + image de fond), pour les finales — remplace le billet thermique standard
+                  </p>
+                </div>
+              </div>
+
+              {customDesign && (
+                <div className="space-y-4 pt-1">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Logo de l&apos;organisateur</Label>
+                    <p className="text-xs text-muted-foreground">Affiché à côté du logo Guichet Foot (fixe)</p>
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png"
+                      onChange={handleLogoChange}
+                      disabled={uploadingLogo}
+                      className="block w-full text-xs text-muted-foreground file:mr-3 file:rounded-md file:border-0 file:bg-brand file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-white"
+                    />
+                    {uploadingLogo && (
+                      <p className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Loader2 className="h-3 w-3 animate-spin" />Téléversement…
+                      </p>
+                    )}
+                    {organizerLogoUrl && !uploadingLogo && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={organizerLogoUrl} alt="Logo organisateur" className="h-14 w-14 object-contain rounded border bg-white p-1" />
+                    )}
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Image d&apos;arrière-plan (stade)</Label>
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png"
+                      onChange={handleBgChange}
+                      disabled={uploadingBg}
+                      className="block w-full text-xs text-muted-foreground file:mr-3 file:rounded-md file:border-0 file:bg-brand file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-white"
+                    />
+                    {uploadingBg && (
+                      <p className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Loader2 className="h-3 w-3 animate-spin" />Téléversement…
+                      </p>
+                    )}
+                    {backgroundImageUrl && !uploadingBg && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={backgroundImageUrl} alt="Arrière-plan" className="h-20 w-full object-cover rounded border" />
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>

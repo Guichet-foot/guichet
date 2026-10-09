@@ -3,12 +3,84 @@ import { NextResponse } from "next/server";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import QRCode from "qrcode";
+import { readFileSync } from "fs";
+import { join } from "path";
+import React from "react";
 import { getPrintStyles } from "@/lib/ticket-print-template";
 import type { PrintFormat } from "@/lib/ticket-print-template";
 import { fmtZone } from "@/lib/format";
 import { fetchAll } from "@/lib/supabase/paginate";
+import type { CustomTicketPDFData } from "@/lib/pdf/billeterie-custom-ticket-pdf";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
+
+async function fetchImageDataUrl(url: string): Promise<string | null> {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 10_000);
+    const r = await fetch(url, { signal: controller.signal });
+    clearTimeout(timer);
+    if (!r.ok) return null;
+    const buf = Buffer.from(await r.arrayBuffer());
+    const ct = r.headers.get("content-type") || "image/jpeg";
+    return `data:${ct};base64,${buf.toString("base64")}`;
+  } catch {
+    return null;
+  }
+}
+
+async function renderCustomDesignPdf(
+  tickets: any[],
+  bil: any,
+  matches: Array<{ home_team: string; away_team: string; home_team_zone?: string | null; away_team_zone?: string | null; venue?: string | null }>,
+  effectivePrice: number,
+  sellerName: string,
+  displayName: string
+): Promise<Buffer> {
+  const [{ renderToBuffer }, { CustomTicketsPDF }] = await Promise.all([
+    import("@react-pdf/renderer"),
+    import("@/lib/pdf/billeterie-custom-ticket-pdf"),
+  ]);
+
+  const logoBuf = readFileSync(join(process.cwd(), "public", "logoticket.png"));
+  const gfLogoDataUrl = `data:image/png;base64,${logoBuf.toString("base64")}`;
+
+  const [organizerLogoDataUrl, backgroundDataUrl] = await Promise.all([
+    bil.organizer_logo_url ? fetchImageDataUrl(bil.organizer_logo_url) : Promise.resolve(null),
+    bil.background_image_url ? fetchImageDataUrl(bil.background_image_url) : Promise.resolve(null),
+  ]);
+
+  const priceLabel = `${new Intl.NumberFormat("fr-FR").format(effectivePrice)} FCFA`;
+  const matchList = matches.map((m) => ({
+    home: m.home_team_zone ? `${m.home_team} (${fmtZone(m.home_team_zone)})` : m.home_team,
+    away: m.away_team_zone ? `${m.away_team} (${fmtZone(m.away_team_zone)})` : m.away_team,
+  }));
+  const venue = matches.find((m) => m.venue)?.venue ?? null;
+
+  const ticketData: CustomTicketPDFData[] = await Promise.all(
+    tickets.map(async (ticket: any) => {
+      const qrDataUrl = await QRCode.toDataURL(`BIL-${ticket.qr_token}`, {
+        width: 240, margin: 1, errorCorrectionLevel: "M",
+        color: { dark: "#000000", light: "#FFFFFF" },
+      });
+      return {
+        serialNumber: ticket.serial_number,
+        createdAtLabel: format(new Date(ticket.created_at), "dd/MM/yyyy HH:mm", { locale: fr }),
+        sellerName,
+        qrDataUrl,
+        title: displayName,
+        priceLabel,
+        matches: matchList,
+        venue,
+        gfLogoDataUrl,
+        organizerLogoDataUrl,
+        backgroundDataUrl,
+      };
+    })
+  );
+
+  return renderToBuffer(React.createElement(CustomTicketsPDF, { tickets: ticketData }) as any);
+}
 
 function trunc(s: string, max: number): string {
   return s.length <= max ? s : s.slice(0, max - 1) + "…";
@@ -115,7 +187,7 @@ export async function GET(request: Request) {
   const billeterieId = tickets[0].billeterie_id;
   const { data: bil } = await adminClient
     .from("billeterie")
-    .select("name, price, match_ids, categories, show_matches_on_ticket")
+    .select("name, price, match_ids, categories, show_matches_on_ticket, custom_design, organizer_logo_url, background_image_url")
     .eq("id", billeterieId)
     .single();
 
@@ -134,15 +206,31 @@ export async function GET(request: Request) {
 
   const matchIds: string[] = bil.match_ids || [];
   const { data: matches } = matchIds.length > 0
-    ? await adminClient.from("matches").select("id, home_team, away_team, match_date, home_team_zone, away_team_zone").in("id", matchIds).order("match_date")
+    ? await adminClient.from("matches").select("id, home_team, away_team, match_date, home_team_zone, away_team_zone, venue").in("id", matchIds).order("match_date")
     : { data: [] as any[] };
-
-  const qrPx = fmt === "58" ? 180 : 220;
 
   const sellerName = (tickets[0] as any).seller?.full_name || "—";
 
   // Displayed name: append category if multi-cat
   const displayName = categoryName ? `${bil.name} — ${categoryName}` : (bil.name as string);
+
+  if ((bil as any).custom_design) {
+    try {
+      const pdfBuffer = await renderCustomDesignPdf(tickets, bil, matches || [], effectivePrice, sellerName, displayName);
+      return new NextResponse(new Uint8Array(pdfBuffer), {
+        headers: {
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `inline; filename="billets-${billeterieId}.pdf"`,
+        },
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+      console.error("[print-batch] custom design PDF error:", err);
+      return new NextResponse(`Erreur de génération PDF : ${msg}`, { status: 500 });
+    }
+  }
+
+  const qrPx = fmt === "58" ? 180 : 220;
 
   const ticketBlocks = await Promise.all(
     tickets.map(async (ticket: any) => {
