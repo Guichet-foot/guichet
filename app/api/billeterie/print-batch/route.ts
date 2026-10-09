@@ -15,7 +15,7 @@ import { fetchAll } from "@/lib/supabase/paginate";
 // public/Billet Finales.html, minus the PASS MULTI-MATCHS bar), scaled down
 // to a printable physical page via CSS transform.
 const FIN_W = 1024;
-const FIN_H = 1610;
+const FIN_H = 1670;
 const FIN_PAGE_MM_W = 105;
 const FIN_PAGE_MM_H = (FIN_PAGE_MM_W * FIN_H) / FIN_W;
 const FIN_SCALE = (FIN_PAGE_MM_W * (96 / 25.4)) / FIN_W;
@@ -23,6 +23,17 @@ const FIN_SCALE = (FIN_PAGE_MM_W * (96 / 25.4)) / FIN_W;
 function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
+
+// Inline SVG trophy (Lucide "trophy" path) — replaces the old raster image
+// so no extra file has to be fetched/decoded per printed ticket.
+const TROPHY_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="#111" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" width="100%" height="100%">
+  <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/>
+  <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/>
+  <path d="M4 22h16"/>
+  <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/>
+  <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/>
+  <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" fill="#111"/>
+</svg>`;
 
 function renderFinalesTicket(
   ticket: { serial_number: string; created_at: string },
@@ -63,16 +74,14 @@ function renderFinalesTicket(
     <div class="fin-bg-fade"></div>
 
     <div class="fin-header">
-      <div class="fin-gf-wrap"><img src="/billet-finales/gf-logo.jpg" alt="Guichet Foot" class="fin-gf-logo"></div>
-      <div class="fin-divider"></div>
       ${organizerLogoUrl ? `<img src="${escapeHtml(organizerLogoUrl)}" alt="Organisateur" class="fin-org-logo">` : ""}
     </div>
     <div class="fin-sep" style="top:322px;"></div>
 
     <div class="fin-title-block">
       <div class="fin-title-row">
-        <div class="fin-troph fin-troph-l"></div>
-        <div class="fin-troph fin-troph-r"></div>
+        <div class="fin-troph fin-troph-l">${TROPHY_SVG}</div>
+        <div class="fin-troph fin-troph-r">${TROPHY_SVG}</div>
         <div class="fin-title-main">${titleMain}</div>
       </div>
       ${titleSub ? `<div class="fin-title-sub">${titleSub}</div>` : ""}
@@ -89,7 +98,7 @@ function renderFinalesTicket(
       <div class="fin-issuer-line">${createdAtFmt}</div>
     </div>
 
-    <div class="fin-sep" style="top:1442px;"></div>
+    <div class="fin-sep" style="top:1502px;"></div>
     <div class="fin-norefund">Non remboursable</div>
     <div class="fin-footer">
       <div class="fin-footer-line"></div>
@@ -125,18 +134,15 @@ body { background:#fff; }
   position:absolute; left:0; right:0; top:270px; height:1040px;
   background: linear-gradient(180deg,#fff 0%,rgba(255,255,255,.55) 18%,rgba(255,255,255,.15) 45%,rgba(255,255,255,.1) 80%,#fff 100%);
 }
-.fin-header { position:absolute; left:0; right:0; top:0; height:320px; display:flex; align-items:center; justify-content:center; gap:40px; }
-.fin-gf-wrap { width:360px; height:220px; overflow:hidden; display:flex; justify-content:center; }
-.fin-gf-logo { width:360px; height:540px; margin-top:-145px; flex:none; object-fit:contain; }
-.fin-divider { width:3px; height:240px; background:#111; }
-.fin-org-logo { max-width:300px; max-height:293px; object-fit:contain; }
+.fin-header { position:absolute; left:0; right:0; top:0; height:320px; display:flex; align-items:center; justify-content:center; }
+.fin-org-logo { max-width:380px; max-height:300px; object-fit:contain; }
 .fin-sep { position:absolute; left:20px; right:20px; border-top:3px dashed #111; }
 
 .fin-title-block { position:absolute; left:0; right:0; top:340px; display:flex; flex-direction:column; align-items:center; }
 .fin-title-row { position:relative; width:100%; display:flex; justify-content:center; }
-.fin-troph { position:absolute; top:6px; width:160px; height:107px; background-image:url('/billet-finales/trophy.png'); background-repeat:no-repeat; background-size:200% 100%; }
-.fin-troph-l { left:84px; background-position:0 0; }
-.fin-troph-r { right:84px; background-position:100% 0; }
+.fin-troph { position:absolute; top:10px; width:90px; height:90px; }
+.fin-troph-l { left:165px; }
+.fin-troph-r { right:165px; }
 .fin-title-main { font-family:'Anton',sans-serif; font-size:108px; line-height:1; letter-spacing:1px; }
 .fin-title-sub { font-family:'Anton',sans-serif; font-size:84px; line-height:1.05; letter-spacing:.5px; margin-top:6px; }
 .fin-price { margin-top:40px; min-width:510px; padding:0 30px; height:90px; border-radius:12px; background:#111; color:#fff; display:flex; align-items:center; justify-content:center; font-family:'Archivo',sans-serif; font-weight:900; font-size:66px; letter-spacing:1px; white-space:nowrap; }
@@ -150,15 +156,15 @@ body { background:#fff; }
 .fin-venue { position:absolute; left:228px; width:568px; top:948px; height:62px; border-radius:12px; background:#111; color:#fff; display:flex; align-items:center; justify-content:center; gap:22px; }
 .fin-venue span { font-weight:600; font-size:32px; letter-spacing:.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 
-.fin-qr-box { position:absolute; left:352px; top:1024px; width:320px; height:320px; border-radius:12px; background:#fff; display:flex; align-items:center; justify-content:center; }
-.fin-qr-box img { width:270px; height:270px; image-rendering:pixelated; }
+.fin-qr-box { position:absolute; left:322px; top:1024px; width:380px; height:380px; border-radius:12px; background:#fff; display:flex; align-items:center; justify-content:center; }
+.fin-qr-box img { width:330px; height:330px; image-rendering:pixelated; }
 
-.fin-issuer { position:absolute; left:0; right:0; top:1374px; text-align:center; font-family:'Archivo',sans-serif; }
+.fin-issuer { position:absolute; left:0; right:0; top:1434px; text-align:center; font-family:'Archivo',sans-serif; }
 .fin-ticket-id { font-weight:800; font-size:23px; letter-spacing:.5px; }
 .fin-issuer-line { font-weight:500; font-size:19px; margin-top:6px; }
 
-.fin-norefund { position:absolute; left:0; right:0; top:1458px; text-align:center; font-family:'Archivo',sans-serif; font-weight:600; font-size:22px; }
-.fin-footer { position:absolute; left:0; right:0; top:1484px; height:100px; display:flex; align-items:center; justify-content:center; gap:16px; }
+.fin-norefund { position:absolute; left:0; right:0; top:1518px; text-align:center; font-family:'Archivo',sans-serif; font-weight:600; font-size:22px; }
+.fin-footer { position:absolute; left:0; right:0; top:1544px; height:100px; display:flex; align-items:center; justify-content:center; gap:16px; }
 .fin-footer-line { width:84px; border-top:2px solid #111; }
 .fin-ball-lg { width:80px; height:80px; border-radius:50%; background:#fff url('/billet-finales/ballon.jpg') -34px -72px/209px 209px no-repeat; }
 .fin-bonmatch { font-family:'Anton',sans-serif; font-size:76px; line-height:1; margin:0 40px; }
@@ -309,7 +315,7 @@ export async function GET(request: Request) {
     const finBlocks = await Promise.all(
       tickets.map(async (ticket: any) => {
         const qrDataUrl = await QRCode.toDataURL(`BIL-${ticket.qr_token}`, {
-          width: 416, margin: 1, errorCorrectionLevel: "M",
+          width: 500, margin: 1, errorCorrectionLevel: "M",
           color: { dark: "#000000", light: "#FFFFFF" },
         });
         return renderFinalesTicket(ticket, displayName, priceLabel, matchList, venue, qrDataUrl, organizerLogoUrl, backgroundImageUrl);
