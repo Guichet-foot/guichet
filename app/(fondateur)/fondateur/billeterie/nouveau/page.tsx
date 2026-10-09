@@ -182,8 +182,8 @@ export default function FondateurNouveauBilletteriePage() {
       if (isNaN(p) || p < 0) { toast.error("Prix invalide"); return; }
     }
 
-    if (customDesign && (!organizerLogoUrl || !backgroundImageUrl)) {
-      toast.error("Ajoutez le logo organisateur et l'image d'arrière-plan");
+    if (customDesign && !organizerLogoUrl) {
+      toast.error("Ajoutez le logo organisateur");
       return;
     }
 
@@ -466,6 +466,7 @@ export default function FondateurNouveauBilletteriePage() {
 
                   <div className="space-y-1.5">
                     <Label className="text-xs">Image d&apos;arrière-plan (stade)</Label>
+                    <p className="text-xs text-muted-foreground">Optionnel — à défaut, l&apos;image de stade par défaut sera utilisée</p>
                     <input
                       type="file"
                       accept="image/jpeg,image/png"

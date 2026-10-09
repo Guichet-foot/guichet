@@ -15,7 +15,7 @@ import { fetchAll } from "@/lib/supabase/paginate";
 // public/Billet Finales.html, minus the PASS MULTI-MATCHS bar), scaled down
 // to a printable physical page via CSS transform.
 const FIN_W = 1024;
-const FIN_H = 1476;
+const FIN_H = 1610;
 const FIN_PAGE_MM_W = 105;
 const FIN_PAGE_MM_H = (FIN_PAGE_MM_W * FIN_H) / FIN_W;
 const FIN_SCALE = (FIN_PAGE_MM_W * (96 / 25.4)) / FIN_W;
@@ -30,7 +30,6 @@ function renderFinalesTicket(
   priceLabel: string,
   matches: Array<{ home: string; away: string }>,
   venue: string | null,
-  sellerName: string,
   qrDataUrl: string,
   organizerLogoUrl: string,
   backgroundImageUrl: string
@@ -87,10 +86,10 @@ function renderFinalesTicket(
     <div class="fin-qr-box"><img src="${qrDataUrl}" alt="QR"></div>
     <div class="fin-issuer">
       <div class="fin-ticket-id">${escapeHtml(ticket.serial_number)}</div>
-      <div class="fin-issuer-line">${escapeHtml(sellerName)} &middot; ${createdAtFmt}</div>
+      <div class="fin-issuer-line">${createdAtFmt}</div>
     </div>
 
-    <div class="fin-sep" style="top:1306px;"></div>
+    <div class="fin-sep" style="top:1442px;"></div>
     <div class="fin-norefund">Non remboursable</div>
     <div class="fin-footer">
       <div class="fin-footer-line"></div>
@@ -152,15 +151,15 @@ body { background:#fff; }
 .fin-venue { position:absolute; left:228px; width:568px; top:948px; height:62px; border-radius:12px; background:#111; color:#fff; display:flex; align-items:center; justify-content:center; gap:22px; }
 .fin-venue span { font-weight:600; font-size:32px; letter-spacing:.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 
-.fin-qr-box { position:absolute; left:386px; top:1014px; width:252px; height:226px; border-radius:12px; background:#fff; display:flex; align-items:center; justify-content:center; }
-.fin-qr-box img { width:208px; height:208px; image-rendering:pixelated; }
+.fin-qr-box { position:absolute; left:352px; top:1024px; width:320px; height:320px; border-radius:12px; background:#fff; display:flex; align-items:center; justify-content:center; }
+.fin-qr-box img { width:270px; height:270px; image-rendering:pixelated; }
 
-.fin-issuer { position:absolute; left:0; right:0; top:1234px; text-align:center; font-family:'Archivo',sans-serif; }
+.fin-issuer { position:absolute; left:0; right:0; top:1374px; text-align:center; font-family:'Archivo',sans-serif; }
 .fin-ticket-id { font-weight:800; font-size:23px; letter-spacing:.5px; }
 .fin-issuer-line { font-weight:500; font-size:19px; margin-top:6px; }
 
-.fin-norefund { position:absolute; left:0; right:0; top:1324px; text-align:center; font-family:'Archivo',sans-serif; font-weight:600; font-size:22px; }
-.fin-footer { position:absolute; left:0; right:0; top:1350px; height:100px; display:flex; align-items:center; justify-content:center; gap:16px; }
+.fin-norefund { position:absolute; left:0; right:0; top:1458px; text-align:center; font-family:'Archivo',sans-serif; font-weight:600; font-size:22px; }
+.fin-footer { position:absolute; left:0; right:0; top:1484px; height:100px; display:flex; align-items:center; justify-content:center; gap:16px; }
 .fin-footer-line { width:84px; border-top:2px solid #111; }
 .fin-ball-lg { width:80px; height:80px; border-radius:50%; background:#fff url('/billet-finales/ballon.jpg') -34px -72px/209px 209px no-repeat; }
 .fin-bonmatch { font-family:'Anton',sans-serif; font-size:76px; line-height:1; margin:0 40px; }
@@ -314,7 +313,7 @@ export async function GET(request: Request) {
           width: 416, margin: 1, errorCorrectionLevel: "M",
           color: { dark: "#000000", light: "#FFFFFF" },
         });
-        return renderFinalesTicket(ticket, displayName, priceLabel, matchList, venue, sellerName, qrDataUrl, organizerLogoUrl, backgroundImageUrl);
+        return renderFinalesTicket(ticket, displayName, priceLabel, matchList, venue, qrDataUrl, organizerLogoUrl, backgroundImageUrl);
       })
     );
 

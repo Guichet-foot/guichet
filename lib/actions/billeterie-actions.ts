@@ -210,8 +210,8 @@ export async function createBilleterie(formData: {
     if (formData.price < 0) return { error: "Prix invalide" };
   }
 
-  if (formData.customDesign && (!formData.organizerLogoUrl || !formData.backgroundImageUrl)) {
-    return { error: "Logo organisateur et image d'arrière-plan requis pour un billet personnalisé" };
+  if (formData.customDesign && !formData.organizerLogoUrl) {
+    return { error: "Logo organisateur requis pour un billet personnalisé" };
   }
 
   // Determine zone_id: explicit param, or auto-detect for admin_zone creators
