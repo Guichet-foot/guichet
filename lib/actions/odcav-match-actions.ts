@@ -44,7 +44,33 @@ export async function getFondateurOdcavAccounts(): Promise<{
   return (data || []).map((p: any) => ({ id: p.id as string, name: p.full_name as string | null }));
 }
 
-// Returns all teams from zones owned by the given ODCAV president
+// Collects a profile id plus every account created under it, at any depth
+// (président → super_admin → super_admin → ...). Zones/teams can be created
+// by any account in that chain, not just the root, so scoping by a single id
+// silently hides content created by sub-accounts.
+async function getHierarchyIds(
+  adminClient: Awaited<ReturnType<typeof createAdminClient>>,
+  rootId: string
+): Promise<string[]> {
+  const all = new Set<string>([rootId]);
+  let frontier = [rootId];
+  while (frontier.length > 0) {
+    const { data } = await adminClient
+      .from("profiles")
+      .select("id")
+      .in("created_by_admin", frontier);
+    const next = (data || [])
+      .map((p: any) => p.id as string)
+      .filter((id: string) => !all.has(id));
+    next.forEach((id: string) => all.add(id));
+    frontier = next;
+  }
+  return [...all];
+}
+
+// Returns all teams from zones owned by the given ODCAV president — or by any
+// account created under them (sub-super_admins), since they all belong to the
+// same ODCAV.
 export async function getTeamsForOdcav(odcavId: string): Promise<{
   id: string;
   name: string;
@@ -53,10 +79,11 @@ export async function getTeamsForOdcav(odcavId: string): Promise<{
 }[]> {
   await requireRole(["fondateur"]);
   const adminClient = await createAdminClient();
+  const hierarchyIds = await getHierarchyIds(adminClient, odcavId);
   const { data: zones } = await adminClient
     .from("zones")
     .select("id, name")
-    .eq("created_by", odcavId)
+    .in("created_by", hierarchyIds)
     .order("name");
   if (!zones || zones.length === 0) return [];
   const zoneIds = zones.map((z: any) => z.id as string);
@@ -75,6 +102,27 @@ export async function getTeamsForOdcav(odcavId: string): Promise<{
   }));
 }
 
+// Walks up the created_by_admin chain to the topmost ODCAV account (stops at
+// the fondateur, who isn't part of any single ODCAV's own hierarchy).
+async function getHierarchyRootId(
+  adminClient: Awaited<ReturnType<typeof createAdminClient>>,
+  profile: { id: string; created_by_admin: string | null }
+): Promise<string> {
+  let currentId = profile.id;
+  let parentId = profile.created_by_admin;
+  while (parentId) {
+    const { data } = await adminClient
+      .from("profiles")
+      .select("id, role, created_by_admin")
+      .eq("id", parentId)
+      .single();
+    if (!data || data.role === "fondateur") break;
+    currentId = data.id as string;
+    parentId = data.created_by_admin as string | null;
+  }
+  return currentId;
+}
+
 // Returns all teams across all zones owned by this ODCAV admin (or parent admin)
 export async function getOdcavTeamsWithZones(): Promise<{
   id: string; name: string; zone_id: string; zone_name: string;
@@ -89,10 +137,10 @@ export async function getOdcavTeamsWithZones(): Promise<{
     const { data } = await adminClient.from("zones").select("id, name").order("name");
     zones = (data || []) as { id: string; name: string }[];
   } else {
-    // Include both the account's own ID and its parent to catch zones created under either ID
-    const ownerIds = [...new Set(
-      [ctx.profile.id, ctx.profile.created_by_admin].filter(Boolean) as string[]
-    )];
+    // Pool zones from the whole ODCAV hierarchy (président + every super_admin
+    // created under them, at any depth), not just this account and its direct parent.
+    const rootId = await getHierarchyRootId(adminClient, ctx.profile as any);
+    const ownerIds = await getHierarchyIds(adminClient, rootId);
     const { data } = await adminClient.from("zones").select("id, name").in("created_by", ownerIds).order("name");
     zones = (data || []) as { id: string; name: string }[];
   }
