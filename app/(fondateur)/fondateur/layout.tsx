@@ -16,7 +16,7 @@ export default async function FondateurLayout({
         permittedModules={profile.permitted_modules ?? null}
       />
       <main className="flex-1 min-w-0 overflow-hidden">
-        <div className="p-4 pt-16 lg:p-8 lg:pt-8 max-w-full">{children}</div>
+        <div className="p-4 pt-24 lg:p-8 lg:pt-8 max-w-full">{children}</div>
       </main>
     </div>
   );
