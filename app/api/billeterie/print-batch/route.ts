@@ -11,14 +11,22 @@ import { fetchAll } from "@/lib/supabase/paginate";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 // ── "Billet personnalisé" (design finales) — poster-style ticket ──────────
-// 1024×1476 design canvas (matches the reference design in
-// public/Billet Finales.html, minus the PASS MULTI-MATCHS bar), scaled down
-// to a printable physical page via CSS transform.
+// Laid out directly in mm (same approach as the standard thermal tickets in
+// lib/ticket-print-template.ts) instead of a px canvas + CSS transform: print
+// engines (Chrome's print-to-PDF included) don't reliably honor `transform:
+// scale()` the same way they render on screen, which silently produced a
+// much smaller QR code and team-name text on paper than in the on-screen
+// preview. Every position/size below is `mm(originalDesignPx)`, converting
+// the original 1024px-wide design 1:1 proportionally into physical mm — the
+// same layout, just expressed in a unit print engines handle correctly.
 const FIN_W = 1024;
 const FIN_H = 1670;
 const FIN_PAGE_MM_W = 145;
 const FIN_PAGE_MM_H = (FIN_PAGE_MM_W * FIN_H) / FIN_W;
-const FIN_SCALE = (FIN_PAGE_MM_W * (96 / 25.4)) / FIN_W;
+const PX_TO_MM = FIN_PAGE_MM_W / FIN_W;
+function mm(px: number): string {
+  return (px * PX_TO_MM).toFixed(2) + "mm";
+}
 
 function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -77,7 +85,7 @@ function renderFinalesTicket(
     <div class="fin-header">
       ${organizerLogoUrl ? `<img src="${escapeHtml(organizerLogoUrl)}" alt="Organisateur" class="fin-org-logo">` : ""}
     </div>
-    <div class="fin-sep" style="top:322px;"></div>
+    <div class="fin-sep" style="top:${mm(322)};"></div>
 
     <div class="fin-title-block">
       <div class="fin-title-row">
@@ -100,7 +108,7 @@ function renderFinalesTicket(
       <div class="fin-issuer-line">${createdAtFmt}</div>
     </div>
 
-    <div class="fin-sep" style="top:1502px;"></div>
+    <div class="fin-sep" style="top:210mm;"></div>
     <div class="fin-norefund">Non remboursable</div>
     <div class="fin-footer">
       <div class="fin-footer-line"></div>
@@ -123,54 +131,57 @@ body { background:#fff; }
 .fin-page { width:${FIN_PAGE_MM_W}mm; height:${FIN_PAGE_MM_H}mm; overflow:hidden; position:relative; break-after: page; }
 .fin-page:last-child { break-after: auto; }
 .fin-ticket {
-  position:relative; width:${FIN_W}px; height:${FIN_H}px;
-  background:#fff; border:6px solid #111; overflow:hidden;
+  position:relative; width:${FIN_PAGE_MM_W}mm; height:${FIN_PAGE_MM_H}mm;
+  background:#fff; border:${mm(6)} solid #111; overflow:hidden;
   font-family:'Oswald',sans-serif; color:#111;
-  transform-origin: top left; transform: scale(${FIN_SCALE});
 }
 .fin-bg {
-  position:absolute; left:0; right:0; top:270px; height:1040px;
+  position:absolute; left:0; right:0; top:${mm(270)}; height:${mm(1040)};
   background-color:#fff; background-position:center 62%; background-size:cover; background-repeat:no-repeat;
 }
 .fin-bg-fade {
-  position:absolute; left:0; right:0; top:270px; height:1040px;
+  position:absolute; left:0; right:0; top:${mm(270)}; height:${mm(1040)};
   background: linear-gradient(180deg,#fff 0%,rgba(255,255,255,.55) 18%,rgba(255,255,255,.15) 45%,rgba(255,255,255,.1) 80%,#fff 100%);
 }
-.fin-header { position:absolute; left:0; right:0; top:0; height:320px; display:flex; align-items:center; justify-content:center; }
-.fin-org-logo { max-width:380px; max-height:300px; object-fit:contain; }
-.fin-sep { position:absolute; left:20px; right:20px; border-top:3px dashed #111; }
+.fin-header { position:absolute; left:0; right:0; top:0; height:${mm(320)}; display:flex; align-items:center; justify-content:center; }
+.fin-org-logo { max-width:${mm(380)}; max-height:${mm(300)}; object-fit:contain; }
+.fin-sep { position:absolute; left:${mm(20)}; right:${mm(20)}; border-top:${mm(3)} dashed #111; }
 
-.fin-title-block { position:absolute; left:0; right:0; top:340px; display:flex; flex-direction:column; align-items:center; }
+.fin-title-block { position:absolute; left:0; right:0; top:${mm(340)}; display:flex; flex-direction:column; align-items:center; }
 .fin-title-row { position:relative; width:100%; display:flex; justify-content:center; }
-.fin-troph { position:absolute; top:10px; width:90px; height:90px; }
-.fin-troph-l { left:165px; }
-.fin-troph-r { right:165px; }
-.fin-title-main { font-family:'Anton',sans-serif; font-size:108px; line-height:1; letter-spacing:1px; }
-.fin-title-sub { font-family:'Anton',sans-serif; font-size:84px; line-height:1.05; letter-spacing:.5px; margin-top:6px; }
-.fin-date { font-family:'Archivo',sans-serif; font-weight:600; font-size:28px; letter-spacing:1px; margin-top:14px; color:#333; }
-.fin-price { margin-top:20px; min-width:510px; padding:0 30px; height:90px; border-radius:12px; background:#111; color:#fff; display:flex; align-items:center; justify-content:center; font-family:'Archivo',sans-serif; font-weight:900; font-size:66px; letter-spacing:1px; white-space:nowrap; }
+.fin-troph { position:absolute; top:${mm(10)}; width:${mm(90)}; height:${mm(90)}; }
+.fin-troph-l { left:${mm(165)}; }
+.fin-troph-r { right:${mm(165)}; }
+.fin-title-main { font-family:'Anton',sans-serif; font-size:${mm(108)}; line-height:1; letter-spacing:${mm(1)}; }
+.fin-title-sub { font-family:'Anton',sans-serif; font-size:${mm(84)}; line-height:1.05; letter-spacing:${mm(0.5)}; margin-top:${mm(6)}; }
+.fin-date { font-family:'Archivo',sans-serif; font-weight:600; font-size:${mm(28)}; letter-spacing:${mm(1)}; margin-top:${mm(14)}; color:#333; }
+.fin-price { margin-top:${mm(20)}; min-width:${mm(510)}; padding:0 ${mm(30)}; height:${mm(90)}; border-radius:${mm(12)}; background:#111; color:#fff; display:flex; align-items:center; justify-content:center; font-family:'Archivo',sans-serif; font-weight:900; font-size:${mm(66)}; letter-spacing:${mm(1)}; white-space:nowrap; }
 
-.fin-matches { position:absolute; left:48px; right:44px; top:688px; display:flex; flex-direction:column; gap:14px; }
-.fin-match-row { position:relative; height:72px; border-radius:12px; background:rgba(255,255,255,.93); box-shadow:0 1px 3px rgba(0,0,0,.25); display:grid; grid-template-columns:60px minmax(0,1fr) 92px minmax(0,1fr) 60px; align-items:center; }
-.fin-ball { justify-self:center; width:48px; height:48px; border-radius:50%; background:#fff url('/billet-finales/ballon.jpg') -20px -43px/125px 125px no-repeat; }
-.fin-team { text-align:center; font-weight:700; font-size:25px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:0 6px; }
-.fin-vs { justify-self:center; width:88px; height:62px; background:#111; color:#fff; clip-path:polygon(22% 0,78% 0,100% 50%,78% 100%,22% 100%,0 50%); display:flex; align-items:center; justify-content:center; font-family:'Archivo',sans-serif; font-weight:900; font-size:30px; }
+.fin-matches { position:absolute; left:${mm(48)}; right:${mm(44)}; top:${mm(688)}; display:flex; flex-direction:column; gap:${mm(14)}; }
+.fin-match-row { position:relative; height:${mm(72)}; border-radius:${mm(12)}; background:rgba(255,255,255,.93); box-shadow:0 1px 3px rgba(0,0,0,.25); display:grid; grid-template-columns:${mm(60)} minmax(0,1fr) ${mm(92)} minmax(0,1fr) ${mm(60)}; align-items:center; }
+.fin-ball { justify-self:center; width:${mm(48)}; height:${mm(48)}; border-radius:50%; background:#fff url('/billet-finales/ballon.jpg') ${mm(-20)} ${mm(-43)}/${mm(125)} ${mm(125)} no-repeat; }
+/* Team name text + QR code are hardcoded to the SAME physical size as the
+   standard thermal tickets (lib/ticket-print-template.ts: teamsPt, qrMM) —
+   not derived from the design canvas proportion — per explicit request that
+   they match exactly rather than merely scale with the rest of the ticket. */
+.fin-team { text-align:center; font-weight:700; font-size:9pt; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:0 ${mm(6)}; }
+.fin-vs { justify-self:center; width:${mm(88)}; height:${mm(62)}; background:#111; color:#fff; clip-path:polygon(22% 0,78% 0,100% 50%,78% 100%,22% 100%,0 50%); display:flex; align-items:center; justify-content:center; font-family:'Archivo',sans-serif; font-weight:900; font-size:${mm(30)}; }
 
-.fin-venue { position:absolute; left:228px; width:568px; top:948px; height:62px; border-radius:12px; background:#111; color:#fff; display:flex; align-items:center; justify-content:center; gap:22px; }
-.fin-venue span { font-weight:600; font-size:32px; letter-spacing:.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.fin-venue { position:absolute; left:${mm(228)}; width:${mm(568)}; top:${mm(948)}; height:${mm(62)}; border-radius:${mm(12)}; background:#111; color:#fff; display:flex; align-items:center; justify-content:center; gap:${mm(22)}; }
+.fin-venue span { font-weight:600; font-size:${mm(32)}; letter-spacing:${mm(0.5)}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 
-.fin-qr-box { position:absolute; left:322px; top:1024px; width:380px; height:380px; border-radius:12px; background:#fff; display:flex; align-items:center; justify-content:center; }
-.fin-qr-box img { width:330px; height:330px; image-rendering:pixelated; }
+.fin-qr-box { position:absolute; left:calc(50% - 22mm); top:${mm(1024)}; width:44mm; height:44mm; border-radius:${mm(12)}; background:#fff; display:flex; align-items:center; justify-content:center; }
+.fin-qr-box img { width:38mm; height:38mm; image-rendering:pixelated; }
 
-.fin-issuer { position:absolute; left:0; right:0; top:1434px; text-align:center; font-family:'Archivo',sans-serif; }
-.fin-ticket-id { font-weight:800; font-size:23px; letter-spacing:.5px; }
-.fin-issuer-line { font-weight:500; font-size:19px; margin-top:6px; }
+.fin-issuer { position:absolute; left:0; right:0; top:197mm; text-align:center; font-family:'Archivo',sans-serif; }
+.fin-ticket-id { font-weight:800; font-size:${mm(23)}; letter-spacing:${mm(0.5)}; }
+.fin-issuer-line { font-weight:500; font-size:${mm(19)}; margin-top:${mm(6)}; }
 
-.fin-norefund { position:absolute; left:0; right:0; top:1518px; text-align:center; font-family:'Archivo',sans-serif; font-weight:600; font-size:22px; }
-.fin-footer { position:absolute; left:0; right:0; top:1544px; height:100px; display:flex; align-items:center; justify-content:center; gap:16px; }
-.fin-footer-line { width:84px; border-top:2px solid #111; }
-.fin-ball-lg { width:80px; height:80px; border-radius:50%; background:#fff url('/billet-finales/ballon.jpg') -34px -72px/209px 209px no-repeat; }
-.fin-bonmatch { font-family:'Anton',sans-serif; font-size:76px; line-height:1; margin:0 40px; }
+.fin-norefund { position:absolute; left:0; right:0; top:214mm; text-align:center; font-family:'Archivo',sans-serif; font-weight:600; font-size:${mm(22)}; }
+.fin-footer { position:absolute; left:0; right:0; top:220mm; height:${mm(100)}; display:flex; align-items:center; justify-content:center; gap:${mm(16)}; }
+.fin-footer-line { width:${mm(84)}; border-top:${mm(2)} solid #111; }
+.fin-ball-lg { width:${mm(80)}; height:${mm(80)}; border-radius:50%; background:#fff url('/billet-finales/ballon.jpg') ${mm(-34)} ${mm(-72)}/${mm(209)} ${mm(209)} no-repeat; }
+.fin-bonmatch { font-family:'Anton',sans-serif; font-size:${mm(76)}; line-height:1; margin:0 ${mm(40)}; }
 `;
 
 function trunc(s: string, max: number): string {
