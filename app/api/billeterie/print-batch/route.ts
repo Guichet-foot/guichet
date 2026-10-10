@@ -16,7 +16,7 @@ import { fetchAll } from "@/lib/supabase/paginate";
 // to a printable physical page via CSS transform.
 const FIN_W = 1024;
 const FIN_H = 1670;
-const FIN_PAGE_MM_W = 105;
+const FIN_PAGE_MM_W = 145;
 const FIN_PAGE_MM_H = (FIN_PAGE_MM_W * FIN_H) / FIN_W;
 const FIN_SCALE = (FIN_PAGE_MM_W * (96 / 25.4)) / FIN_W;
 
