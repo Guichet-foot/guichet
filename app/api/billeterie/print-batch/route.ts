@@ -29,7 +29,6 @@ import { fetchAll } from "@/lib/supabase/paginate";
 // same-size QR glued onto the old tall layout.
 const FIN_W = 1024;
 const FIN_PAGE_MM_W = 145;
-const FIN_PAGE_MM_H = 230;
 const PX_TO_MM = FIN_PAGE_MM_W / FIN_W;
 function mm(px: number): string {
   return (px * PX_TO_MM).toFixed(2) + "mm";
@@ -37,6 +36,33 @@ function mm(px: number): string {
 
 function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+// Everything from the match list down used to sit at fixed mm offsets sized
+// for 3 matches — any ticket with fewer matches (very common: most finales
+// passes cover 1-2) left a visible dead gap before the venue/QR section.
+// Computed instead from the actual match count + whether a venue is set, so
+// the page is exactly as tall as its content needs, no shorter, no taller.
+const MATCH_ROW_H = 13; // mm — fits the 16pt team-name text
+const MATCH_GAP = 2;
+const MATCHES_TOP = 72;
+const QR_H = 66;
+const FOOTER_H = 13;
+
+function computeFinalesLayout(matchCount: number, hasVenue: boolean) {
+  const matchesBottom = matchCount > 0
+    ? MATCHES_TOP + matchCount * MATCH_ROW_H + Math.max(0, matchCount - 1) * MATCH_GAP
+    : MATCHES_TOP;
+  const venueTop = matchesBottom + 3;
+  const afterMatches = hasVenue ? venueTop + 8 : matchesBottom + 3;
+  const qrTop = afterMatches + 4;
+  const issuerTop = qrTop + QR_H + 6;
+  const sep2Top = issuerTop + 12 + 4;
+  const norefundTop = sep2Top + 3;
+  const footerTop = norefundTop + 4 + 2;
+  const pageHeight = footerTop + FOOTER_H + 3;
+  const bgTop = (hasVenue ? venueTop : qrTop) - 6;
+  return { venueTop, qrTop, issuerTop, sep2Top, norefundTop, footerTop, pageHeight, bgTop };
 }
 
 // Inline SVG trophy (Lucide "trophy" path) — replaces the old raster image
@@ -75,8 +101,10 @@ function renderFinalesTicket(
       <div class="fin-ball"></div>
     </div>`).join("");
 
+  const L = computeFinalesLayout(matches.length, !!venue);
+
   const venueHtml = venue ? `
-    <div class="fin-venue">
+    <div class="fin-venue" style="top:${L.venueTop}mm;">
       <svg width="30" height="38" viewBox="0 0 24 30"><path d="M12 0C5.4 0 0 5.2 0 11.6 0 20.3 12 30 12 30s12-9.7 12-18.4C24 5.2 18.6 0 12 0z" fill="#fff"></path><circle cx="12" cy="11.5" r="4.5" fill="#111"></circle></svg>
       <span>${escapeHtml(venue.toUpperCase())}</span>
     </div>` : "";
@@ -86,8 +114,8 @@ function renderFinalesTicket(
   return `
 <div class="fin-page">
   <div class="fin-ticket">
-    <div class="fin-bg" style="background-image:url('${escapeHtml(bgUrl)}');"></div>
-    <div class="fin-bg-fade"></div>
+    <div class="fin-bg" style="background-image:url('${escapeHtml(bgUrl)}'); top:${L.bgTop}mm; bottom:${FOOTER_H}mm;"></div>
+    <div class="fin-bg-fade" style="top:${L.bgTop}mm; bottom:${FOOTER_H}mm;"></div>
 
     <div class="fin-header">
       ${organizerLogoUrl ? `<img src="${escapeHtml(organizerLogoUrl)}" alt="Organisateur" class="fin-org-logo">` : ""}
@@ -109,15 +137,15 @@ function renderFinalesTicket(
 
     ${venueHtml}
 
-    <div class="fin-qr-box"><img src="${qrDataUrl}" alt="QR"></div>
-    <div class="fin-issuer">
+    <div class="fin-qr-box" style="top:${L.qrTop}mm;"><img src="${qrDataUrl}" alt="QR"></div>
+    <div class="fin-issuer" style="top:${L.issuerTop}mm;">
       <div class="fin-ticket-id">${escapeHtml(ticket.serial_number)}</div>
       <div class="fin-issuer-line">${createdAtFmt}</div>
     </div>
 
-    <div class="fin-sep" style="top:208mm;"></div>
-    <div class="fin-norefund">Non remboursable</div>
-    <div class="fin-footer">
+    <div class="fin-sep" style="top:${L.sep2Top}mm;"></div>
+    <div class="fin-norefund" style="top:${L.norefundTop}mm;">Non remboursable</div>
+    <div class="fin-footer" style="top:${L.footerTop}mm;">
       <div class="fin-footer-line"></div>
       <div class="fin-ball fin-ball-lg"></div>
       <div class="fin-bonmatch">BON MATCH !</div>
@@ -128,26 +156,30 @@ function renderFinalesTicket(
 </div>`;
 }
 
-const FIN_CSS = `
+// Page height depends on match count/venue (see computeFinalesLayout) so it
+// is computed once per batch and passed in, instead of a fixed constant.
+function finCss(pageHeightMm: number): string {
+  const h = `${pageHeightMm}mm`;
+  return `
 @font-face { font-family:'Anton'; font-style:normal; font-weight:400; font-display:swap; src:url('/billet-finales/fonts/anton-400.woff2') format('woff2'); }
 @font-face { font-family:'Archivo'; font-style:normal; font-weight:500 900; font-display:swap; src:url('/billet-finales/fonts/archivo-var.woff2') format('woff2'); }
 @font-face { font-family:'Oswald'; font-style:normal; font-weight:400 700; font-display:swap; src:url('/billet-finales/fonts/oswald-var.woff2') format('woff2'); }
-@page { size: ${FIN_PAGE_MM_W}mm ${FIN_PAGE_MM_H}mm; margin: 0; }
+@page { size: ${FIN_PAGE_MM_W}mm ${h}; margin: 0; }
 * { margin:0; padding:0; box-sizing:border-box; -webkit-print-color-adjust:exact; print-color-adjust:exact; color-adjust:exact; }
 body { background:#fff; }
-.fin-page { width:${FIN_PAGE_MM_W}mm; height:${FIN_PAGE_MM_H}mm; overflow:hidden; position:relative; break-after: page; }
+.fin-page { width:${FIN_PAGE_MM_W}mm; height:${h}; overflow:hidden; position:relative; break-after: page; }
 .fin-page:last-child { break-after: auto; }
 .fin-ticket {
-  position:relative; width:${FIN_PAGE_MM_W}mm; height:${FIN_PAGE_MM_H}mm;
+  position:relative; width:${FIN_PAGE_MM_W}mm; height:${h};
   background:#fff; border:${mm(6)} solid #111; overflow:hidden;
   font-family:'Oswald',sans-serif; color:#111;
 }
 .fin-bg {
-  position:absolute; left:0; right:0; top:100mm; bottom:17mm;
+  position:absolute; left:0; right:0;
   background-color:#fff; background-position:center 62%; background-size:cover; background-repeat:no-repeat;
 }
 .fin-bg-fade {
-  position:absolute; left:0; right:0; top:100mm; bottom:17mm;
+  position:absolute; left:0; right:0;
   background: linear-gradient(180deg,#fff 0%,rgba(255,255,255,.55) 18%,rgba(255,255,255,.15) 45%,rgba(255,255,255,.1) 80%,#fff 100%);
 }
 .fin-header { position:absolute; left:0; right:0; top:0; height:26mm; display:flex; align-items:center; justify-content:center; }
@@ -164,31 +196,32 @@ body { background:#fff; }
 .fin-date { font-family:'Archivo',sans-serif; font-weight:600; font-size:3mm; letter-spacing:${mm(1)}; margin-top:1mm; color:#333; }
 .fin-price { margin-top:1.5mm; min-width:${mm(510)}; padding:0 ${mm(30)}; height:10.5mm; border-radius:${mm(12)}; background:#111; color:#fff; display:flex; align-items:center; justify-content:center; font-family:'Archivo',sans-serif; font-weight:900; font-size:8mm; letter-spacing:${mm(1)}; white-space:nowrap; }
 
-.fin-matches { position:absolute; left:${mm(48)}; right:${mm(44)}; top:72mm; display:flex; flex-direction:column; gap:2mm; }
-.fin-match-row { position:relative; height:11mm; border-radius:${mm(12)}; background:rgba(255,255,255,.93); box-shadow:0 1px 3px rgba(0,0,0,.25); display:grid; grid-template-columns:${mm(60)} minmax(0,1fr) ${mm(92)} minmax(0,1fr) ${mm(60)}; align-items:center; }
+.fin-matches { position:absolute; left:${mm(48)}; right:${mm(44)}; top:${MATCHES_TOP}mm; display:flex; flex-direction:column; gap:${MATCH_GAP}mm; }
+.fin-match-row { position:relative; height:${MATCH_ROW_H}mm; border-radius:${mm(12)}; background:rgba(255,255,255,.93); box-shadow:0 1px 3px rgba(0,0,0,.25); display:grid; grid-template-columns:${mm(60)} minmax(0,1fr) ${mm(92)} minmax(0,1fr) ${mm(60)}; align-items:center; }
 .fin-ball { justify-self:center; width:7.5mm; height:7.5mm; border-radius:50%; background:#fff url('/billet-finales/ballon.jpg') -3.2mm -6.9mm/20mm 20mm no-repeat; }
 /* Team names, QR code and the serial/date under it are oversized relative to
    the rest of the design on purpose — scanning speed and on-the-spot
    legibility at a match entrance matter more than visual proportion here. */
-.fin-team { text-align:center; font-weight:700; font-size:12pt; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:0 ${mm(6)}; }
+.fin-team { text-align:center; font-weight:700; font-size:16pt; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:0 ${mm(6)}; }
 .fin-vs { justify-self:center; width:${mm(88)}; height:8mm; background:#111; color:#fff; clip-path:polygon(22% 0,78% 0,100% 50%,78% 100%,22% 100%,0 50%); display:flex; align-items:center; justify-content:center; font-family:'Archivo',sans-serif; font-weight:900; font-size:4mm; }
 
-.fin-venue { position:absolute; left:${mm(228)}; width:${mm(568)}; top:112mm; height:8mm; border-radius:${mm(12)}; background:#111; color:#fff; display:flex; align-items:center; justify-content:center; gap:${mm(22)}; }
+.fin-venue { position:absolute; left:${mm(228)}; width:${mm(568)}; height:8mm; border-radius:${mm(12)}; background:#111; color:#fff; display:flex; align-items:center; justify-content:center; gap:${mm(22)}; }
 .fin-venue span { font-weight:600; font-size:4mm; letter-spacing:${mm(0.5)}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 
-.fin-qr-box { position:absolute; left:calc(50% - 33mm); top:124mm; width:66mm; height:66mm; border-radius:${mm(12)}; background:#fff; display:flex; align-items:center; justify-content:center; }
+.fin-qr-box { position:absolute; left:calc(50% - 33mm); width:66mm; height:66mm; border-radius:${mm(12)}; background:#fff; display:flex; align-items:center; justify-content:center; }
 .fin-qr-box img { width:60mm; height:60mm; image-rendering:pixelated; }
 
-.fin-issuer { position:absolute; left:0; right:0; top:194mm; text-align:center; font-family:'Archivo',sans-serif; }
+.fin-issuer { position:absolute; left:0; right:0; text-align:center; font-family:'Archivo',sans-serif; }
 .fin-ticket-id { font-weight:900; font-size:5.5mm; letter-spacing:${mm(0.5)}; }
 .fin-issuer-line { font-weight:700; font-size:4mm; margin-top:1mm; color:#222; }
 
-.fin-norefund { position:absolute; left:0; right:0; top:212mm; text-align:center; font-family:'Archivo',sans-serif; font-weight:600; font-size:3mm; }
-.fin-footer { position:absolute; left:0; right:0; top:214mm; height:13mm; display:flex; align-items:center; justify-content:center; gap:${mm(16)}; }
+.fin-norefund { position:absolute; left:0; right:0; text-align:center; font-family:'Archivo',sans-serif; font-weight:600; font-size:3mm; }
+.fin-footer { position:absolute; left:0; right:0; height:${FOOTER_H}mm; display:flex; align-items:center; justify-content:center; gap:${mm(16)}; }
 .fin-footer-line { width:${mm(84)}; border-top:${mm(2)} solid #111; }
 .fin-ball-lg { width:10mm; height:10mm; border-radius:50%; background:#fff url('/billet-finales/ballon.jpg') -4.3mm -9.1mm/26.3mm 26.3mm no-repeat; }
 .fin-bonmatch { font-family:'Anton',sans-serif; font-size:9mm; line-height:1; margin:0 ${mm(40)}; }
 `;
+}
 
 function trunc(s: string, max: number): string {
   return s.length <= max ? s : s.slice(0, max - 1) + "…";
@@ -334,6 +367,7 @@ export async function GET(request: Request) {
       : null;
     const organizerLogoUrl = (bil as any).organizer_logo_url || "";
     const backgroundImageUrl = (bil as any).background_image_url || "";
+    const finPageHeight = computeFinalesLayout(matchList.length, !!venue).pageHeight;
 
     const finBlocks = await Promise.all(
       tickets.map(async (ticket: any) => {
@@ -351,7 +385,7 @@ export async function GET(request: Request) {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Billetterie — ${escapeHtml(bil.name as string)}</title>
-<style>${FIN_CSS}</style>
+<style>${finCss(finPageHeight)}</style>
 </head>
 <body>
 ${finBlocks.join("\n")}
