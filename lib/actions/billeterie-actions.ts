@@ -32,6 +32,12 @@ export interface BilleterieItem {
   isDone: boolean;
   blocksOrdered: number | null;
   blockOrderDate: string | null;
+  customDesign: boolean;
+  organizerLogoUrl: string | null;
+  backgroundImageUrl: string | null;
+  customDate: string | null;
+  customVenue: string | null;
+  noteText: string | null;
 }
 
 // ── Matches disponibles pour créer un billetterie ─────────────────────────────
@@ -355,7 +361,7 @@ export async function getBilleterieList(): Promise<BilleterieItem[]> {
     creatorIds = [ownerId, ...(subAdmins || []).map((p: any) => p.id as string)];
   }
 
-  let query = adminClient.from("billeterie").select("id, name, match_ids, price, categories, created_at, is_done, blocks_ordered, block_order_date");
+  let query = adminClient.from("billeterie").select("id, name, match_ids, price, categories, created_at, is_done, blocks_ordered, block_order_date, custom_design, organizer_logo_url, background_image_url, custom_date, custom_venue, note_text");
   if (profile.role !== "fondateur") {
     query = query.in("created_by", creatorIds);
   }
@@ -387,6 +393,12 @@ export async function getBilleterieList(): Promise<BilleterieItem[]> {
     isDone: (b.is_done as boolean) ?? false,
     blocksOrdered: (b.blocks_ordered as number | null) ?? null,
     blockOrderDate: (b.block_order_date as string | null) ?? null,
+    customDesign: (b.custom_design as boolean) ?? false,
+    organizerLogoUrl: (b.organizer_logo_url as string | null) ?? null,
+    backgroundImageUrl: (b.background_image_url as string | null) ?? null,
+    customDate: (b.custom_date as string | null) ?? null,
+    customVenue: (b.custom_venue as string | null) ?? null,
+    noteText: (b.note_text as string | null) ?? null,
   }));
 }
 
@@ -923,10 +935,20 @@ export async function updateBilleterie(
     categories?: BilCategory[] | null;
     blocksOrdered?: number | null;
     blockOrderDate?: string | null;
+    customDesign?: boolean;
+    organizerLogoUrl?: string | null;
+    backgroundImageUrl?: string | null;
+    customDate?: string | null;
+    customVenue?: string | null;
+    noteText?: string | null;
   }
 ): Promise<{ error?: string }> {
   await requireRole(["fondateur", "super_admin", "president_odcav", "tresorier"]);
   const adminClient = await createAdminClient();
+
+  if (formData.customDesign && !formData.organizerLogoUrl) {
+    return { error: "Logo organisateur requis pour un billet personnalisé" };
+  }
 
   const isMultiCat = formData.categories && formData.categories.length > 0;
   const update: Record<string, unknown> = {
@@ -937,6 +959,14 @@ export async function updateBilleterie(
   if (formData.categories !== undefined) update.categories = isMultiCat ? formData.categories : null;
   if (formData.blocksOrdered !== undefined) update.blocks_ordered = formData.blocksOrdered;
   if (formData.blockOrderDate !== undefined) update.block_order_date = formData.blockOrderDate;
+  if (formData.customDesign !== undefined) {
+    update.custom_design = formData.customDesign;
+    update.organizer_logo_url = formData.customDesign ? (formData.organizerLogoUrl || null) : null;
+    update.background_image_url = formData.customDesign ? (formData.backgroundImageUrl || null) : null;
+    update.custom_date = formData.customDesign ? (formData.customDate || null) : null;
+    update.custom_venue = formData.customDesign ? (formData.customVenue || null) : null;
+  }
+  if (formData.noteText !== undefined) update.note_text = formData.noteText || null;
 
   const { error } = await adminClient.from("billeterie").update(update).eq("id", id);
   if (error) return { error: error.message };

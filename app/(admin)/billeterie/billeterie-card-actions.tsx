@@ -2,10 +2,11 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Pencil, Trash2, Loader2, Plus, Check, Trophy, Layers, Package } from "lucide-react";
+import { Pencil, Trash2, Loader2, Plus, Check, Trophy, Layers, Package, Image as ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import {
   Sheet,
@@ -42,6 +43,12 @@ interface Props {
     matchIds?: string[];
     blocksOrdered?: number | null;
     blockOrderDate?: string | null;
+    customDesign?: boolean;
+    organizerLogoUrl?: string | null;
+    backgroundImageUrl?: string | null;
+    customDate?: string | null;
+    customVenue?: string | null;
+    noteText?: string | null;
   };
 }
 
@@ -66,6 +73,16 @@ export function BilleterieCardActions({ item }: Props) {
   const [blockOrderDate, setBlockOrderDate] = useState(
     item.blockOrderDate || format(new Date(), "yyyy-MM-dd")
   );
+  const [noteText, setNoteText] = useState(item.noteText || "");
+
+  // Billet personnalisé (design finales) : logo organisateur + image d'arrière-plan
+  const [customDesign, setCustomDesign] = useState(!!item.customDesign);
+  const [organizerLogoUrl, setOrganizerLogoUrl] = useState<string | null>(item.organizerLogoUrl || null);
+  const [backgroundImageUrl, setBackgroundImageUrl] = useState<string | null>(item.backgroundImageUrl || null);
+  const [customDate, setCustomDate] = useState(item.customDate || "");
+  const [customVenue, setCustomVenue] = useState(item.customVenue || "");
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [uploadingBg, setUploadingBg] = useState(false);
 
   // Available matches (loaded on open)
   const [matches, setMatches] = useState<MatchOption[]>([]);
@@ -94,7 +111,41 @@ export function BilleterieCardActions({ item }: Props) {
     setSelectedIds(new Set(item.matchIds || []));
     setBlocksOrdered(item.blocksOrdered ? String(item.blocksOrdered) : "");
     setBlockOrderDate(item.blockOrderDate || format(new Date(), "yyyy-MM-dd"));
+    setNoteText(item.noteText || "");
+    setCustomDesign(!!item.customDesign);
+    setOrganizerLogoUrl(item.organizerLogoUrl || null);
+    setBackgroundImageUrl(item.backgroundImageUrl || null);
+    setCustomDate(item.customDate || "");
+    setCustomVenue(item.customVenue || "");
     setEditOpen(true);
+  }
+
+  async function uploadCustomAsset(file: File, kind: "logo" | "background"): Promise<string | null> {
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("kind", kind);
+    const res = await fetch("/api/billeterie/custom-assets", { method: "POST", body: fd });
+    const data = await res.json();
+    if (!res.ok) { toast.error(data.error || "Erreur d'upload"); return null; }
+    return data.url as string;
+  }
+
+  async function handleLogoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingLogo(true);
+    const url = await uploadCustomAsset(file, "logo");
+    if (url) setOrganizerLogoUrl(url);
+    setUploadingLogo(false);
+  }
+
+  async function handleBgChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingBg(true);
+    const url = await uploadCustomAsset(file, "background");
+    if (url) setBackgroundImageUrl(url);
+    setUploadingBg(false);
   }
 
   function toggleMatch(id: string) {
@@ -137,6 +188,11 @@ export function BilleterieCardActions({ item }: Props) {
       if (isNaN(numPrice) || numPrice < 0) { toast.error("Prix invalide"); return; }
     }
 
+    if (customDesign && !organizerLogoUrl) {
+      toast.error("Ajoutez le logo organisateur");
+      return;
+    }
+
     setSaving(true);
     const result = await updateBilleterie(item.id, {
       name: name.trim(),
@@ -145,6 +201,12 @@ export function BilleterieCardActions({ item }: Props) {
       categories: multiCat ? categories : null,
       blocksOrdered: blocksOrdered ? parseInt(blocksOrdered) : null,
       blockOrderDate: blocksOrdered ? blockOrderDate : null,
+      customDesign,
+      organizerLogoUrl,
+      backgroundImageUrl,
+      customDate: customDate || null,
+      customVenue: customVenue || null,
+      noteText: noteText || null,
     });
     setSaving(false);
 
@@ -210,6 +272,18 @@ export function BilleterieCardActions({ item }: Props) {
                   onChange={(e) => setName(e.target.value)}
                   required
                   placeholder="Ex: Pass Phase de Poules"
+                />
+              </div>
+
+              {/* ── Texte / Note ── */}
+              <div className="space-y-2">
+                <Label htmlFor="bil-note">Texte / Note (optionnel)</Label>
+                <Textarea
+                  id="bil-note"
+                  value={noteText}
+                  onChange={(e) => setNoteText(e.target.value)}
+                  placeholder="Affiché en gras sur tous les billets, sous le titre"
+                  rows={2}
                 />
               </div>
 
@@ -346,6 +420,103 @@ export function BilleterieCardActions({ item }: Props) {
                     />
                   </div>
                 </div>
+              </div>
+
+              {/* ── Billet personnalisé (design finales) ── */}
+              <div className="space-y-3 rounded-lg border p-3 bg-muted/30">
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={customDesign}
+                    onClick={() => setCustomDesign((v) => !v)}
+                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
+                      customDesign ? "bg-brand" : "bg-muted-foreground/30"
+                    }`}
+                  >
+                    <span
+                      className={`pointer-events-none block h-4 w-4 rounded-full bg-white shadow-lg transform transition-transform ${
+                        customDesign ? "translate-x-4" : "translate-x-0"
+                      }`}
+                    />
+                  </button>
+                  <div>
+                    <p className="text-sm font-medium flex items-center gap-1.5">
+                      <ImageIcon className="h-3.5 w-3.5 text-brand" />
+                      Billet personnalisé
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Design affiche (logo organisateur + image de fond), pour les finales — remplace le billet thermique standard
+                    </p>
+                  </div>
+                </div>
+
+                {customDesign && (
+                  <div className="space-y-4 pt-1">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="bil-custom-date" className="text-xs">Date</Label>
+                        <Input
+                          id="bil-custom-date"
+                          type="date"
+                          value={customDate}
+                          onChange={(e) => setCustomDate(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="bil-custom-venue" className="text-xs">Stade</Label>
+                        <Input
+                          id="bil-custom-venue"
+                          value={customVenue}
+                          onChange={(e) => setCustomVenue(e.target.value)}
+                          placeholder="Stade Caroline Faye"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Logo de l&apos;organisateur</Label>
+                      <p className="text-xs text-muted-foreground">Affiché en haut du billet</p>
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png"
+                        onChange={handleLogoChange}
+                        disabled={uploadingLogo}
+                        className="block w-full text-xs text-muted-foreground file:mr-3 file:rounded-md file:border-0 file:bg-brand file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-white"
+                      />
+                      {uploadingLogo && (
+                        <p className="text-xs text-muted-foreground flex items-center gap-1">
+                          <Loader2 className="h-3 w-3 animate-spin" />Téléversement…
+                        </p>
+                      )}
+                      {organizerLogoUrl && !uploadingLogo && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={organizerLogoUrl} alt="Logo organisateur" className="h-14 w-14 object-contain rounded border bg-white p-1" />
+                      )}
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Image d&apos;arrière-plan (stade)</Label>
+                      <p className="text-xs text-muted-foreground">Optionnel — à défaut, l&apos;image de stade par défaut sera utilisée</p>
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png"
+                        onChange={handleBgChange}
+                        disabled={uploadingBg}
+                        className="block w-full text-xs text-muted-foreground file:mr-3 file:rounded-md file:border-0 file:bg-brand file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-white"
+                      />
+                      {uploadingBg && (
+                        <p className="text-xs text-muted-foreground flex items-center gap-1">
+                          <Loader2 className="h-3 w-3 animate-spin" />Téléversement…
+                        </p>
+                      )}
+                      {backgroundImageUrl && !uploadingBg && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={backgroundImageUrl} alt="Arrière-plan" className="h-20 w-full object-cover rounded border" />
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* ── Matchs ── */}

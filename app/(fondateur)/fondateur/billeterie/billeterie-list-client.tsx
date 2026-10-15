@@ -168,6 +168,12 @@ export function FondateurBilleterieList({ items }: { items: BilleterieItem[] }) 
                     matchIds: item.matchIds,
                     blocksOrdered: item.blocksOrdered,
                     blockOrderDate: item.blockOrderDate,
+                    customDesign: item.customDesign,
+                    organizerLogoUrl: item.organizerLogoUrl,
+                    backgroundImageUrl: item.backgroundImageUrl,
+                    customDate: item.customDate,
+                    customVenue: item.customVenue,
+                    noteText: item.noteText,
                   }}
                 />
               </div>
