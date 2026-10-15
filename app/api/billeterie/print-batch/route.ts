@@ -45,7 +45,6 @@ function escapeHtml(s: string): string {
 // the page is exactly as tall as its content needs, no shorter, no taller.
 const MATCH_ROW_H = 13; // mm — fits the 16pt team-name text
 const MATCH_GAP = 2;
-const MATCHES_TOP_BASE = 72;
 const QR_H = 66;
 const FOOTER_H = 13;
 
@@ -53,26 +52,40 @@ const FOOTER_H = 13;
 // wraps naturally like normal text, so a long pass name can grow to 2-3
 // lines. There's no DOM here to measure real wrap width, so this estimates
 // line count from character count (title-main is ~20 chars/line at its
-// font-size) to push the match list down enough to avoid an overlap.
+// font-size) to push what follows down enough to avoid an overlap.
 const TITLE_CHARS_PER_LINE = 20;
-const TITLE_LINE_H = 10; // mm per wrapped title line, beyond the first
-const NOTE_EXTRA_H = 5; // mm reserved for the optional note line
+const TITLE_TOP = 30; // mm — matches .fin-title-block's fixed top offset
+const TITLE_LINE_H = 10.5; // mm per title line (incl. the first)
+const NOTE_H = 6; // mm — note line + its margin, only when a note is set
+const DATE_H = 4.5; // mm — date line + its margin, only when a date is set
+const PRICE_H = 12; // mm — price pill + its margin
+const GAP_BEFORE_MATCHES = 6; // mm between the title block and the first match row
+const GAP_AFTER_CONTENT = 4; // mm between the title block (or matches) and venue/QR
 
 function estimateTitleExtraLines(title: string): number {
   const lines = Math.ceil(title.trim().length / TITLE_CHARS_PER_LINE) || 1;
   return Math.max(0, Math.min(lines, 3) - 1);
 }
 
-function computeFinalesLayout(matchCount: number, hasVenue: boolean, title: string, hasNote: boolean) {
-  const matchesTop = MATCHES_TOP_BASE + estimateTitleExtraLines(title) * TITLE_LINE_H + (hasNote ? NOTE_EXTRA_H : 0);
-  const matchesBottom = matchCount > 0
+function computeFinalesLayout(matchCount: number, hasVenue: boolean, title: string, hasNote: boolean, hasDate: boolean) {
+  // Where the title block (title + note + date + price pill) actually ends —
+  // used directly as the anchor for venue/QR when there's no match list, so
+  // a zero-match ticket doesn't wait for room that was only ever reserved
+  // for match rows that aren't there.
+  const titleBlockBottom = TITLE_TOP
+    + TITLE_LINE_H * (1 + estimateTitleExtraLines(title))
+    + (hasNote ? NOTE_H : 0)
+    + (hasDate ? DATE_H : 0)
+    + PRICE_H;
+  const matchesTop = titleBlockBottom + GAP_BEFORE_MATCHES;
+  const contentBottom = matchCount > 0
     ? matchesTop + matchCount * MATCH_ROW_H + Math.max(0, matchCount - 1) * MATCH_GAP
-    : matchesTop;
-  const venueTop = matchesBottom + 3;
-  const afterMatches = hasVenue ? venueTop + 8 : matchesBottom + 3;
-  const qrTop = afterMatches + 4;
+    : titleBlockBottom;
+  const venueTop = contentBottom + GAP_AFTER_CONTENT;
+  const afterContent = hasVenue ? venueTop + 8 : contentBottom + GAP_AFTER_CONTENT;
+  const qrTop = afterContent + 4;
   const issuerTop = qrTop + QR_H + 6;
-  const sep2Top = issuerTop + 12 + 4;
+  const sep2Top = issuerTop + 17 + 4;
   const norefundTop = sep2Top + 3;
   const footerTop = norefundTop + 4 + 2;
   const pageHeight = footerTop + FOOTER_H + 3;
@@ -104,7 +117,7 @@ function renderFinalesTicket(
       <div class="fin-ball"></div>
     </div>`).join("");
 
-  const L = computeFinalesLayout(matches.length, !!venue, title, !!noteText);
+  const L = computeFinalesLayout(matches.length, !!venue, title, !!noteText, !!dateLabel);
 
   const venueHtml = venue ? `
     <div class="fin-venue" style="top:${L.venueTop}mm;">
@@ -138,8 +151,10 @@ function renderFinalesTicket(
 
     <div class="fin-qr-box" style="top:${L.qrTop}mm;"><img src="${qrDataUrl}" alt="QR"></div>
     <div class="fin-issuer" style="top:${L.issuerTop}mm;">
-      <div class="fin-ticket-id">${escapeHtml(ticket.serial_number)}</div>
-      <div class="fin-issuer-line">${createdAtFmt}</div>
+      <div class="fin-issuer-box">
+        <div class="fin-ticket-id">${escapeHtml(ticket.serial_number)}</div>
+        <div class="fin-issuer-line">${createdAtFmt}</div>
+      </div>
     </div>
 
     <div class="fin-sep" style="top:${L.sep2Top}mm;"></div>
@@ -185,7 +200,7 @@ body { background:#fff; }
 .fin-org-logo { max-width:${mm(380)}; max-height:20mm; object-fit:contain; }
 .fin-sep { position:absolute; left:${mm(20)}; right:${mm(20)}; border-top:${mm(3)} dashed #111; }
 
-.fin-title-block { position:absolute; left:0; right:0; top:30mm; display:flex; flex-direction:column; align-items:center; }
+.fin-title-block { position:absolute; left:0; right:0; top:${TITLE_TOP}mm; display:flex; flex-direction:column; align-items:center; }
 .fin-title-main { max-width:125mm; text-align:center; font-family:'Anton',sans-serif; font-size:9.5mm; line-height:1.08; letter-spacing:${mm(1)}; }
 .fin-note { max-width:125mm; text-align:center; font-family:'Archivo',sans-serif; font-weight:800; font-size:4.2mm; letter-spacing:${mm(0.5)}; margin-top:1.5mm; color:#b91c1c; }
 .fin-date { font-family:'Archivo',sans-serif; font-weight:600; font-size:3mm; letter-spacing:${mm(1)}; margin-top:1mm; color:#333; }
@@ -206,7 +221,8 @@ body { background:#fff; }
 .fin-qr-box { position:absolute; left:calc(50% - 33mm); width:66mm; height:66mm; border-radius:${mm(12)}; background:#fff; display:flex; align-items:center; justify-content:center; }
 .fin-qr-box img { width:60mm; height:60mm; image-rendering:pixelated; }
 
-.fin-issuer { position:absolute; left:0; right:0; text-align:center; font-family:'Archivo',sans-serif; }
+.fin-issuer { position:absolute; left:0; right:0; display:flex; justify-content:center; }
+.fin-issuer-box { background:#fff; border-radius:${mm(10)}; padding:2mm ${mm(28)}; text-align:center; font-family:'Archivo',sans-serif; box-shadow:0 1px 3px rgba(0,0,0,.2); }
 .fin-ticket-id { font-weight:900; font-size:5.5mm; letter-spacing:${mm(0.5)}; }
 .fin-issuer-line { font-weight:700; font-size:4mm; margin-top:1mm; color:#222; }
 
@@ -376,7 +392,7 @@ export async function GET(request: Request) {
       : null;
     const organizerLogoUrl = (bil as any).organizer_logo_url || "";
     const backgroundImageUrl = (bil as any).background_image_url || "";
-    const finPageHeight = computeFinalesLayout(matchList.length, !!venue, bil.name as string, !!noteText).pageHeight;
+    const finPageHeight = computeFinalesLayout(matchList.length, !!venue, bil.name as string, !!noteText, !!dateLabel).pageHeight;
 
     const finBlocks = await Promise.all(
       tickets.map(async (ticket: any) => {

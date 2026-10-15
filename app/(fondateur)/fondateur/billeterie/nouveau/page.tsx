@@ -191,6 +191,11 @@ export default function FondateurNouveauBilletteriePage() {
       return;
     }
 
+    if (uploadingLogo || uploadingBg) {
+      toast.error("Patientez la fin du téléversement de l'image");
+      return;
+    }
+
     let matchIds: string[];
     let bilZoneId: string | undefined;
     if (scopeMode === "zone") {
@@ -737,7 +742,7 @@ export default function FondateurNouveauBilletteriePage() {
         <Button
           type="submit"
           className="w-full bg-brand hover:bg-brand/90"
-          disabled={loading || !canSubmit}
+          disabled={loading || !canSubmit || uploadingLogo || uploadingBg}
         >
           {loading ? (
             <Loader2 className="h-4 w-4 animate-spin" />

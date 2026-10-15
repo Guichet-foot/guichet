@@ -193,6 +193,11 @@ export function BilleterieCardActions({ item }: Props) {
       return;
     }
 
+    if (uploadingLogo || uploadingBg) {
+      toast.error("Patientez la fin du téléversement de l'image");
+      return;
+    }
+
     setSaving(true);
     const result = await updateBilleterie(item.id, {
       name: name.trim(),
@@ -622,7 +627,7 @@ export function BilleterieCardActions({ item }: Props) {
               <Button
                 type="submit"
                 className="flex-1 bg-brand hover:bg-brand/90"
-                disabled={saving}
+                disabled={saving || uploadingLogo || uploadingBg}
               >
                 {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Enregistrer"}
               </Button>

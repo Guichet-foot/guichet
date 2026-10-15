@@ -152,6 +152,11 @@ export default function NouveauBilletteriePage() {
       return;
     }
 
+    if (uploadingLogo || uploadingBg) {
+      toast.error("Patientez la fin du téléversement de l'image");
+      return;
+    }
+
     const matchIds = scopeMode === "zone" ? zoneMatchIds : Array.from(selectedIds);
 
     setLoading(true);
@@ -572,7 +577,7 @@ export default function NouveauBilletteriePage() {
         <Button
           type="submit"
           className="w-full bg-brand hover:bg-brand/90"
-          disabled={loading || !canSubmit}
+          disabled={loading || !canSubmit || uploadingLogo || uploadingBg}
         >
           {loading ? (
             <Loader2 className="h-4 w-4 animate-spin" />
