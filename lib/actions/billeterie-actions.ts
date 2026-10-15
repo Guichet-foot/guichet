@@ -188,6 +188,7 @@ export async function createBilleterie(formData: {
   backgroundImageUrl?: string | null;
   customDate?: string | null;
   customVenue?: string | null;
+  noteText?: string | null;
 }): Promise<{ error?: string; billeterieId?: string; batchId?: string }> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -236,6 +237,7 @@ export async function createBilleterie(formData: {
     background_image_url: formData.customDesign ? (formData.backgroundImageUrl || null) : null,
     custom_date: formData.customDesign ? (formData.customDate || null) : null,
     custom_venue: formData.customDesign ? (formData.customVenue || null) : null,
+    note_text: formData.noteText || null,
   };
   if (isMultiCat) insertData.categories = formData.categories;
 

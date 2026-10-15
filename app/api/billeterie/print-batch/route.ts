@@ -45,14 +45,29 @@ function escapeHtml(s: string): string {
 // the page is exactly as tall as its content needs, no shorter, no taller.
 const MATCH_ROW_H = 13; // mm — fits the 16pt team-name text
 const MATCH_GAP = 2;
-const MATCHES_TOP = 72;
+const MATCHES_TOP_BASE = 72;
 const QR_H = 66;
 const FOOTER_H = 13;
 
-function computeFinalesLayout(matchCount: number, hasVenue: boolean) {
+// The title has no fixed word-split anymore (see renderFinalesTicket) — it
+// wraps naturally like normal text, so a long pass name can grow to 2-3
+// lines. There's no DOM here to measure real wrap width, so this estimates
+// line count from character count (title-main is ~20 chars/line at its
+// font-size) to push the match list down enough to avoid an overlap.
+const TITLE_CHARS_PER_LINE = 20;
+const TITLE_LINE_H = 10; // mm per wrapped title line, beyond the first
+const NOTE_EXTRA_H = 5; // mm reserved for the optional note line
+
+function estimateTitleExtraLines(title: string): number {
+  const lines = Math.ceil(title.trim().length / TITLE_CHARS_PER_LINE) || 1;
+  return Math.max(0, Math.min(lines, 3) - 1);
+}
+
+function computeFinalesLayout(matchCount: number, hasVenue: boolean, title: string, hasNote: boolean) {
+  const matchesTop = MATCHES_TOP_BASE + estimateTitleExtraLines(title) * TITLE_LINE_H + (hasNote ? NOTE_EXTRA_H : 0);
   const matchesBottom = matchCount > 0
-    ? MATCHES_TOP + matchCount * MATCH_ROW_H + Math.max(0, matchCount - 1) * MATCH_GAP
-    : MATCHES_TOP;
+    ? matchesTop + matchCount * MATCH_ROW_H + Math.max(0, matchCount - 1) * MATCH_GAP
+    : matchesTop;
   const venueTop = matchesBottom + 3;
   const afterMatches = hasVenue ? venueTop + 8 : matchesBottom + 3;
   const qrTop = afterMatches + 4;
@@ -62,34 +77,22 @@ function computeFinalesLayout(matchCount: number, hasVenue: boolean) {
   const footerTop = norefundTop + 4 + 2;
   const pageHeight = footerTop + FOOTER_H + 3;
   const bgTop = (hasVenue ? venueTop : qrTop) - 6;
-  return { venueTop, qrTop, issuerTop, sep2Top, norefundTop, footerTop, pageHeight, bgTop };
+  return { matchesTop, venueTop, qrTop, issuerTop, sep2Top, norefundTop, footerTop, pageHeight, bgTop };
 }
-
-// Inline SVG trophy (Lucide "trophy" path) — replaces the old raster image
-// so no extra file has to be fetched/decoded per printed ticket.
-const TROPHY_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="#111" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" width="100%" height="100%">
-  <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/>
-  <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/>
-  <path d="M4 22h16"/>
-  <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/>
-  <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/>
-  <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" fill="#111"/>
-</svg>`;
 
 function renderFinalesTicket(
   ticket: { serial_number: string; created_at: string },
   title: string,
   dateLabel: string | null,
   priceLabel: string,
+  noteText: string | null,
   matches: Array<{ home: string; away: string }>,
   venue: string | null,
   qrDataUrl: string,
   organizerLogoUrl: string,
   backgroundImageUrl: string
 ): string {
-  const words = title.trim().split(/\s+/);
-  const titleMain = escapeHtml(words[0] || title);
-  const titleSub = escapeHtml(words.slice(1).join(" "));
+  const titleEsc = escapeHtml(title);
   const createdAtFmt = format(new Date(ticket.created_at), "dd/MM/yyyy HH:mm", { locale: fr });
 
   const matchRows = matches.map((m) => `
@@ -101,7 +104,7 @@ function renderFinalesTicket(
       <div class="fin-ball"></div>
     </div>`).join("");
 
-  const L = computeFinalesLayout(matches.length, !!venue);
+  const L = computeFinalesLayout(matches.length, !!venue, title, !!noteText);
 
   const venueHtml = venue ? `
     <div class="fin-venue" style="top:${L.venueTop}mm;">
@@ -123,17 +126,13 @@ function renderFinalesTicket(
     <div class="fin-sep" style="top:27mm;"></div>
 
     <div class="fin-title-block">
-      <div class="fin-title-row">
-        <div class="fin-troph fin-troph-l">${TROPHY_SVG}</div>
-        <div class="fin-troph fin-troph-r">${TROPHY_SVG}</div>
-        <div class="fin-title-main">${titleMain}</div>
-      </div>
-      ${titleSub ? `<div class="fin-title-sub">${titleSub}</div>` : ""}
+      <div class="fin-title-main">${titleEsc}</div>
+      ${noteText ? `<div class="fin-note">${escapeHtml(noteText)}</div>` : ""}
       ${dateLabel ? `<div class="fin-date">${escapeHtml(dateLabel.toUpperCase())}</div>` : ""}
       <div class="fin-price">${escapeHtml(priceLabel)}</div>
     </div>
 
-    ${matches.length > 0 ? `<div class="fin-matches">${matchRows}</div>` : ""}
+    ${matches.length > 0 ? `<div class="fin-matches" style="top:${L.matchesTop}mm;">${matchRows}</div>` : ""}
 
     ${venueHtml}
 
@@ -187,16 +186,12 @@ body { background:#fff; }
 .fin-sep { position:absolute; left:${mm(20)}; right:${mm(20)}; border-top:${mm(3)} dashed #111; }
 
 .fin-title-block { position:absolute; left:0; right:0; top:30mm; display:flex; flex-direction:column; align-items:center; }
-.fin-title-row { position:relative; width:100%; display:flex; justify-content:center; }
-.fin-troph { position:absolute; top:0; width:11mm; height:11mm; }
-.fin-troph-l { left:${mm(140)}; }
-.fin-troph-r { right:${mm(140)}; }
-.fin-title-main { font-family:'Anton',sans-serif; font-size:11mm; line-height:1; letter-spacing:${mm(1)}; }
-.fin-title-sub { font-family:'Anton',sans-serif; font-size:8.5mm; line-height:1.05; letter-spacing:${mm(0.5)}; margin-top:0.5mm; }
+.fin-title-main { max-width:125mm; text-align:center; font-family:'Anton',sans-serif; font-size:9.5mm; line-height:1.08; letter-spacing:${mm(1)}; }
+.fin-note { max-width:125mm; text-align:center; font-family:'Archivo',sans-serif; font-weight:800; font-size:4.2mm; letter-spacing:${mm(0.5)}; margin-top:1.5mm; color:#b91c1c; }
 .fin-date { font-family:'Archivo',sans-serif; font-weight:600; font-size:3mm; letter-spacing:${mm(1)}; margin-top:1mm; color:#333; }
 .fin-price { margin-top:1.5mm; min-width:${mm(510)}; padding:0 ${mm(30)}; height:10.5mm; border-radius:${mm(12)}; background:#111; color:#fff; display:flex; align-items:center; justify-content:center; font-family:'Archivo',sans-serif; font-weight:900; font-size:8mm; letter-spacing:${mm(1)}; white-space:nowrap; }
 
-.fin-matches { position:absolute; left:${mm(48)}; right:${mm(44)}; top:${MATCHES_TOP}mm; display:flex; flex-direction:column; gap:${MATCH_GAP}mm; }
+.fin-matches { position:absolute; left:${mm(48)}; right:${mm(44)}; display:flex; flex-direction:column; gap:${MATCH_GAP}mm; }
 .fin-match-row { position:relative; height:${MATCH_ROW_H}mm; border-radius:${mm(12)}; background:rgba(255,255,255,.93); box-shadow:0 1px 3px rgba(0,0,0,.25); display:grid; grid-template-columns:${mm(60)} minmax(0,1fr) ${mm(92)} minmax(0,1fr) ${mm(60)}; align-items:center; }
 .fin-ball { justify-self:center; width:7.5mm; height:7.5mm; border-radius:50%; background:#fff url('/billet-finales/ballon.jpg') -3.2mm -6.9mm/20mm 20mm no-repeat; }
 /* Team names, QR code and the serial/date under it are oversized relative to
@@ -235,7 +230,8 @@ function renderBilleterieTicket(
   sellerName: string,
   qrDataUrl: string,
   fmt: PrintFormat,
-  showMatches: boolean
+  showMatches: boolean,
+  noteText: string | null
 ): string {
   const is58 = fmt === "58";
   const priceFmt = new Intl.NumberFormat("fr-FR").format(price);
@@ -244,7 +240,11 @@ function renderBilleterieTicket(
   const namePt = is58 ? "9" : "11";
   const matchPt = is58 ? "6" : "7";
   const logoFontPt = is58 ? "10" : "12";
+  const notePt = is58 ? "7" : "8";
   const prixStyle = `font-weight:900;font-size:${is58 ? "9" : "10"}pt;letter-spacing:0.5px;`;
+  const noteHtml = noteText
+    ? `<div class="c" style="font-weight:800;font-size:${notePt}pt;color:#b91c1c;margin-top:0.5mm;">${escapeHtml(noteText)}</div>`
+    : "";
 
   if (!showMatches) {
     return `
@@ -252,6 +252,7 @@ function renderBilleterieTicket(
 <div class="c" style="font-weight:900;font-size:${logoFontPt}pt;letter-spacing:1px;padding:1mm 0;">Guichet Foot</div>
 <div class="sep"></div>
 <div class="c" style="font-size:${namePt}pt;font-weight:900;line-height:1.3;letter-spacing:0.5px;">${bilName}</div>
+${noteHtml}
 <div class="c tiny" style="font-style:italic;margin-top:0;">PASS MULTI-MATCHS</div>
 <div class="c" style="${prixStyle}">${priceFmt}&nbsp;FCFA</div>
 <div class="sep"></div>
@@ -286,6 +287,7 @@ function renderBilleterieTicket(
 <div class="c" style="font-weight:900;font-size:${logoFontPt}pt;letter-spacing:1px;padding:1mm 0;">Guichet Foot</div>
 <div class="sep"></div>
 <div class="c" style="font-size:${namePt}pt;font-weight:900;line-height:1.3;letter-spacing:0.5px;">${bilName}</div>
+${noteHtml}
 <div class="c tiny" style="font-style:italic;margin-top:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${passLine}</div>
 <div class="c" style="${prixStyle}">${priceFmt}&nbsp;FCFA</div>
 <div class="sep"></div>
@@ -328,7 +330,7 @@ export async function GET(request: Request) {
   const billeterieId = tickets[0].billeterie_id;
   const { data: bil } = await adminClient
     .from("billeterie")
-    .select("name, price, match_ids, categories, show_matches_on_ticket, custom_design, organizer_logo_url, background_image_url, custom_date, custom_venue")
+    .select("name, price, match_ids, categories, show_matches_on_ticket, custom_design, organizer_logo_url, background_image_url, custom_date, custom_venue, note_text")
     .eq("id", billeterieId)
     .single();
 
@@ -354,20 +356,27 @@ export async function GET(request: Request) {
 
   // Displayed name: append category if multi-cat
   const displayName = categoryName ? `${bil.name} — ${categoryName}` : (bil.name as string);
+  const noteText: string | null = (bil as any).note_text || null;
 
   if ((bil as any).custom_design) {
-    const priceLabel = `${new Intl.NumberFormat("fr-FR").format(effectivePrice)} FCFA`;
-    const matchList = (matches || []).map((m: any) => ({
-      home: m.home_team_zone ? `${m.home_team} (${fmtZone(m.home_team_zone)})` : m.home_team,
-      away: m.away_team_zone ? `${m.away_team} (${fmtZone(m.away_team_zone)})` : m.away_team,
-    }));
+    // Category goes on the price line ("Entrée - 500 FCFA"), not the title.
+    const priceLabel = categoryName
+      ? `${categoryName} - ${new Intl.NumberFormat("fr-FR").format(effectivePrice)} FCFA`
+      : `${new Intl.NumberFormat("fr-FR").format(effectivePrice)} FCFA`;
+    const showMatches = (bil as any).show_matches_on_ticket !== false;
+    const matchList = showMatches
+      ? (matches || []).map((m: any) => ({
+          home: m.home_team_zone ? `${m.home_team} (${fmtZone(m.home_team_zone)})` : m.home_team,
+          away: m.away_team_zone ? `${m.away_team} (${fmtZone(m.away_team_zone)})` : m.away_team,
+        }))
+      : [];
     const venue = (bil as any).custom_venue || null;
     const dateLabel = (bil as any).custom_date
       ? format(new Date(`${(bil as any).custom_date}T00:00:00`), "dd MMMM yyyy", { locale: fr })
       : null;
     const organizerLogoUrl = (bil as any).organizer_logo_url || "";
     const backgroundImageUrl = (bil as any).background_image_url || "";
-    const finPageHeight = computeFinalesLayout(matchList.length, !!venue).pageHeight;
+    const finPageHeight = computeFinalesLayout(matchList.length, !!venue, bil.name as string, !!noteText).pageHeight;
 
     const finBlocks = await Promise.all(
       tickets.map(async (ticket: any) => {
@@ -375,7 +384,7 @@ export async function GET(request: Request) {
           width: 500, margin: 1, errorCorrectionLevel: "M",
           color: { dark: "#000000", light: "#FFFFFF" },
         });
-        return renderFinalesTicket(ticket, displayName, dateLabel, priceLabel, matchList, venue, qrDataUrl, organizerLogoUrl, backgroundImageUrl);
+        return renderFinalesTicket(ticket, bil.name as string, dateLabel, priceLabel, noteText, matchList, venue, qrDataUrl, organizerLogoUrl, backgroundImageUrl);
       })
     );
 
@@ -412,7 +421,7 @@ window.onload = function() {
         errorCorrectionLevel: "M",
         color: { dark: "#000000", light: "#FFFFFF" },
       });
-      return renderBilleterieTicket(ticket, displayName, effectivePrice, matches || [], sellerName, qrDataUrl, fmt, bil.show_matches_on_ticket !== false);
+      return renderBilleterieTicket(ticket, displayName, effectivePrice, matches || [], sellerName, qrDataUrl, fmt, bil.show_matches_on_ticket !== false, noteText);
     })
   );
 

@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
 import { ArrowLeft, Loader2, Check, Trophy, Plus, Trash2, Layers, MapPin, ChevronDown, Package, Users, Landmark, Image as ImageIcon } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
@@ -45,6 +46,7 @@ export default function FondateurNouveauBilletteriePage() {
   const [categories, setCategories] = useState<BilCategory[]>([{ name: "", price: 0 }]);
   const [blocksOrdered, setBlocksOrdered] = useState("");
   const [blockOrderDate, setBlockOrderDate] = useState(() => format(new Date(), "yyyy-MM-dd"));
+  const [noteText, setNoteText] = useState("");
 
   // Billet personnalisé (design finales) : logo organisateur + image d'arrière-plan
   const [customDesign, setCustomDesign] = useState(false);
@@ -229,6 +231,7 @@ export default function FondateurNouveauBilletteriePage() {
       backgroundImageUrl,
       customDate: customDate || null,
       customVenue: customVenue || null,
+      noteText: noteText || null,
     });
     setLoading(false);
 
@@ -275,6 +278,17 @@ export default function FondateurNouveauBilletteriePage() {
                 onChange={(e) => setName(e.target.value)}
                 required
                 placeholder="Ex: Pass Phase de Poules"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="noteText">Texte / Note (optionnel)</Label>
+              <Textarea
+                id="noteText"
+                value={noteText}
+                onChange={(e) => setNoteText(e.target.value)}
+                placeholder="Affiché en gras sur tous les billets, sous le titre"
+                rows={2}
               />
             </div>
 
