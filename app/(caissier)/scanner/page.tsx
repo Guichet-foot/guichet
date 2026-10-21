@@ -35,7 +35,6 @@ function extractCardToken(text: string): string | null {
 function ScannerContent() {
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const [cardResult, setCardResult] = useState<AccessCard | null>(null);
-  const [scanning, setScanning] = useState(true);
   const [stats, setStats] = useState({ validated: 0, total: 0 });
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [torchSupported, setTorchSupported] = useState(false);
@@ -44,11 +43,18 @@ function ScannerContent() {
   /* eslint-disable @typescript-eslint/no-explicit-any */
   const html5QrCodeRef = useRef<any>(null);
   const streamTrackRef = useRef<MediaStreamTrack | null>(null);
+  // Guards against the same still-in-frame QR code firing the decode
+  // callback a second time before html5QrCode.pause() has taken effect —
+  // a `useState` guard doesn't work here because the callback is created
+  // once (empty-deps effect below) and would always read its stale initial
+  // value. A ref is read/written synchronously and isn't captured by value,
+  // so it actually blocks the re-entrant call.
+  const processingRef = useRef(false);
 
   const resumeScanning = useCallback(() => {
     setScanResult(null);
     setCardResult(null);
-    setScanning(true);
+    processingRef.current = false;
   }, []);
 
   async function closeCardOverlay() {
@@ -88,8 +94,8 @@ function ScannerContent() {
           { facingMode: "environment" },
           { fps: 15, qrbox: { width: 220, height: 220 } },
           async (decodedText: string) => {
-            if (!scanning) return;
-            setScanning(false);
+            if (processingRef.current) return;
+            processingRef.current = true;
 
             try { await html5QrCode.pause(); } catch { }
 
