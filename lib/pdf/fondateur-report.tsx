@@ -8,6 +8,7 @@ function fmt(n: number) {
 export interface FondateurReportRow {
   organisateur: string;
   type: "zone" | "c3";
+  date: string;
   billetsScanned: number;
   recettesBrutes: number;
   commission: number;
@@ -73,10 +74,11 @@ const s = StyleSheet.create({
   },
 });
 
-const COL = { org: 2.5, type: 0.55, validés: 0.8, brutes: 1.4, commission: 1.25, frais: 1.2, nette: 1.4 };
+const COL = { date: 0.9, org: 2.0, type: 0.55, validés: 0.8, brutes: 1.4, commission: 1.25, frais: 1.2, nette: 1.4 };
 
 export function FondateurReport({ data }: { data: FondateurReportData }) {
   const odcavPct = (data.odcavRate * 100).toFixed(0);
+  const organisateurCount = new Set(data.rows.map((r) => r.organisateur)).size;
 
   return (
     <Document>
@@ -115,6 +117,7 @@ export function FondateurReport({ data }: { data: FondateurReportData }) {
 
         {/* Table header */}
         <View style={s.thRow}>
+          <Text style={[s.thText, { flex: COL.date }]}>Date</Text>
           <Text style={[s.thText, { flex: COL.org }]}>Organisateur</Text>
           <Text style={[s.thText, { flex: COL.type, textAlign: "center" }]}>Type</Text>
           <Text style={[s.thText, { flex: COL.validés, textAlign: "right" }]}>Billets</Text>
@@ -124,9 +127,10 @@ export function FondateurReport({ data }: { data: FondateurReportData }) {
           <Text style={[s.thText, { flex: COL.nette, textAlign: "right" }]}>Recette Nette</Text>
         </View>
 
-        {/* Table rows */}
+        {/* Table rows — one per organizer per scan day */}
         {data.rows.map((row, i) => (
           <View key={i} style={[s.row, i % 2 === 1 ? s.rowAlt : {}]}>
+            <Text style={[s.cell, { flex: COL.date }]}>{row.date}</Text>
             <Text style={[s.cell, { flex: COL.org }]}>{row.organisateur}</Text>
             <Text style={[s.cell, { flex: COL.type, textAlign: "center", color: row.type === "c3" ? "#1D4ED8" : "#15803D" }]}>
               {row.type === "c3" ? "C3" : "Zone"}
@@ -151,8 +155,8 @@ export function FondateurReport({ data }: { data: FondateurReportData }) {
 
         {/* Totals row */}
         <View style={s.totRow}>
-          <Text style={[s.totCell, { flex: COL.org + COL.type + COL.validés }]}>
-            TOTAUX — {data.rows.length} organisateur{data.rows.length !== 1 ? "s" : ""}
+          <Text style={[s.totCell, { flex: COL.date + COL.org + COL.type + COL.validés }]}>
+            TOTAUX — {organisateurCount} organisateur{organisateurCount !== 1 ? "s" : ""}
           </Text>
           <Text style={[s.totCell, { flex: COL.brutes, textAlign: "right" }]}>{fmt(data.totals.recettesBrutes)}</Text>
           <Text style={[s.totCell, { flex: COL.commission, textAlign: "right" }]}>{fmt(data.totals.commission)}</Text>

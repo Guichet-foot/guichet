@@ -97,6 +97,13 @@ export async function POST(request: Request) {
       }
     }
 
+    // Composite "organizerId::YYYY-MM-DD" key so each table row ends up being
+    // one organizer's activity for one scan day, instead of collapsing an
+    // entire (potentially months-long) report period into a single row.
+    function dayKey(id: string, scannedAt: string): string {
+      return `${id}::${scannedAt.split("T")[0]}`;
+    }
+
     // ── Zone: regular tickets with price ─────────────────────────────
     const zoneRevenue = new Map<string, number>();
     const zoneScanned = new Map<string, number>();
@@ -114,10 +121,11 @@ export async function POST(request: Request) {
       );
       for (const t of zoneTickets) {
         const zId = matchToZone.get(t.match_id as string);
-        if (!zId) continue;
-        zoneScanned.set(zId, (zoneScanned.get(zId) || 0) + 1);
+        if (!zId || !t.scanned_at) continue;
+        const key = dayKey(zId, t.scanned_at as string);
+        zoneScanned.set(key, (zoneScanned.get(key) || 0) + 1);
         if (t.counts_as_revenue) {
-          zoneRevenue.set(zId, (zoneRevenue.get(zId) || 0) + (t.price || 0));
+          zoneRevenue.set(key, (zoneRevenue.get(key) || 0) + (t.price || 0));
         }
       }
     }
@@ -142,7 +150,7 @@ export async function POST(request: Request) {
           fetchAll<any>((from2, to2) =>
             adminSupabase
               .from("billeterie_scans")
-              .select("match_id, ticket:billeterie_tickets(billeterie_id, category_name)")
+              .select("match_id, scanned_at, ticket:billeterie_tickets(billeterie_id, category_name)")
               .in("match_id", ids)
               .gte("scanned_at", dateStart.toISOString())
               .lte("scanned_at", dateEnd.toISOString())
@@ -154,8 +162,9 @@ export async function POST(request: Request) {
 
       for (const s of scanChunks.flat()) {
         const zId = matchToZone.get(s.match_id as string);
-        if (!zId) continue;
-        zoneScanned.set(zId, (zoneScanned.get(zId) || 0) + 1);
+        if (!zId || !s.scanned_at) continue;
+        const key = dayKey(zId, s.scanned_at as string);
+        zoneScanned.set(key, (zoneScanned.get(key) || 0) + 1);
 
         const tk = Array.isArray(s.ticket) ? s.ticket[0] : s.ticket;
         const info = tk ? bilInfo.get(tk.billeterie_id as string) : undefined;
@@ -168,7 +177,7 @@ export async function POST(request: Request) {
             price = info.price;
           }
         }
-        zoneRevenue.set(zId, (zoneRevenue.get(zId) || 0) + price);
+        zoneRevenue.set(key, (zoneRevenue.get(key) || 0) + price);
       }
     }
 
@@ -234,8 +243,9 @@ export async function POST(request: Request) {
           const bilId = ticketToBil.get(s.ticket_id as string);
           if (!bilId) continue;
           const c3Id = bilToC3.get(bilId);
-          if (!c3Id) continue;
-          c3ScannedMap.set(c3Id, (c3ScannedMap.get(c3Id) || 0) + 1);
+          if (!c3Id || !s.scanned_at) continue;
+          const key = dayKey(c3Id, s.scanned_at as string);
+          c3ScannedMap.set(key, (c3ScannedMap.get(key) || 0) + 1);
           const catName = ticketToCat.get(s.ticket_id as string);
           const cats = bilCatMap[bilId];
           let price = 0;
@@ -245,24 +255,36 @@ export async function POST(request: Request) {
           } else {
             price = bilPriceMap[bilId] || 0;
           }
-          c3Revenue.set(c3Id, (c3Revenue.get(c3Id) || 0) + price);
+          c3Revenue.set(key, (c3Revenue.get(key) || 0) + price);
         }
       }
     }
 
-    // ── Build rows ────────────────────────────────────────────────────
+    // ── Build rows — one per organizer per scan day ─────────────────────
+    // (rows[].date holds the raw "YYYY-MM-DD" key until the sort below;
+    // it's reformatted for display right before handing off to the PDF.)
     const rows: FondateurReportRow[] = [];
 
+    function splitDayKey(key: string): { id: string; date: string } {
+      const sep = key.indexOf("::");
+      return { id: key.slice(0, sep), date: key.slice(sep + 2) };
+    }
+
     if (type === "all" || type === "zone") {
-      for (const [zId, zName] of zoneMap) {
-        const scanned = zoneScanned.get(zId) || 0;
-        const brutes = zoneRevenue.get(zId) || 0;
+      const keys = new Set([...zoneScanned.keys(), ...zoneRevenue.keys()]);
+      for (const key of keys) {
+        const { id: zId, date } = splitDayKey(key);
+        const zName = zoneMap.get(zId);
+        if (!zName) continue;
+        const scanned = zoneScanned.get(key) || 0;
+        const brutes = zoneRevenue.get(key) || 0;
         if (scanned === 0 && brutes === 0) continue;
         const commission = Math.round(brutes * odcavRate);
         const frais = scanned * 10;
         rows.push({
           organisateur: zName,
           type: "zone",
+          date,
           billetsScanned: scanned,
           recettesBrutes: brutes,
           commission,
@@ -273,15 +295,19 @@ export async function POST(request: Request) {
     }
 
     if (type === "all" || type === "c3") {
-      for (const [c3Id, c3Name] of c3Map) {
-        const scanned = c3ScannedMap.get(c3Id) || 0;
-        const brutes = c3Revenue.get(c3Id) || 0;
+      const keys = new Set([...c3ScannedMap.keys(), ...c3Revenue.keys()]);
+      for (const key of keys) {
+        const { id: c3Id, date } = splitDayKey(key);
+        const c3Name = c3Map.get(c3Id);
+        const scanned = c3ScannedMap.get(key) || 0;
+        const brutes = c3Revenue.get(key) || 0;
         if (scanned === 0 && brutes === 0) continue;
         const commission = Math.round(brutes * odcavRate);
         const frais = scanned * 10;
         rows.push({
           organisateur: c3Name || "C3",
           type: "c3",
+          date,
           billetsScanned: scanned,
           recettesBrutes: brutes,
           commission,
@@ -291,7 +317,18 @@ export async function POST(request: Request) {
       }
     }
 
-    rows.sort((a, b) => b.recettesBrutes - a.recettesBrutes || a.organisateur.localeCompare(b.organisateur));
+    // Chronological first (raw "YYYY-MM-DD" sorts correctly as text), then
+    // the previous ranking as tie-breaker within the same day.
+    rows.sort((a, b) =>
+      a.date.localeCompare(b.date) ||
+      b.recettesBrutes - a.recettesBrutes ||
+      a.organisateur.localeCompare(b.organisateur)
+    );
+
+    // Reformat dates for display now that sort order is locked in.
+    for (const r of rows) {
+      r.date = format(new Date(r.date + "T00:00:00"), "dd/MM/yyyy", { locale: fr });
+    }
 
     const totals = rows.reduce(
       (acc, r) => ({
