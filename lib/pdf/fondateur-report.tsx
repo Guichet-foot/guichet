@@ -5,6 +5,16 @@ function fmt(n: number) {
   return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ") + " FCFA";
 }
 
+// Plain count, no currency suffix. Deliberately NOT `.toLocaleString("fr-FR")`:
+// that inserts a Unicode narrow no-break space (U+202F) as the thousands
+// separator, which the PDF's standard Helvetica font has no glyph for and
+// renders as a mangled "/" (e.g. 23121 showed up as "23/121" in print).
+// Reusing fmt()'s own separator (not retyping it) keeps the exact same,
+// already-proven-safe character.
+function fmtN(n: number): string {
+  return fmt(n).slice(0, -" FCFA".length);
+}
+
 export interface FondateurReportRow {
   organisateur: string;
   type: "zone" | "c3";
@@ -95,7 +105,7 @@ export function FondateurReport({ data }: { data: FondateurReportData }) {
           <View style={s.summaryCard}>
             <Text style={s.summaryLabel}>Recettes Brutes</Text>
             <Text style={[s.summaryValue, { color: "#0D5C3F" }]}>{fmt(data.totals.recettesBrutes)}</Text>
-            <Text style={[s.summaryLabel, { marginTop: 3 }]}>{data.totals.billetsScanned.toLocaleString("fr-FR")} billets validés</Text>
+            <Text style={[s.summaryLabel, { marginTop: 3 }]}>{fmtN(data.totals.billetsScanned)} billets validés</Text>
           </View>
           <View style={s.summaryCard}>
             <Text style={s.summaryLabel}>Commission ODCAV ({odcavPct}%)</Text>
@@ -104,7 +114,7 @@ export function FondateurReport({ data }: { data: FondateurReportData }) {
           <View style={s.summaryCard}>
             <Text style={s.summaryLabel}>Frais Billetterie</Text>
             <Text style={[s.summaryValue, { color: "#C2410C" }]}>{fmt(data.totals.frais)}</Text>
-            <Text style={[s.summaryLabel, { marginTop: 3 }]}>{data.totals.billetsScanned.toLocaleString("fr-FR")} × 10 FCFA</Text>
+            <Text style={[s.summaryLabel, { marginTop: 3 }]}>{fmtN(data.totals.billetsScanned)} × 10 FCFA</Text>
           </View>
           <View style={[s.summaryCard, { backgroundColor: data.totals.recetteNette >= 0 ? "#ECFDF5" : "#FEF2F2" }]}>
             <Text style={s.summaryLabel}>Recette Nette</Text>
@@ -136,7 +146,7 @@ export function FondateurReport({ data }: { data: FondateurReportData }) {
               {row.type === "c3" ? "C3" : "Zone"}
             </Text>
             <Text style={[s.cell, { flex: COL.validés, textAlign: "right" }]}>
-              {row.billetsScanned.toLocaleString("fr-FR")}
+              {fmtN(row.billetsScanned)}
             </Text>
             <Text style={[s.cell, { flex: COL.brutes, textAlign: "right", fontFamily: "Helvetica-Bold", color: "#0D5C3F" }]}>
               {fmt(row.recettesBrutes)}

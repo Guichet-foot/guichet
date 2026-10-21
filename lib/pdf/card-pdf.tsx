@@ -4,6 +4,14 @@ import {
   Svg, Path, Circle, Rect, Line,
 } from "@react-pdf/renderer";
 
+// `n.toLocaleString("fr-FR")` inserts a narrow no-break space (U+202F) as the
+// thousands separator, which the PDF's standard Helvetica font has no glyph
+// for and renders as a mangled "/" — use a plain space via manual regex
+// instead (see lib/pdf/fondateur-report.tsx for the full writeup).
+function fmtAmount(n: number): string {
+  return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+}
+
 // ── Units ──────────────────────────────────────────────────────────
 const MM = 72 / 25.4;
 
@@ -187,7 +195,7 @@ export function CardPDFView({ card }: { card: CardPDFData }) {
       ? [{ label: "ASC", value: card.asc_name, icon: <IconShield /> }]
       : []),
     ...(card.price && !isPersonneRessource
-      ? [{ label: "MONTANT", value: `${card.price.toLocaleString("fr-FR")} FCFA`, icon: <IconTag /> }]
+      ? [{ label: "MONTANT", value: `${fmtAmount(card.price)} FCFA`, icon: <IconTag /> }]
       : []),
   ];
 
