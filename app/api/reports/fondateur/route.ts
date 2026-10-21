@@ -350,7 +350,7 @@ export async function POST(request: Request) {
             ? `Jusqu'au ${format(dateEnd, "d MMMM yyyy", { locale: fr })}`
             : "Toutes périodes";
 
-    // Name the scope in the header so the PDF says which account(s) it covers
+    // Name the scope so the PDF title line says which account it covers
     const scopeParts: string[] = [];
     if (zoneId) scopeParts.push(allZonesNonDemo.find((z) => z.id === zoneId)?.name || "Zone");
     if (c3Id) scopeParts.push(c3Map.get(c3Id) || "C3");
@@ -358,10 +358,11 @@ export async function POST(request: Request) {
       const { data: saProfile } = await adminSupabase.from("profiles").select("full_name").eq("id", saId).maybeSingle();
       scopeParts.push(`Super Admin : ${saProfile?.full_name || "—"}`);
     }
-    const periodLabel = scopeParts.length > 0 ? `${scopeParts.join(" · ")} — ${basePeriodLabel}` : basePeriodLabel;
+    const scopeLabel = scopeParts.length > 0 ? scopeParts.join(" · ") : null;
 
     const reportData = {
-      periodLabel,
+      scopeLabel,
+      periodLabel: basePeriodLabel,
       generatedAt: format(new Date(), "dd/MM/yyyy HH:mm", { locale: fr }),
       odcavRate,
       rows,

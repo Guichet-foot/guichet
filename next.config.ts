@@ -12,6 +12,9 @@ const nextConfig: NextConfig = {
     "/*": [
       "node_modules/sharp/**/*",
       "node_modules/@img/**/*",
+      // lib/pdf/fondateur-report.tsx reads this via fs.readFileSync(path.join(process.cwd(), ...))
+      // at runtime — a dynamically-built path the file tracer can't follow statically.
+      "public/logoodcavdes.png",
     ],
   },
   experimental: {

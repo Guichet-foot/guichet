@@ -1,5 +1,17 @@
 import React from "react";
-import { Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
+import { Document, Page, Text, View, StyleSheet, Image } from "@react-pdf/renderer";
+import fs from "fs";
+import path from "path";
+
+// Static ODCAV logo for the header — read once at module load (this file only
+// ever runs server-side, inside renderToBuffer()), not per-request.
+const odcavLogo: Buffer | null = (() => {
+  try {
+    return fs.readFileSync(path.join(process.cwd(), "public", "logoodcavdes.png"));
+  } catch {
+    return null;
+  }
+})();
 
 function fmt(n: number) {
   return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ") + " FCFA";
@@ -27,6 +39,7 @@ export interface FondateurReportRow {
 }
 
 export interface FondateurReportData {
+  scopeLabel: string | null;
   periodLabel: string;
   generatedAt: string;
   odcavRate: number;
@@ -42,9 +55,18 @@ export interface FondateurReportData {
 
 const s = StyleSheet.create({
   page: { padding: 28, fontSize: 9, fontFamily: "Helvetica" },
-  header: { marginBottom: 14, paddingBottom: 12, borderBottomWidth: 2, borderBottomColor: "#0D5C3F" },
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 14,
+    paddingBottom: 12,
+    borderBottomWidth: 2,
+    borderBottomColor: "#0D5C3F",
+  },
   title: { fontSize: 17, fontFamily: "Helvetica-Bold", color: "#0D5C3F" },
   meta: { fontSize: 8, color: "#6B7280", marginTop: 2 },
+  odcavLogo: { width: 46, height: 46, objectFit: "contain" },
   summaryRow: { flexDirection: "row", gap: 6, marginBottom: 14 },
   summaryCard: { flex: 1, padding: 9, backgroundColor: "#F0EDE8", borderRadius: 3 },
   summaryLabel: { fontSize: 7, color: "#6B7280", marginBottom: 2 },
@@ -95,9 +117,14 @@ export function FondateurReport({ data }: { data: FondateurReportData }) {
       <Page size="A4" orientation="landscape" style={s.page}>
         {/* Header */}
         <View style={s.header}>
-          <Text style={s.title}>GUICHET FOOT — Rapport Financier</Text>
-          <Text style={s.meta}>{data.periodLabel}</Text>
-          <Text style={s.meta}>Généré le {data.generatedAt}</Text>
+          <View>
+            <Text style={s.title}>
+              GUICHET FOOT — Rapport Financier{data.scopeLabel ? ` — ${data.scopeLabel}` : ""}
+            </Text>
+            <Text style={s.meta}>{data.periodLabel}</Text>
+            <Text style={s.meta}>Généré le {data.generatedAt}</Text>
+          </View>
+          {odcavLogo && <Image src={{ data: odcavLogo, format: "png" }} style={s.odcavLogo} />}
         </View>
 
         {/* Summary cards */}
