@@ -368,19 +368,15 @@ export async function getBilleterieList(): Promise<BilleterieItem[]> {
   const { data } = await query.order("created_at", { ascending: false });
   if (!data || data.length === 0) return [];
 
-  // Count tickets per billeterie using parallel COUNT-only queries (no data transfer)
+  // Count tickets per billeterie in one grouped query instead of one COUNT(*)
+  // per billeterie — with 179+ passes for a fondateur, the per-item loop fired
+  // that many simultaneous requests against a 427k-row table on every page load.
   const billIds = data.map((b: any) => b.id as string);
   const ticketMap: Record<string, number> = {};
-  await Promise.all(
-    billIds.map(async (bId) => {
-      const { count } = await adminClient
-        .from("billeterie_tickets")
-        .select("*", { count: "exact", head: true })
-        .eq("billeterie_id", bId)
-        .eq("withdrawn", false);
-      ticketMap[bId] = count || 0;
-    })
-  );
+  const { data: countRows } = await adminClient.rpc("get_billeterie_ticket_counts", { bil_ids: billIds });
+  for (const row of (countRows || []) as { billeterie_id: string; ticket_count: number }[]) {
+    ticketMap[row.billeterie_id] = row.ticket_count;
+  }
 
   return data.map((b: any) => ({
     id: b.id as string,
