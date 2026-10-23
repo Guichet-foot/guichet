@@ -9,6 +9,7 @@ import { InterFilters } from "./inter-filters";
 import { InterPdfButton } from "./pdf-button";
 import { fetchAll } from "@/lib/supabase/paginate";
 import { computeBlocksOrderedFee } from "@/lib/actions/billeterie-actions";
+import { FinancesRealtimeRefresh } from "@/components/finances-realtime-refresh";
 
 export const metadata = { title: "Finances Inter-Zones" };
 
@@ -433,6 +434,7 @@ export default async function FinancesInterPage({
 
   return (
     <div className="space-y-6 min-w-0">
+      <FinancesRealtimeRefresh />
       <FinancesOdcavTabs active={typeParam as "communal" | "departemental"} />
 
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
