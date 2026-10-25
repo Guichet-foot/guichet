@@ -57,6 +57,10 @@ export async function POST(request: Request) {
     const hasZoneScope = !!(zoneId || saId);
     const includeZones = !c3Id || hasZoneScope;
     const includeC3 = !!c3Id || !hasZoneScope;
+    // ODCAV has no per-account filter (there's only one) — it belongs only
+    // in the unfiltered "everything" picture, same as zone/c3 narrow it out
+    // of each other. Any explicit zone or C3 scope excludes it from "all".
+    const includeOdcav = !hasZoneScope && !c3Id;
 
     // All zones (excl. demo)
     const { data: zonesData } = await adminSupabase.from("zones").select("id, name, created_by");
@@ -275,7 +279,7 @@ export async function POST(request: Request) {
     const odcavRevenue = new Map<string, number>();
     const odcavScanned = new Map<string, number>();
 
-    if (odcavMatchIds.length > 0 && (type === "all" || type === "odcav")) {
+    if (odcavMatchIds.length > 0 && ((type === "all" && includeOdcav) || type === "odcav")) {
       const odcavTickets = await fetchAll<any>((from2, to2) =>
         adminSupabase
           .from("tickets")
@@ -395,7 +399,7 @@ export async function POST(request: Request) {
       }
     }
 
-    if (type === "all" || type === "odcav") {
+    if ((type === "all" && includeOdcav) || type === "odcav") {
       const keys = new Set([...odcavScanned.keys(), ...odcavRevenue.keys()]);
       for (const key of keys) {
         const { date } = splitDayKey(key);
