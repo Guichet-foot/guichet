@@ -154,7 +154,7 @@ export default async function DashboardPage({
     // Bilan" popup's C3 selector on the C3 tab.
     let c3ProfilesList: { id: string; full_name: string; city: string | null }[] = [];
     if (tab === "c3") {
-      const { data: c3ProfilesRaw } = await adminClient.from("profiles").select("id, full_name, city").eq("role", "c3");
+      const { data: c3ProfilesRaw } = await adminClient.from("profiles").select("id, full_name, city").eq("role", "c3").eq("active", true);
       c3ProfilesList = (c3ProfilesRaw || []) as { id: string; full_name: string; city: string | null }[];
     }
 
