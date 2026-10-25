@@ -3,9 +3,7 @@ import { fetchAll } from "@/lib/supabase/paginate";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 export interface ScanStats {
-  totalPrinted: number;
   totalScanned: number;
-  totalUnsold: number;
   grossRevenue: number;
 }
 
@@ -16,10 +14,11 @@ export interface ScanStats {
 // still have leftover blocs scanned today, so the match scope stays
 // unrestricted and only the scan counts are filtered by scanned_at.
 //
-// "Validés par scan" (totalScanned) is scoped to [dateStart, dateEnd] — the
-// live, period number. "Invendus" (totalUnsold) is printed-minus-scanned
-// across ALL time, since it represents current remaining stock, not an
-// activity count for the period.
+// Printed/unsold counts were dropped: billeterie_tickets accumulates every
+// bloc ever printed for a billeterie regardless of when, so "Billets
+// imprimés"/"Billets invendus" showed lifetime totals rather than anything
+// tied to the selected period — reported as stale/incorrect and removed.
+// Only scanned-today (a real event count) and its revenue remain.
 export async function computeScanStats(
   adminClient: any,
   matchIds: string[],
@@ -27,7 +26,7 @@ export async function computeScanStats(
   dateEnd: Date
 ): Promise<ScanStats> {
   if (matchIds.length === 0) {
-    return { totalPrinted: 0, totalScanned: 0, totalUnsold: 0, grossRevenue: 0 };
+    return { totalScanned: 0, grossRevenue: 0 };
   }
 
   const dateStartIso = dateStart.toISOString();
@@ -35,9 +34,7 @@ export async function computeScanStats(
 
   // Regular tickets — kept for forward-compat even though the platform
   // currently sells exclusively through billeterie (0 rows today).
-  const [{ count: printedCount }, { count: allTimeScannedCount }, periodScannedTickets] = await Promise.all([
-    adminClient.from("tickets").select("*", { count: "exact", head: true }).in("match_id", matchIds).eq("bloc_printed", true),
-    adminClient.from("tickets").select("*", { count: "exact", head: true }).in("match_id", matchIds).eq("status", "scanne"),
+  const [periodScannedTickets, { data: allBilsData }] = await Promise.all([
     fetchAll<any>((from, to) =>
       adminClient
         .from("tickets")
@@ -49,19 +46,17 @@ export async function computeScanStats(
         .order("id", { ascending: true })
         .range(from, to)
     ),
+    adminClient.from("billeterie").select("id, price, match_ids, categories"),
   ]);
 
   // Billeterie — the platform's actual sales channel today.
-  const { data: allBilsData } = await adminClient.from("billeterie").select("id, price, match_ids, categories");
   const matchIdSet = new Set(matchIds);
   const bils = ((allBilsData || []) as any[]).filter((b) =>
     ((b.match_ids || []) as string[]).some((id) => matchIdSet.has(id))
   );
   const bilIds = bils.map((b) => b.id as string);
 
-  let bilPrinted = 0;
-  let bilAllTimeScanned = 0;
-  let bilPeriodScanned = 0;
+  let bilScanned = 0;
   let bilRevenue = 0;
 
   if (bilIds.length > 0) {
@@ -72,23 +67,17 @@ export async function computeScanStats(
       if (b.categories) bilCatMap[b.id] = b.categories;
     });
 
-    const [{ count: bilPrintedCount }, { count: bilAllTimeScannedCount }, periodBilScans] = await Promise.all([
-      adminClient.from("billeterie_tickets").select("*", { count: "exact", head: true }).in("billeterie_id", bilIds).eq("withdrawn", false),
-      adminClient.from("billeterie_scans").select("*", { count: "exact", head: true }).in("match_id", matchIds),
-      fetchAll<any>((from, to) =>
-        adminClient
-          .from("billeterie_scans")
-          .select("ticket_id")
-          .in("match_id", matchIds)
-          .gte("scanned_at", dateStartIso)
-          .lte("scanned_at", dateEndIso)
-          .order("id", { ascending: true })
-          .range(from, to)
-      ),
-    ]);
-    bilPrinted = bilPrintedCount || 0;
-    bilAllTimeScanned = bilAllTimeScannedCount || 0;
-    bilPeriodScanned = periodBilScans.length;
+    const periodBilScans = await fetchAll<any>((from, to) =>
+      adminClient
+        .from("billeterie_scans")
+        .select("ticket_id")
+        .in("match_id", matchIds)
+        .gte("scanned_at", dateStartIso)
+        .lte("scanned_at", dateEndIso)
+        .order("id", { ascending: true })
+        .range(from, to)
+    );
+    bilScanned = periodBilScans.length;
 
     const scannedTicketIds = [...new Set(periodBilScans.map((s: any) => s.ticket_id as string))];
     if (scannedTicketIds.length > 0) {
@@ -122,13 +111,10 @@ export async function computeScanStats(
     }
   }
 
-  const totalPrinted = (printedCount || 0) + bilPrinted;
-  const allTimeScanned = (allTimeScannedCount || 0) + bilAllTimeScanned;
-  const totalScanned = periodScannedTickets.length + bilPeriodScanned;
-  const totalUnsold = Math.max(0, totalPrinted - allTimeScanned);
+  const totalScanned = periodScannedTickets.length + bilScanned;
   const grossRevenue =
     periodScannedTickets.filter((t: any) => t.counts_as_revenue).reduce((s: number, t: any) => s + (t.price || 0), 0) +
     bilRevenue;
 
-  return { totalPrinted, totalScanned, totalUnsold, grossRevenue };
+  return { totalScanned, grossRevenue };
 }

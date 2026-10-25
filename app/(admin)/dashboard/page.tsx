@@ -177,8 +177,6 @@ export default async function DashboardPage({
       dateEnd,
       feePerBlock,
     });
-    const unsoldRate = stats.totalPrinted > 0 ? (stats.totalUnsold / stats.totalPrinted) * 100 : 0;
-
     // ── Render ───────────────────────────────────────────────────────────
     return (
       <div className="space-y-5 sm:space-y-6">
@@ -191,28 +189,15 @@ export default async function DashboardPage({
         <OdcavDashboardTabs active={tab} period={params.period || "today"} />
         <OdcavDashboardFilters tab={tab} zones={ownedZones} currentZone={zoneFilter || ""} />
 
-        {/* Stat cards — 2 cols tablet, 4 cols desktop */}
-        <div className="grid grid-cols-1 min-[480px]:grid-cols-2 xl:grid-cols-4 gap-4">
-          <StatCard
-            title="Billets imprimés"
-            value={stats.totalPrinted.toLocaleString("fr-FR")}
-            subtitle={`${Math.floor(stats.totalPrinted / 100)} blocs imprimés`}
-            icon={<Layers className="h-5 w-5 text-blue-600" />}
-            iconBg="bg-blue-50"
-          />
+        {/* Stat cards — "Billets imprimés"/"Billets invendus" dropped: billeterie_tickets
+            accumulates every bloc ever printed, so those showed lifetime totals instead
+            of anything tied to the selected period — reported as incorrect, removed. */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <StatCard
             title="Validés par scan"
             value={stats.totalScanned.toLocaleString("fr-FR")}
-            subtitle={stats.totalPrinted > 0 ? `${((stats.totalScanned / stats.totalPrinted) * 100).toFixed(1)}% des imprimés` : "0% des imprimés"}
             icon={<ScanLine className="h-5 w-5 text-green-600" />}
             iconBg="bg-green-50"
-          />
-          <StatCard
-            title="Billets invendus"
-            value={stats.totalUnsold.toLocaleString("fr-FR")}
-            subtitle={`${unsoldRate.toFixed(1)}% des imprimés`}
-            icon={<PackageX className="h-5 w-5 text-orange-600" />}
-            iconBg="bg-orange-50"
           />
           <StatCard
             title="Recettes brutes"
