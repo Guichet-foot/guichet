@@ -14,10 +14,12 @@ import { DashboardFilters } from "./dashboard-filters";
 import { ZoneCardGrid } from "@/components/zone-card-grid";
 import { ZoneBackHeader } from "@/components/zone-back-header";
 import { StatCard } from "./stat-card";
-import { ZoneDonutChart } from "./zone-donut-chart";
 import { ZonePerformanceTable } from "./zone-performance-table";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { computeBlocksOrderedFee } from "@/lib/actions/billeterie-actions";
+import { computeScanStats } from "@/lib/dashboard-scan-stats";
+import { OdcavDashboardTabs } from "./odcav-dashboard-tabs";
+import { OdcavDashboardFilters } from "./odcav-dashboard-filters";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -41,6 +43,14 @@ function parsePeriod(params: Record<string, string | undefined>) {
       periodLabel = "Aujourd'hui";
       periodDays = 1;
       break;
+    case "yesterday": {
+      const y = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+      dateStart = y;
+      dateEnd = new Date(y.getFullYear(), y.getMonth(), y.getDate(), 23, 59, 59, 999);
+      periodLabel = "Hier";
+      periodDays = 1;
+      break;
+    }
     case "7d":
       dateStart = new Date(now.getTime() - 7 * 86_400_000);
       periodLabel = "7 derniers jours";
@@ -116,9 +126,11 @@ export default async function DashboardPage({
     .maybeSingle();
   const feePerBlock = platformFeeData?.fee_per_block ?? 1000;
 
-  // ── ODCAV Global Dashboard ─────────────────────────────────────────────────
+  // ── ODCAV Global Dashboard — Zone / C3 (Communal) / ODCAV tabs ─────────────
+  // Simplified on purpose: today's scan numbers per scope, no trends/charts —
+  // see conversation decision to replace the old single-view dashboard.
   if (isOdcavRole) {
-    const zoneFilter = effectiveZoneId; // null = all zones
+    const tab: "zone" | "c3" | "odcav" = params.tab === "c3" || params.tab === "odcav" ? params.tab : "zone";
 
     // super_admin and president_odcav see ALL data (no created_by filter)
     // tresorier is scoped to their parent's data
@@ -130,312 +142,84 @@ export default async function DashboardPage({
           ? (profile as any).created_by_admin as string
           : profile.id;
       const { data: subAdminsData } = await adminClient
-        .from("profiles").select("id, zone_id").eq("created_by_admin", ownerId);
+        .from("profiles").select("id").eq("created_by_admin", ownerId);
       creatorIds = [ownerId, ...((subAdminsData || []) as any[]).map((p: any) => p.id as string)];
     }
 
-    // 1. All zones (global role sees all, restricted role filters by sub-admin zone assignments)
-    const [{ data: zonesData }, { data: c3ProfilesRaw }] = await Promise.all([
-      adminClient.from("zones").select("id, name").order("name"),
-      adminClient.from("profiles").select("id, full_name, city").eq("role", "c3"),
-    ]);
-    const allZones = (zonesData || []) as { id: string; name: string }[];
-    const c3ProfilesList = (c3ProfilesRaw || []) as { id: string; full_name: string; city: string | null }[];
-    const c3FilterParam = params.c3 || "";
+    // Zone tab only — the C3 and ODCAV tabs show the aggregate across all
+    // accounts in that scope, no sub-filter (per spec: only Zone gets one).
+    const zoneFilter = tab === "zone" ? effectiveZoneId : null;
 
-    // 2. Matches in period — zone matches OR C3 matches depending on filter
-    let matchesPeriod: any[];
-    if (c3FilterParam) {
-      const { data: c3Matches } = await adminClient
-        .from("matches")
-        .select("id, zone_id, home_team, away_team, match_date, status")
-        .eq("c3_account_id", c3FilterParam)
-        .gte("match_date", dateStart.toISOString())
-        .lte("match_date", dateEnd.toISOString())
-        .order("match_date", { ascending: false });
-      matchesPeriod = c3Matches || [];
+    // Match scope per tab — deliberately NOT restricted by match_date: a
+    // match from days ago can still have leftover blocs scanned today, so
+    // only the scan/revenue queries (inside computeScanStats) are period-
+    // filtered, via scanned_at.
+    let matchQuery;
+    if (tab === "c3") {
+      matchQuery = adminClient.from("matches").select("id").not("c3_account_id", "is", null);
+    } else if (tab === "odcav") {
+      matchQuery = adminClient.from("matches").select("id").eq("is_direct", true).is("zone_id", null).is("c3_account_id", null);
     } else {
-      let matchQuery = adminClient
-        .from("matches")
-        .select("id, zone_id, home_team, away_team, match_date, status")
-        .gte("match_date", dateStart.toISOString())
-        .lte("match_date", dateEnd.toISOString())
-        .order("match_date", { ascending: false });
-      if (creatorIds) matchQuery = (matchQuery as any).in("created_by", creatorIds);
+      matchQuery = adminClient.from("matches").select("id").not("zone_id", "is", null);
       if (zoneFilter) matchQuery = matchQuery.eq("zone_id", zoneFilter);
-      const { data: zoneMatchesData } = await matchQuery;
-      matchesPeriod = zoneMatchesData || [];
     }
-    const matchIds = matchesPeriod.map((m: any) => m.id as string);
+    if (creatorIds) matchQuery = (matchQuery as any).in("created_by", creatorIds);
+    const { data: scopeMatchesData } = await matchQuery;
+    const matchIds = ((scopeMatchesData || []) as any[]).map((m: any) => m.id as string);
 
-    // 3. Prev period matches (for trends — skip when C3 filter active)
-    let prevMatchIds: string[] = [];
-    if (!c3FilterParam) {
-      let prevMatchQuery = adminClient
-        .from("matches")
-        .select("id")
-        .gte("match_date", prevDateStart.toISOString())
-        .lte("match_date", prevDateEnd.toISOString());
-      if (creatorIds) prevMatchQuery = (prevMatchQuery as any).in("created_by", creatorIds);
-      if (zoneFilter) prevMatchQuery = prevMatchQuery.eq("zone_id", zoneFilter);
-      const { data: prevMatchesPeriod } = await prevMatchQuery;
-      prevMatchIds = (prevMatchesPeriod || []).map((m: any) => m.id as string);
-    }
-
-    // 4. Tickets — current and previous periods in parallel
-    const [allTickets, prevTickets] = await Promise.all([
-      matchIds.length > 0
-        ? fetchAll<any>((from, to) =>
-            adminClient
-              .from("tickets")
-              .select("match_id, price, status, bloc_printed, counts_as_revenue")
-              .in("match_id", matchIds)
-              .order("id", { ascending: true }).range(from, to)
-          )
-        : Promise.resolve([]),
-      prevMatchIds.length > 0
-        ? fetchAll<any>((from, to) =>
-            adminClient
-              .from("tickets")
-              .select("match_id, price, status, bloc_printed, counts_as_revenue")
-              .in("match_id", prevMatchIds)
-              .order("id", { ascending: true }).range(from, to)
-          )
-        : Promise.resolve([]),
-    ]);
-
-    // 5. Billeterie — matchs de la période uniquement, scanned_at pour filtre scan
-    let bilPrinted = 0, bilScanned = 0, bilRevenue = 0;
-    if (matchIds.length > 0) {
-      const matchIdSet = new Set(matchIds);
-      const { data: allBilsData } = await adminClient.from("billeterie").select("id, price, match_ids, categories");
-      const bilsInPeriod = ((allBilsData || []) as any[]).filter((b: any) =>
-        (b.match_ids || []).some((id: string) => matchIdSet.has(id))
-      );
-      const bilIds = bilsInPeriod.map((b: any) => b.id as string);
-      const bilPriceMap: Record<string, number> = {};
-      const bilCatMap1: Record<string, Array<{name: string; price: number}>> = {};
-      bilsInPeriod.forEach((b: any) => {
-        bilPriceMap[b.id] = b.price || 0;
-        if (b.categories) bilCatMap1[b.id] = b.categories;
-      });
-
-      // Partenaires indirects : billeteries plus anciennes partageant des matchs avec
-      // bilsInPeriod mais pas avec les matchs de la période directement.
-      const directBilMatchIds1 = new Set<string>(
-        bilsInPeriod.flatMap((b: any) => (b.match_ids || []) as string[])
-      );
-      const indirectBils1 = ((allBilsData || []) as any[]).filter((b: any) => {
-        if (bilIds.includes(b.id)) return false;
-        const bm: string[] = b.match_ids || [];
-        if (bm.some((id) => matchIdSet.has(id))) return false;
-        return bm.some((id) => directBilMatchIds1.has(id));
-      });
-      const indirectBilIds1 = indirectBils1.map((b: any) => b.id as string);
-      indirectBils1.forEach((b: any) => {
-        bilPriceMap[b.id] = b.price || 0;
-        if (b.categories) bilCatMap1[b.id] = b.categories;
-      });
-      const allFetchBilIds1 = [...bilIds, ...indirectBilIds1];
-
-      if (allFetchBilIds1.length > 0) {
-        const allBilMatchIds = [...new Set([
-          ...bilsInPeriod.flatMap((b: any) => (b.match_ids || []) as string[]),
-          ...indirectBils1.flatMap((b: any) => (b.match_ids || []) as string[]),
-        ])];
-
-        const [bilAllTickets, allBilScans] = await Promise.all([
-          fetchAll<any>((from, to) =>
-            adminClient.from("billeterie_tickets").select("id, billeterie_id, withdrawn, category_name")
-              .in("billeterie_id", allFetchBilIds1).order("id", { ascending: true }).range(from, to)
-          ),
-          fetchAll<any>((from, to) =>
-            adminClient.from("billeterie_scans").select("ticket_id, scanned_at")
-              .in("match_id", allBilMatchIds).order("id", { ascending: true }).range(from, to)
-          ),
-        ]);
-
-        const nonWithdrawnByBil: Record<string, number> = {};
-        const bilTicketIdMap: Record<string, string> = {};
-        const bilTicketCatMap1: Record<string, string | null> = {};
-        bilAllTickets.forEach((t: any) => {
-          bilTicketIdMap[t.id as string] = t.billeterie_id as string;
-          bilTicketCatMap1[t.id as string] = t.category_name ?? null;
-          if (!t.withdrawn) {
-            nonWithdrawnByBil[t.billeterie_id] = (nonWithdrawnByBil[t.billeterie_id] || 0) + 1;
-          }
-        });
-
-        const bilTicketIdSet = new Set(Object.keys(bilTicketIdMap));
-        const relevantScans = allBilScans.filter((s: any) => bilTicketIdSet.has(s.ticket_id as string));
-
-        const dateStartMs = dateStart.getTime();
-        const dateEndMs   = dateEnd.getTime();
-
-        const totalScansByBil: Record<string, number> = {};
-        const periodScansByBil: Record<string, number> = {};
-        relevantScans.forEach((s: any) => {
-          const bId = bilTicketIdMap[s.ticket_id as string];
-          if (!bId) return;
-          totalScansByBil[bId] = (totalScansByBil[bId] || 0) + 1;
-          const scannedAtMs = new Date(s.scanned_at as string).getTime();
-          if (scannedAtMs >= dateStartMs && scannedAtMs <= dateEndMs) {
-            periodScansByBil[bId] = (periodScansByBil[bId] || 0) + 1;
-          }
-        });
-
-        bilPrinted = allFetchBilIds1.reduce((sum: number, bId: string) => {
-          const nw = nonWithdrawnByBil[bId] || 0;
-          const ts = totalScansByBil[bId] || 0;
-          const ps = periodScansByBil[bId] || 0;
-          return sum + Math.max(0, nw - (ts - ps));
-        }, 0);
-
-        const periodBilScans = relevantScans.filter((s: any) => {
-          const scannedAtMs = new Date(s.scanned_at as string).getTime();
-          return scannedAtMs >= dateStartMs && scannedAtMs <= dateEndMs;
-        });
-        bilScanned = periodBilScans.length;
-        bilRevenue = periodBilScans.reduce((s: number, sc: any) => {
-          const bId = bilTicketIdMap[sc.ticket_id as string];
-          if (!bId) return s;
-          const catName = bilTicketCatMap1[sc.ticket_id as string];
-          const cats = bilCatMap1[bId];
-          if (cats && catName) {
-            const cat = cats.find((c) => c.name === catName);
-            return s + (cat ? cat.price : 0);
-          }
-          return s + (bilPriceMap[bId] || 0);
-        }, 0);
-      }
-    }
-
-    // ── Aggregate global stats ──────────────────────────────────────────────
-    const totalPrinted  = allTickets.filter((t: any) => t.bloc_printed).length + bilPrinted;
-    const totalScanned  = allTickets.filter((t: any) => t.status === "scanne").length + bilScanned;
-    const totalUnsold   = Math.max(0, totalPrinted - totalScanned);
-    const grossRevenue  = allTickets
-      .filter((t: any) => t.counts_as_revenue && t.status === "scanne")
-      .reduce((s: number, t: any) => s + t.price, 0) + bilRevenue;
-
-    // Prev period totals for trends
-    const prevPrinted  = prevTickets.filter((t: any) => t.bloc_printed).length;
-    const prevScanned  = prevTickets.filter((t: any) => t.status === "scanne").length;
-    const prevRevenue  = prevTickets
-      .filter((t: any) => t.counts_as_revenue && t.status === "scanne")
-      .reduce((s: number, t: any) => s + t.price, 0);
-    const prevUnsold   = Math.max(0, prevPrinted - prevScanned);
-
-    const trendPrinted = prevPrinted > 0 ? ((totalPrinted - prevPrinted) / prevPrinted) * 100 : undefined;
-    const trendUnsold  = prevUnsold  > 0 ? ((totalUnsold  - prevUnsold)  / prevUnsold)  * 100 : undefined;
-    const trendRevenue = prevRevenue > 0 ? ((grossRevenue - prevRevenue)  / prevRevenue) * 100 : undefined;
-
-    // ── Per-zone aggregation ────────────────────────────────────────────────
-    const matchZoneMap: Record<string, string | null> = {};
-    (matchesPeriod || []).forEach((m: any) => { matchZoneMap[m.id] = m.zone_id || null; });
-
-    const zoneTicketsMap: Record<string, any[]> = {};
-    allTickets.forEach((t: any) => {
-      const zId = matchZoneMap[t.match_id] || "_inter";
-      if (!zoneTicketsMap[zId]) zoneTicketsMap[zId] = [];
-      zoneTicketsMap[zId].push(t);
-    });
-
-    const zonesForFilter = zoneFilter ? allZones.filter((z) => z.id === zoneFilter) : allZones;
-
-    const zonePerformance = zonesForFilter.map((zone) => {
-      const tickets = zoneTicketsMap[zone.id] || [];
-      const matchesInZone = (matchesPeriod || []).filter((m: any) => m.zone_id === zone.id);
-      const printed   = tickets.filter((t: any) => t.bloc_printed).length;
-      const sold      = tickets.filter((t: any) => t.status === "scanne").length;
-      const unsold    = Math.max(0, printed - sold);
-      const revenue   = tickets
-        .filter((t: any) => t.counts_as_revenue && t.status === "scanne")
-        .reduce((s: number, t: any) => s + t.price, 0);
-      return {
-        id: zone.id, name: zone.name,
-        printed, sold, unsold, revenue,
-        matchCount: matchesInZone.length,
-        unsoldRate: printed > 0 ? (unsold / printed) * 100 : 0,
-      };
-    }).filter((z) => z.matchCount > 0 || z.printed > 0);
-
-    // ── Revenue by zone for donut ──────────────────────────────────────────
-    const revenueByZone = zonePerformance
-      .filter((z) => z.revenue > 0)
-      .sort((a, b) => b.revenue - a.revenue)
-      .map((z) => ({
-        id: z.id,
-        name: z.name,
-        revenue: z.revenue,
-        pct: grossRevenue > 0 ? (z.revenue / grossRevenue) * 100 : 0,
-      }));
-
-    const unsoldRate   = totalPrinted > 0 ? (totalUnsold / totalPrinted) * 100 : 0;
-    const fraisODCAV   = Math.round(grossRevenue * 0.05);
+    const stats = await computeScanStats(adminClient, matchIds, dateStart, dateEnd);
+    const fraisODCAV = Math.round(stats.grossRevenue * 0.05);
     // Frais billetterie = blocs commandés (pas billets scannés) × tarif/bloc
-    const { blocksOrdered: blocksOrderedGlobal, fee: fraisBil } = await computeBlocksOrderedFee({
+    const { blocksOrdered, fee: fraisBil } = await computeBlocksOrderedFee({
       scopeMatchIds: matchIds,
       zoneId: zoneFilter,
       dateStart,
       dateEnd,
       feePerBlock,
     });
+    const unsoldRate = stats.totalPrinted > 0 ? (stats.totalUnsold / stats.totalPrinted) * 100 : 0;
 
     // ── Render ───────────────────────────────────────────────────────────
     return (
       <div className="space-y-5 sm:space-y-6">
         <AutoRefresh intervalMs={30_000} />
-        {/* Header */}
-        {selectedZone && <ZoneBackHeader zoneName={selectedZone.name} />}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div>
-            <h1 className="text-xl sm:text-2xl font-bold font-heading">Tableau de bord</h1>
-            <p className="text-sm text-muted-foreground mt-0.5">{periodLabel}</p>
-          </div>
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold font-heading">Tableau de bord</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">{periodLabel}</p>
         </div>
 
-        {/* Filters */}
-        <DashboardFilters
-          zones={allZones}
-          currentZone={zoneFilter || ""}
-          showZoneFilter
-          c3Accounts={c3ProfilesList.map((c) => ({ id: c.id, name: c.full_name, city: c.city }))}
-          currentC3={c3FilterParam}
-        />
+        <OdcavDashboardTabs active={tab} period={params.period || "today"} />
+        <OdcavDashboardFilters tab={tab} zones={ownedZones} currentZone={zoneFilter || ""} />
 
         {/* Stat cards — 2 cols tablet, 4 cols desktop */}
         <div className="grid grid-cols-1 min-[480px]:grid-cols-2 xl:grid-cols-4 gap-4">
           <StatCard
             title="Billets imprimés"
-            value={totalPrinted.toLocaleString("fr-FR")}
-            subtitle={`${Math.floor(totalPrinted / 100)} blocs imprimés`}
+            value={stats.totalPrinted.toLocaleString("fr-FR")}
+            subtitle={`${Math.floor(stats.totalPrinted / 100)} blocs imprimés`}
             icon={<Layers className="h-5 w-5 text-blue-600" />}
             iconBg="bg-blue-50"
-            trend={trendPrinted}
           />
           <StatCard
             title="Validés par scan"
-            value={totalScanned.toLocaleString("fr-FR")}
-            subtitle={totalPrinted > 0 ? `${((totalScanned / totalPrinted) * 100).toFixed(1)}% des imprimés` : "0% des imprimés"}
+            value={stats.totalScanned.toLocaleString("fr-FR")}
+            subtitle={stats.totalPrinted > 0 ? `${((stats.totalScanned / stats.totalPrinted) * 100).toFixed(1)}% des imprimés` : "0% des imprimés"}
             icon={<ScanLine className="h-5 w-5 text-green-600" />}
             iconBg="bg-green-50"
           />
           <StatCard
             title="Billets invendus"
-            value={totalUnsold.toLocaleString("fr-FR")}
+            value={stats.totalUnsold.toLocaleString("fr-FR")}
             subtitle={`${unsoldRate.toFixed(1)}% des imprimés`}
             icon={<PackageX className="h-5 w-5 text-orange-600" />}
             iconBg="bg-orange-50"
-            trend={trendUnsold}
           />
           <StatCard
             title="Recettes brutes"
-            value={formatFCFA(grossRevenue)}
+            value={formatFCFA(stats.grossRevenue)}
             subtitle="Avant frais ODCAV"
             icon={<Banknote className="h-5 w-5 text-emerald-600" />}
             iconBg="bg-emerald-50"
-            trend={trendRevenue}
           />
         </div>
 
@@ -461,55 +245,11 @@ export default async function DashboardPage({
               <div>
                 <p className="text-sm text-orange-700 font-medium">Frais billetterie</p>
                 <p className="text-2xl font-bold text-orange-800 tabular-nums">{formatFCFA(fraisBil)}</p>
-                <p className="text-xs text-orange-600">{blocksOrderedGlobal} bloc{blocksOrderedGlobal !== 1 ? "s" : ""} commandé{blocksOrderedGlobal !== 1 ? "s" : ""} × {formatFCFA(feePerBlock)}</p>
+                <p className="text-xs text-orange-600">{blocksOrdered} bloc{blocksOrdered !== 1 ? "s" : ""} commandé{blocksOrdered !== 1 ? "s" : ""} × {formatFCFA(feePerBlock)}</p>
               </div>
             </CardContent>
           </Card>
         </div>
-
-        {/* Chart — Recettes par zone */}
-        <Card className="rounded-2xl shadow-sm border-border/40">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base sm:text-lg">Recettes par zone</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ZoneDonutChart zones={revenueByZone} total={grossRevenue} />
-          </CardContent>
-        </Card>
-
-        {/* Matchs du jour */}
-        {(matchesPeriod || []).length > 0 && (
-          <Card className="rounded-2xl shadow-sm border-border/40">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base sm:text-lg">
-                Matchs du jour
-                <span className="ml-2 text-sm font-normal text-muted-foreground">
-                  ({(matchesPeriod || []).length})
-                </span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              <div className="divide-y divide-border/40">
-                {(matchesPeriod as any[]).map((m: any) => {
-                  const zoneName = allZones.find((z) => z.id === m.zone_id)?.name;
-                  return (
-                    <div key={m.id} className="flex items-center justify-between px-5 py-3 text-sm">
-                      <div>
-                        <span className="font-medium">{m.home_team} vs {m.away_team}</span>
-                        {zoneName && (
-                          <span className="ml-2 text-xs text-muted-foreground">{zoneName}</span>
-                        )}
-                      </div>
-                      <Badge className={MATCH_STATUS_COLORS[m.status as keyof typeof MATCH_STATUS_COLORS] || "bg-gray-100 text-gray-700"}>
-                        {MATCH_STATUS_LABELS[m.status as keyof typeof MATCH_STATUS_LABELS] || m.status}
-                      </Badge>
-                    </div>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
-        )}
       </div>
     );
   }

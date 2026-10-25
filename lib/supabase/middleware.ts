@@ -85,6 +85,7 @@ export async function updateSession(request: NextRequest) {
       if (profile.role === "caissier") redirectUrl = "/vente";
       if (profile.role === "portier") redirectUrl = "/scanner";
       if (["fondateur", "assistant_fondateur", "billetterie_fondateur"].includes(profile.role)) redirectUrl = "/fondateur/dashboard";
+      if (["super_admin", "president_odcav", "tresorier"].includes(profile.role)) redirectUrl = "/dashboard";
       return NextResponse.redirect(new URL(redirectUrl, request.url));
     }
     return supabaseResponse;
@@ -222,6 +223,7 @@ export async function updateSession(request: NextRequest) {
     if (profile.role === "caissier") redirectUrl = "/vente";
     if (profile.role === "portier") redirectUrl = "/scanner";
     if (isFondateurRole) redirectUrl = "/fondateur/dashboard";
+    if (["super_admin", "president_odcav", "tresorier"].includes(profile.role)) redirectUrl = "/dashboard";
     return NextResponse.redirect(new URL(redirectUrl, request.url));
   }
 

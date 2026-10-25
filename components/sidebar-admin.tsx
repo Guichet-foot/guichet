@@ -21,6 +21,7 @@ import {
   PackageX,
   Network,
   TicketCheck,
+  LayoutDashboard,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
@@ -50,6 +51,10 @@ const superAdminLinks = [
   { href: "/parametres-odcav", label: "Paramètre ODCAV", icon: Building2 },
 ];
 
+// ODCAV accounts (super_admin, president_odcav, tresorier) land here after
+// login — simplified Zone/Communal/ODCAV view of today's scans.
+const odcavDashboardLink = { href: "/dashboard", label: "Tableau de bord", icon: LayoutDashboard };
+
 // C3 has no zone, no cartes, no Paramètre Zone — their own settings
 const c3Links = [
   { href: "/finances",       label: "Finances",          icon: Wallet },
@@ -72,7 +77,7 @@ export function SidebarAdmin({ userName, userRole, zoneName, permittedModules }:
       : userRole === "fondateur"
       ? [...adminLinks, ...superAdminLinks]
       : userRole === "super_admin" || userRole === "president_odcav" || userRole === "tresorier"
-      ? [...adminLinks, ...superAdminLinks.filter((l) => l.href !== "/billeterie")]
+      ? [odcavDashboardLink, ...adminLinks, ...superAdminLinks.filter((l) => l.href !== "/billeterie")]
       : adminLinks;
 
   // Filter by permitted_modules when set (null = all modules visible)
@@ -80,7 +85,7 @@ export function SidebarAdmin({ userName, userRole, zoneName, permittedModules }:
     permittedModules && permittedModules.length > 0
       ? baseLinks.filter((l) => {
           const key = l.href.replace(/^\//, "");
-          return key === "finances" || permittedModules.includes(key);
+          return key === "finances" || key === "dashboard" || permittedModules.includes(key);
         })
       : baseLinks;
 
