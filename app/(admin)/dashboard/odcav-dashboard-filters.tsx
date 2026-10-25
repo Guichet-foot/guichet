@@ -7,10 +7,11 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { MapPin, CalendarDays, RotateCcw } from "lucide-react";
+import { MapPin, CalendarDays, RotateCcw, Building2 } from "lucide-react";
 import { useState, useEffect } from "react";
 
 interface Zone { id: string; name: string; }
+interface C3Account { id: string; name: string; city?: string | null; }
 
 const PERIOD_OPTIONS = [
   { value: "today", label: "Aujourd'hui" },
@@ -23,10 +24,14 @@ export function OdcavDashboardFilters({
   tab,
   zones = [],
   currentZone = "",
+  c3Accounts = [],
+  currentC3 = "",
 }: {
   tab: "zone" | "c3" | "odcav";
   zones?: Zone[];
   currentZone?: string;
+  c3Accounts?: C3Account[];
+  currentC3?: string;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -40,11 +45,13 @@ export function OdcavDashboardFilters({
   const [start, setStart] = useState(currentStart);
   const [end, setEnd] = useState(currentEnd);
   const [zone, setZone] = useState(currentZone);
+  const [c3, setC3] = useState(currentC3);
 
   useEffect(() => { setPeriod(currentPeriod); }, [currentPeriod]);
   useEffect(() => { setStart(currentStart); }, [currentStart]);
   useEffect(() => { setEnd(currentEnd); }, [currentEnd]);
   useEffect(() => { setZone(currentZone); }, [currentZone]);
+  useEffect(() => { setC3(currentC3); }, [currentC3]);
 
   const isCustom = period === "custom";
 
@@ -63,6 +70,10 @@ export function OdcavDashboardFilters({
       const z = overrides.zone ?? zone;
       if (z) p.set("zone", z);
     }
+    if (tab === "c3") {
+      const c = overrides.c3 ?? c3;
+      if (c) p.set("c3", c);
+    }
     router.push(`${pathname}?${p.toString()}`);
   }
 
@@ -78,6 +89,12 @@ export function OdcavDashboardFilters({
     push({ zone: z });
   }
 
+  function handleC3Change(v: string | null) {
+    const c = !v || v === "__all__" ? "" : v;
+    setC3(c);
+    push({ c3: c });
+  }
+
   function applyCustom() {
     push({ period: "custom", start, end });
   }
@@ -85,12 +102,13 @@ export function OdcavDashboardFilters({
   function reset() {
     setPeriod("today");
     setZone("");
+    setC3("");
     setStart("");
     setEnd("");
     router.push(`${pathname}?tab=${tab}`);
   }
 
-  const hasFilters = !!(zone || period !== "today" || (isCustom && (start || end)));
+  const hasFilters = !!(zone || c3 || period !== "today" || (isCustom && (start || end)));
 
   return (
     <div className="flex flex-wrap items-end gap-3">
@@ -107,6 +125,27 @@ export function OdcavDashboardFilters({
               <SelectItem value="__all__">Toutes les zones</SelectItem>
               {zones.map((z) => (
                 <SelectItem key={z.id} value={z.id}>{z.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
+      {tab === "c3" && c3Accounts.length > 0 && (
+        <div className="space-y-1.5 w-full sm:w-auto">
+          <Label className="text-xs font-medium flex items-center gap-1 text-muted-foreground">
+            <Building2 className="h-3 w-3" /> Filtrer par C3
+          </Label>
+          <Select value={c3 || "__all__"} onValueChange={handleC3Change}>
+            <SelectTrigger className="h-9 w-full sm:w-52 text-sm">
+              <SelectValue placeholder="Tous les C3" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">Tous les C3</SelectItem>
+              {c3Accounts.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.name}{c.city ? ` — ${c.city}` : ""}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>

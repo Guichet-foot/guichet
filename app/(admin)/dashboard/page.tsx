@@ -147,12 +147,11 @@ export default async function DashboardPage({
       creatorIds = [ownerId, ...((subAdminsData || []) as any[]).map((p: any) => p.id as string)];
     }
 
-    // Zone tab only — the C3 and ODCAV tabs show the aggregate across all
-    // accounts in that scope, no sub-filter (per spec: only Zone gets one).
     const zoneFilter = tab === "zone" ? effectiveZoneId : null;
+    const c3Filter = tab === "c3" ? (params.c3 || null) : null;
 
-    // C3 profiles — only needed to populate the "Télécharger Bilan" popup's
-    // C3 selector on the C3 tab.
+    // C3 profiles — populate the C3 filter dropdown and the "Télécharger
+    // Bilan" popup's C3 selector on the C3 tab.
     let c3ProfilesList: { id: string; full_name: string; city: string | null }[] = [];
     if (tab === "c3") {
       const { data: c3ProfilesRaw } = await adminClient.from("profiles").select("id, full_name, city").eq("role", "c3");
@@ -166,6 +165,7 @@ export default async function DashboardPage({
     let matchQuery;
     if (tab === "c3") {
       matchQuery = adminClient.from("matches").select("id").not("c3_account_id", "is", null);
+      if (c3Filter) matchQuery = matchQuery.eq("c3_account_id", c3Filter);
     } else if (tab === "odcav") {
       matchQuery = adminClient.from("matches").select("id").eq("is_direct", true).is("zone_id", null).is("c3_account_id", null);
     } else {
@@ -198,7 +198,13 @@ export default async function DashboardPage({
         <OdcavDashboardTabs active={tab} period={params.period || "today"} />
 
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <OdcavDashboardFilters tab={tab} zones={ownedZones} currentZone={zoneFilter || ""} />
+          <OdcavDashboardFilters
+            tab={tab}
+            zones={ownedZones}
+            currentZone={zoneFilter || ""}
+            c3Accounts={c3ProfilesList.map((c) => ({ id: c.id, name: c.full_name, city: c.city }))}
+            currentC3={c3Filter || ""}
+          />
           <BilanDownloadButton
             tab={tab}
             zones={ownedZones}
