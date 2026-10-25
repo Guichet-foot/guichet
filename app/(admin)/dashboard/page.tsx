@@ -190,20 +190,21 @@ export default async function DashboardPage({
     return (
       <div className="space-y-5 sm:space-y-6">
         <AutoRefresh intervalMs={30_000} />
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold font-heading">Tableau de bord</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">{periodLabel}</p>
+        </div>
+
+        <OdcavDashboardTabs active={tab} period={params.period || "today"} />
+
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div>
-            <h1 className="text-xl sm:text-2xl font-bold font-heading">Tableau de bord</h1>
-            <p className="text-sm text-muted-foreground mt-0.5">{periodLabel}</p>
-          </div>
+          <OdcavDashboardFilters tab={tab} zones={ownedZones} currentZone={zoneFilter || ""} />
           <BilanDownloadButton
             tab={tab}
             zones={ownedZones}
             c3Accounts={c3ProfilesList.map((c) => ({ id: c.id, name: c.full_name, city: c.city }))}
           />
         </div>
-
-        <OdcavDashboardTabs active={tab} period={params.period || "today"} />
-        <OdcavDashboardFilters tab={tab} zones={ownedZones} currentZone={zoneFilter || ""} />
 
         {/* Stat cards — "Billets imprimés"/"Billets invendus" dropped: billeterie_tickets
             accumulates every bloc ever printed, so those showed lifetime totals instead
