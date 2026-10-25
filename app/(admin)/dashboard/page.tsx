@@ -17,7 +17,8 @@ import { StatCard } from "./stat-card";
 import { ZonePerformanceTable } from "./zone-performance-table";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { computeBlocksOrderedFee } from "@/lib/actions/billeterie-actions";
-import { computeScanStats } from "@/lib/dashboard-scan-stats";
+import { computeScanStats, computeZoneBreakdown } from "@/lib/dashboard-scan-stats";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { OdcavDashboardTabs } from "./odcav-dashboard-tabs";
 import { OdcavDashboardFilters } from "./odcav-dashboard-filters";
 import { BilanDownloadButton } from "./bilan-download-button";
@@ -164,12 +165,12 @@ export default async function DashboardPage({
     // filtered, via scanned_at.
     let matchQuery;
     if (tab === "c3") {
-      matchQuery = adminClient.from("matches").select("id").not("c3_account_id", "is", null);
+      matchQuery = adminClient.from("matches").select("id, zone_id").not("c3_account_id", "is", null);
       if (c3Filter) matchQuery = matchQuery.eq("c3_account_id", c3Filter);
     } else if (tab === "odcav") {
-      matchQuery = adminClient.from("matches").select("id").eq("is_direct", true).is("zone_id", null).is("c3_account_id", null);
+      matchQuery = adminClient.from("matches").select("id, zone_id").eq("is_direct", true).is("zone_id", null).is("c3_account_id", null);
     } else {
-      matchQuery = adminClient.from("matches").select("id").not("zone_id", "is", null);
+      matchQuery = adminClient.from("matches").select("id, zone_id").not("zone_id", "is", null);
       if (zoneFilter) matchQuery = matchQuery.eq("zone_id", zoneFilter);
     }
     if (creatorIds) matchQuery = (matchQuery as any).in("created_by", creatorIds);
@@ -186,6 +187,17 @@ export default async function DashboardPage({
       dateEnd,
       feePerBlock,
     });
+
+    // Per-zone breakdown table — Zone tab only. The top cards stay the
+    // all-zones aggregate; this table details today's activity zone by zone.
+    let zoneBreakdown: Awaited<ReturnType<typeof computeZoneBreakdown>> = [];
+    if (tab === "zone") {
+      const matchToZone = new Map<string, string>();
+      ((scopeMatchesData || []) as any[]).forEach((m: any) => { if (m.zone_id) matchToZone.set(m.id, m.zone_id); });
+      zoneBreakdown = await computeZoneBreakdown(
+        adminClient, ownedZones, matchToZone, matchIds, dateStart, dateEnd, 0.05, feePerBlock
+      );
+    }
     // ── Render ───────────────────────────────────────────────────────────
     return (
       <div className="space-y-5 sm:space-y-6">
@@ -258,6 +270,49 @@ export default async function DashboardPage({
             </CardContent>
           </Card>
         </div>
+
+        {/* Détail par zone — les cards ci-dessus restent l'agrégat toutes zones */}
+        {tab === "zone" && (
+          <Card className="rounded-2xl shadow-sm border-border/40">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base sm:text-lg">Détail par zone</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              {zoneBreakdown.length === 0 ? (
+                <p className="text-sm text-muted-foreground px-5 py-8 text-center">Aucune activité sur cette période</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-muted/50">
+                        <TableHead>Zone</TableHead>
+                        <TableHead className="text-right">Nbr Scanné</TableHead>
+                        <TableHead className="text-right">Recettes brutes</TableHead>
+                        <TableHead className="text-right">Frais ODCAV</TableHead>
+                        <TableHead className="text-right">Frais billetterie</TableHead>
+                        <TableHead className="text-right">Recette Nette</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {zoneBreakdown.map((row) => (
+                        <TableRow key={row.zoneId}>
+                          <TableCell className="font-medium">{row.zoneName}</TableCell>
+                          <TableCell className="text-right">{row.scanned.toLocaleString("fr-FR")}</TableCell>
+                          <TableCell className="text-right font-semibold">{formatFCFA(row.recettesBrutes)}</TableCell>
+                          <TableCell className="text-right text-blue-700">{formatFCFA(row.fraisODCAV)}</TableCell>
+                          <TableCell className="text-right text-orange-700">{formatFCFA(row.fraisBilletterie)}</TableCell>
+                          <TableCell className={`text-right font-semibold ${row.recetteNette >= 0 ? "text-emerald-700" : "text-danger"}`}>
+                            {formatFCFA(row.recetteNette)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </div>
     );
   }
