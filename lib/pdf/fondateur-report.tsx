@@ -29,7 +29,7 @@ function fmtN(n: number): string {
 
 export interface FondateurReportRow {
   organisateur: string;
-  type: "zone" | "c3";
+  type: "zone" | "c3" | "odcav";
   date: string;
   billetsScanned: number;
   recettesBrutes: number;
@@ -169,8 +169,8 @@ export function FondateurReport({ data }: { data: FondateurReportData }) {
           <View key={i} style={[s.row, i % 2 === 1 ? s.rowAlt : {}]}>
             <Text style={[s.cell, { flex: COL.date }]}>{row.date}</Text>
             <Text style={[s.cell, { flex: COL.org }]}>{row.organisateur}</Text>
-            <Text style={[s.cell, { flex: COL.type, textAlign: "center", color: row.type === "c3" ? "#1D4ED8" : "#15803D" }]}>
-              {row.type === "c3" ? "C3" : "Zone"}
+            <Text style={[s.cell, { flex: COL.type, textAlign: "center", color: row.type === "c3" ? "#1D4ED8" : row.type === "odcav" ? "#7C3AED" : "#15803D" }]}>
+              {row.type === "c3" ? "C3" : row.type === "odcav" ? "ODCAV" : "Zone"}
             </Text>
             <Text style={[s.cell, { flex: COL.validés, textAlign: "right" }]}>
               {fmtN(row.billetsScanned)}

@@ -77,16 +77,20 @@ export async function POST(request: Request) {
     // All non-cancelled matches
     const { data: allMatchesData } = await adminSupabase
       .from("matches")
-      .select("id, zone_id, c3_account_id")
+      .select("id, zone_id, c3_account_id, is_direct")
       .neq("status", "annule");
-    const allMatches = (allMatchesData || []) as { id: string; zone_id: string | null; c3_account_id: string | null }[];
+    const allMatches = (allMatchesData || []) as { id: string; zone_id: string | null; c3_account_id: string | null; is_direct: boolean | null }[];
 
     const matchToZone = new Map<string, string>();
     const matchToC3 = new Map<string, string>();
     const zoneMatchIds: string[] = [];
     const c3MatchIds: string[] = [];
+    // Matches run directly by the ODCAV — no zone, no C3 account (is_direct=true).
+    // There's currently only one ODCAV, so these all roll up into a single row
+    // per day rather than being grouped by some per-account id.
+    const odcavMatchIds: string[] = [];
 
-    for (const m of allMatches) {
+    for (const m of allMatches as any[]) {
       if (m.zone_id && zoneIds.includes(m.zone_id) && !m.c3_account_id) {
         matchToZone.set(m.id, m.zone_id);
         zoneMatchIds.push(m.id);
@@ -94,6 +98,9 @@ export async function POST(request: Request) {
       if (m.c3_account_id && c3Ids.includes(m.c3_account_id)) {
         matchToC3.set(m.id, m.c3_account_id);
         c3MatchIds.push(m.id);
+      }
+      if (m.is_direct && !m.zone_id && !m.c3_account_id) {
+        odcavMatchIds.push(m.id);
       }
     }
 
@@ -260,6 +267,77 @@ export async function POST(request: Request) {
       }
     }
 
+    // ── ODCAV direct: regular tickets + billeterie scans with price ──────
+    // Same mechanics as the Zone block above, except there's only one
+    // bucket ("odcav") instead of one per zone — there's currently a single
+    // ODCAV, so these all roll up into one row per scan day.
+    const ODCAV_KEY = "odcav";
+    const odcavRevenue = new Map<string, number>();
+    const odcavScanned = new Map<string, number>();
+
+    if (odcavMatchIds.length > 0 && (type === "all" || type === "odcav")) {
+      const odcavTickets = await fetchAll<any>((from2, to2) =>
+        adminSupabase
+          .from("tickets")
+          .select("price, status, counts_as_revenue, scanned_at")
+          .in("match_id", odcavMatchIds)
+          .eq("status", "scanne")
+          .gte("scanned_at", dateStart.toISOString())
+          .lte("scanned_at", dateEnd.toISOString())
+          .order("id", { ascending: true }).range(from2, to2)
+      );
+      for (const t of odcavTickets) {
+        if (!t.scanned_at) continue;
+        const key = dayKey(ODCAV_KEY, t.scanned_at as string);
+        odcavScanned.set(key, (odcavScanned.get(key) || 0) + 1);
+        if (t.counts_as_revenue) {
+          odcavRevenue.set(key, (odcavRevenue.get(key) || 0) + (t.price || 0));
+        }
+      }
+
+      const { data: odcavBilData } = await adminSupabase.from("billeterie").select("id, price, categories");
+      const odcavBilInfo = new Map<string, { price: number; cats: { name: string; price: number }[] | null }>();
+      ((odcavBilData || []) as any[]).forEach((b) =>
+        odcavBilInfo.set(b.id as string, { price: b.price || 0, cats: (b.categories as any) || null })
+      );
+
+      const odcavMatchChunks: string[][] = [];
+      for (let i = 0; i < odcavMatchIds.length; i += 100) odcavMatchChunks.push(odcavMatchIds.slice(i, i + 100));
+
+      const odcavScanChunks = await Promise.all(
+        odcavMatchChunks.map((ids) =>
+          fetchAll<any>((from2, to2) =>
+            adminSupabase
+              .from("billeterie_scans")
+              .select("scanned_at, ticket:billeterie_tickets(billeterie_id, category_name)")
+              .in("match_id", ids)
+              .gte("scanned_at", dateStart.toISOString())
+              .lte("scanned_at", dateEnd.toISOString())
+              .order("id", { ascending: true }).range(from2, to2)
+          )
+        )
+      );
+
+      for (const s of odcavScanChunks.flat()) {
+        if (!s.scanned_at) continue;
+        const key = dayKey(ODCAV_KEY, s.scanned_at as string);
+        odcavScanned.set(key, (odcavScanned.get(key) || 0) + 1);
+
+        const tk = Array.isArray(s.ticket) ? s.ticket[0] : s.ticket;
+        const info = tk ? odcavBilInfo.get(tk.billeterie_id as string) : undefined;
+        let price = 0;
+        if (info) {
+          if (info.cats && tk.category_name) {
+            const cat = info.cats.find((c) => c.name === tk.category_name);
+            price = cat ? cat.price : 0;
+          } else {
+            price = info.price;
+          }
+        }
+        odcavRevenue.set(key, (odcavRevenue.get(key) || 0) + price);
+      }
+    }
+
     // ── Build rows — one per organizer per scan day ─────────────────────
     // (rows[].date holds the raw "YYYY-MM-DD" key until the sort below;
     // it's reformatted for display right before handing off to the PDF.)
@@ -307,6 +385,28 @@ export async function POST(request: Request) {
         rows.push({
           organisateur: c3Name || "C3",
           type: "c3",
+          date,
+          billetsScanned: scanned,
+          recettesBrutes: brutes,
+          commission,
+          frais,
+          recetteNette: brutes - commission - frais,
+        });
+      }
+    }
+
+    if (type === "all" || type === "odcav") {
+      const keys = new Set([...odcavScanned.keys(), ...odcavRevenue.keys()]);
+      for (const key of keys) {
+        const { date } = splitDayKey(key);
+        const scanned = odcavScanned.get(key) || 0;
+        const brutes = odcavRevenue.get(key) || 0;
+        if (scanned === 0 && brutes === 0) continue;
+        const commission = Math.round(brutes * odcavRate);
+        const frais = scanned * 10;
+        rows.push({
+          organisateur: "ODCAV",
+          type: "odcav",
           date,
           billetsScanned: scanned,
           recettesBrutes: brutes,

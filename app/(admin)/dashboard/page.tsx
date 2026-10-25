@@ -20,6 +20,7 @@ import { computeBlocksOrderedFee } from "@/lib/actions/billeterie-actions";
 import { computeScanStats } from "@/lib/dashboard-scan-stats";
 import { OdcavDashboardTabs } from "./odcav-dashboard-tabs";
 import { OdcavDashboardFilters } from "./odcav-dashboard-filters";
+import { BilanDownloadButton } from "./bilan-download-button";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -150,6 +151,14 @@ export default async function DashboardPage({
     // accounts in that scope, no sub-filter (per spec: only Zone gets one).
     const zoneFilter = tab === "zone" ? effectiveZoneId : null;
 
+    // C3 profiles — only needed to populate the "Télécharger Bilan" popup's
+    // C3 selector on the C3 tab.
+    let c3ProfilesList: { id: string; full_name: string; city: string | null }[] = [];
+    if (tab === "c3") {
+      const { data: c3ProfilesRaw } = await adminClient.from("profiles").select("id, full_name, city").eq("role", "c3");
+      c3ProfilesList = (c3ProfilesRaw || []) as { id: string; full_name: string; city: string | null }[];
+    }
+
     // Match scope per tab — deliberately NOT restricted by match_date: a
     // match from days ago can still have leftover blocs scanned today, so
     // only the scan/revenue queries (inside computeScanStats) are period-
@@ -181,9 +190,16 @@ export default async function DashboardPage({
     return (
       <div className="space-y-5 sm:space-y-6">
         <AutoRefresh intervalMs={30_000} />
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold font-heading">Tableau de bord</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">{periodLabel}</p>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h1 className="text-xl sm:text-2xl font-bold font-heading">Tableau de bord</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">{periodLabel}</p>
+          </div>
+          <BilanDownloadButton
+            tab={tab}
+            zones={ownedZones}
+            c3Accounts={c3ProfilesList.map((c) => ({ id: c.id, name: c.full_name, city: c.city }))}
+          />
         </div>
 
         <OdcavDashboardTabs active={tab} period={params.period || "today"} />
