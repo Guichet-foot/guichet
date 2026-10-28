@@ -399,6 +399,7 @@ export async function GET(request: Request) {
       : null;
     const organizerLogoUrl = (bil as any).organizer_logo_url || "";
     const backgroundImageUrl = (bil as any).background_image_url || "";
+    const bgUrl = backgroundImageUrl || "/billet-finales/stade-default.jpg";
     const L = computeFinalesLayout(matchList.length, !!venue, bil.name as string, !!noteText, !!dateLabel);
 
     const finBlocks = await Promise.all(
@@ -410,6 +411,19 @@ export async function GET(request: Request) {
         return renderFinalesTicket(ticket, bil.name as string, dateLabel, priceLabel, noteText, matchList, venue, qrDataUrl, organizerLogoUrl, backgroundImageUrl);
       })
     );
+
+    // A custom background/logo is hosted on Supabase Storage — a different
+    // origin than the default /billet-finales/stade-default.jpg, which Next
+    // serves instantly from the same origin. The fixed 300ms delay before
+    // print() was tuned against that fast, same-origin case; a slower
+    // cross-origin fetch (plus decoding a progressive JPEG, which renders in
+    // multiple low-to-high-quality passes) can still be mid-load when print()
+    // fires, which prints whatever partial/garbled frame was on screen at
+    // that instant — this matches exactly what was reported for a custom
+    // uploaded background while the default one (always fast) printed fine.
+    // Waiting for the actual images to finish loading removes that race
+    // instead of guessing a longer fixed delay.
+    const preloadUrls = JSON.stringify([organizerLogoUrl, bgUrl].filter(Boolean)).replace(/</g, "\\u003c");
 
     const html = `<!DOCTYPE html>
 <html lang="fr">
@@ -423,7 +437,19 @@ export async function GET(request: Request) {
 ${finBlocks.join("\n")}
 <script>
 window.onload = function() {
-  setTimeout(function() { window.print(); }, 300);
+  var urls = ${preloadUrls};
+  var done = false;
+  function go() { if (!done) { done = true; setTimeout(function() { window.print(); }, 50); } }
+  var remaining = urls.length;
+  if (remaining === 0) { go(); }
+  else {
+    urls.forEach(function(u) {
+      var img = new Image();
+      img.onload = img.onerror = function() { remaining--; if (remaining <= 0) go(); };
+      img.src = u;
+    });
+    setTimeout(go, 5000);
+  }
   window.addEventListener('afterprint', function() { if (window.opener) window.close(); });
 };
 </script>
