@@ -7,31 +7,8 @@ import { getPrintStyles } from "@/lib/ticket-print-template";
 import type { PrintFormat } from "@/lib/ticket-print-template";
 import { fmtZone } from "@/lib/format";
 import { fetchAll } from "@/lib/supabase/paginate";
-import fs from "fs/promises";
-import path from "path";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-
-// Resolves the finales-ticket background to a data: URI once per batch — the
-// default local file is read straight off disk; a custom uploaded background
-// (Supabase Storage URL) is fetched once. See finCss() for why this is
-// inlined instead of left as a url() the browser fetches per printed page.
-async function resolveBackgroundDataUri(customUrl: string): Promise<string> {
-  try {
-    if (customUrl) {
-      const res = await fetch(customUrl);
-      if (!res.ok) throw new Error(`fetch ${res.status}`);
-      const buf = Buffer.from(await res.arrayBuffer());
-      return `data:image/jpeg;base64,${buf.toString("base64")}`;
-    }
-    const buf = await fs.readFile(path.join(process.cwd(), "public", "billet-finales", "stade-default.jpg"));
-    return `data:image/jpeg;base64,${buf.toString("base64")}`;
-  } catch {
-    // Fall back to the plain URL (old behavior) if anything goes wrong —
-    // the ticket still prints, just without the inlining optimization.
-    return customUrl || "/billet-finales/stade-default.jpg";
-  }
-}
 
 // ── "Billet personnalisé" (design finales) — poster-style ticket ──────────
 // Laid out directly in mm (same approach as the standard thermal tickets in
@@ -125,7 +102,8 @@ function renderFinalesTicket(
   matches: Array<{ home: string; away: string }>,
   venue: string | null,
   qrDataUrl: string,
-  organizerLogoUrl: string
+  organizerLogoUrl: string,
+  backgroundImageUrl: string
 ): string {
   const titleEsc = escapeHtml(title);
   const createdAtFmt = format(new Date(ticket.created_at), "dd/MM/yyyy HH:mm", { locale: fr });
@@ -147,11 +125,13 @@ function renderFinalesTicket(
       <span>${escapeHtml(venue.toUpperCase())}</span>
     </div>` : "";
 
+  const bgUrl = backgroundImageUrl || "/billet-finales/stade-default.jpg";
+
   return `
 <div class="fin-page">
   <div class="fin-ticket">
-    <div class="fin-bg"></div>
-    <div class="fin-bg-fade"></div>
+    <div class="fin-bg" style="background-image:url('${escapeHtml(bgUrl)}'); top:${L.bgTop}mm; bottom:${FOOTER_H}mm;"></div>
+    <div class="fin-bg-fade" style="top:${L.bgTop}mm; bottom:${FOOTER_H}mm;"></div>
 
     <div class="fin-header">
       ${organizerLogoUrl ? `<img src="${escapeHtml(organizerLogoUrl)}" alt="Organisateur" class="fin-org-logo">` : ""}
@@ -193,18 +173,13 @@ function renderFinalesTicket(
 // Page height depends on match count/venue (see computeFinalesLayout) so it
 // is computed once per batch and passed in, instead of a fixed constant.
 //
-// The background photo is embedded as a base64 data: URI ONCE here, in the
-// shared <style> block, instead of as a url('https://...') on every one of
-// up to 100 <div class="fin-bg"> tickets. Two reasons:
-//  1. A batch print renders every page client-side; if the browser's print
-//     pipeline doesn't share its usual HTTP cache for that pass (seen with
-//     Chrome print-to-PDF on long multi-page jobs), each page would re-fetch
-//     the same photo over the network — the likely cause of the reported
-//     multi-minute stalls partway through a 100-ticket batch.
-//  2. Keeping it in the single CSS class (not duplicated per ticket's inline
-//     style) means the base64 text itself appears once in the whole HTML
-//     document, not 100 times.
-function finCss(pageHeightMm: number, bgDataUri: string, bgTop: number, footerH: number): string {
+// The background photo stays a plain per-ticket url() (set inline in
+// renderFinalesTicket), not a base64 data: URI baked into this shared
+// stylesheet — a prior attempt at that (to cut per-page network fetches on
+// a 100-ticket batch) instead corrupted the printed background and made
+// pages overflow/cut off on the actual thermal printer, which this plain
+// url() approach does not.
+function finCss(pageHeightMm: number): string {
   const h = `${pageHeightMm}mm`;
   return `
 @font-face { font-family:'Anton'; font-style:normal; font-weight:400; font-display:swap; src:url('/billet-finales/fonts/anton-400.woff2') format('woff2'); }
@@ -221,11 +196,11 @@ body { background:#fff; }
   font-family:'Oswald',sans-serif; color:#111;
 }
 .fin-bg {
-  position:absolute; left:0; right:0; top:${bgTop}mm; bottom:${footerH}mm;
-  background-color:#fff; background-image:url('${bgDataUri}'); background-position:center 62%; background-size:cover; background-repeat:no-repeat;
+  position:absolute; left:0; right:0;
+  background-color:#fff; background-position:center 62%; background-size:cover; background-repeat:no-repeat;
 }
 .fin-bg-fade {
-  position:absolute; left:0; right:0; top:${bgTop}mm; bottom:${footerH}mm;
+  position:absolute; left:0; right:0;
   background: linear-gradient(180deg,#fff 0%,rgba(255,255,255,.55) 18%,rgba(255,255,255,.15) 45%,rgba(255,255,255,.1) 80%,#fff 100%);
 }
 .fin-header { position:absolute; left:0; right:0; top:0; height:26mm; display:flex; align-items:center; justify-content:center; }
@@ -425,7 +400,6 @@ export async function GET(request: Request) {
     const organizerLogoUrl = (bil as any).organizer_logo_url || "";
     const backgroundImageUrl = (bil as any).background_image_url || "";
     const L = computeFinalesLayout(matchList.length, !!venue, bil.name as string, !!noteText, !!dateLabel);
-    const bgDataUri = await resolveBackgroundDataUri(backgroundImageUrl);
 
     const finBlocks = await Promise.all(
       tickets.map(async (ticket: any) => {
@@ -433,7 +407,7 @@ export async function GET(request: Request) {
           width: 350, margin: 1, errorCorrectionLevel: "M",
           color: { dark: "#000000", light: "#FFFFFF" },
         });
-        return renderFinalesTicket(ticket, bil.name as string, dateLabel, priceLabel, noteText, matchList, venue, qrDataUrl, organizerLogoUrl);
+        return renderFinalesTicket(ticket, bil.name as string, dateLabel, priceLabel, noteText, matchList, venue, qrDataUrl, organizerLogoUrl, backgroundImageUrl);
       })
     );
 
@@ -443,7 +417,7 @@ export async function GET(request: Request) {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Billetterie — ${escapeHtml(bil.name as string)}</title>
-<style>${finCss(L.pageHeight, bgDataUri, L.bgTop, FOOTER_H)}</style>
+<style>${finCss(L.pageHeight)}</style>
 </head>
 <body>
 ${finBlocks.join("\n")}
