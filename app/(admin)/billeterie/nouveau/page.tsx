@@ -46,13 +46,15 @@ export default function NouveauBilletteriePage() {
   const [blockOrderDate, setBlockOrderDate] = useState(() => format(new Date(), "yyyy-MM-dd"));
   const [noteText, setNoteText] = useState("");
 
-  // Billet personnalisé (design finales) : logo organisateur + image d'arrière-plan
+  // Billet personnalisé (design finales) : logo(s) + image d'arrière-plan
   const [customDesign, setCustomDesign] = useState(false);
   const [organizerLogoUrl, setOrganizerLogoUrl] = useState<string | null>(null);
+  const [extraLogoUrls, setExtraLogoUrls] = useState<string[]>([]);
   const [backgroundImageUrl, setBackgroundImageUrl] = useState<string | null>(null);
   const [customDate, setCustomDate] = useState("");
   const [customVenue, setCustomVenue] = useState("");
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [uploadingExtraLogo, setUploadingExtraLogo] = useState(false);
   const [uploadingBg, setUploadingBg] = useState(false);
 
   // Mode : "matches" (sélection manuelle) | "zone" (toute la zone de l'admin)
@@ -126,6 +128,20 @@ export default function NouveauBilletteriePage() {
     setUploadingLogo(false);
   }
 
+  async function handleExtraLogoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingExtraLogo(true);
+    const url = await uploadCustomAsset(file, "logo");
+    if (url) setExtraLogoUrls((prev) => [...prev, url]);
+    setUploadingExtraLogo(false);
+    e.target.value = "";
+  }
+
+  function removeExtraLogo(idx: number) {
+    setExtraLogoUrls((prev) => prev.filter((_, i) => i !== idx));
+  }
+
   async function handleBgChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -133,6 +149,7 @@ export default function NouveauBilletteriePage() {
     const url = await uploadCustomAsset(file, "background");
     if (url) setBackgroundImageUrl(url);
     setUploadingBg(false);
+    e.target.value = "";
   }
 
   async function handleSubmit(e: { preventDefault(): void }) {
@@ -152,7 +169,7 @@ export default function NouveauBilletteriePage() {
       return;
     }
 
-    if (uploadingLogo || uploadingBg) {
+    if (uploadingLogo || uploadingExtraLogo || uploadingBg) {
       toast.error("Patientez la fin du téléversement de l'image");
       return;
     }
@@ -170,6 +187,7 @@ export default function NouveauBilletteriePage() {
       blockOrderDate: blocksOrdered ? blockOrderDate : null,
       customDesign,
       organizerLogoUrl,
+      extraLogoUrls,
       backgroundImageUrl,
       customDate: customDate || null,
       customVenue: customVenue || null,
@@ -435,6 +453,42 @@ export default function NouveauBilletteriePage() {
                   </div>
 
                   <div className="space-y-1.5">
+                    <Label className="text-xs">Logos supplémentaires (équipes, partenaires…)</Label>
+                    <p className="text-xs text-muted-foreground">Affichés sur la même ligne que le logo organisateur</p>
+                    {extraLogoUrls.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {extraLogoUrls.map((url, i) => (
+                          <div key={i} className="relative">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={url} alt={`Logo ${i + 1}`} className="h-12 w-12 object-contain rounded border bg-white p-1" />
+                            <button
+                              type="button"
+                              onClick={() => removeExtraLogo(i)}
+                              className="absolute -top-1.5 -right-1.5 rounded-full bg-destructive text-white p-0.5 shadow"
+                            >
+                              <Trash2 className="h-2.5 w-2.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {extraLogoUrls.length < 5 && (
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png"
+                        onChange={handleExtraLogoChange}
+                        disabled={uploadingExtraLogo}
+                        className="block w-full text-xs text-muted-foreground file:mr-3 file:rounded-md file:border-0 file:bg-brand file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-white"
+                      />
+                    )}
+                    {uploadingExtraLogo && (
+                      <p className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Loader2 className="h-3 w-3 animate-spin" />Téléversement…
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="space-y-1.5">
                     <Label className="text-xs">Image d&apos;arrière-plan (stade)</Label>
                     <p className="text-xs text-muted-foreground">Optionnel — à défaut, l&apos;image de stade par défaut sera utilisée</p>
                     <input
@@ -450,8 +504,17 @@ export default function NouveauBilletteriePage() {
                       </p>
                     )}
                     {backgroundImageUrl && !uploadingBg && (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={backgroundImageUrl} alt="Arrière-plan" className="h-20 w-full object-cover rounded border" />
+                      <div className="relative inline-block w-full">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={backgroundImageUrl} alt="Arrière-plan" className="h-20 w-full object-cover rounded border" />
+                        <button
+                          type="button"
+                          onClick={() => setBackgroundImageUrl(null)}
+                          className="absolute top-1 right-1 flex items-center gap-1 rounded-md bg-black/70 text-white text-xs px-2 py-1 hover:bg-black"
+                        >
+                          <Trash2 className="h-3 w-3" />Retirer
+                        </button>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -577,7 +640,7 @@ export default function NouveauBilletteriePage() {
         <Button
           type="submit"
           className="w-full bg-brand hover:bg-brand/90"
-          disabled={loading || !canSubmit || uploadingLogo || uploadingBg}
+          disabled={loading || !canSubmit || uploadingLogo || uploadingExtraLogo || uploadingBg}
         >
           {loading ? (
             <Loader2 className="h-4 w-4 animate-spin" />

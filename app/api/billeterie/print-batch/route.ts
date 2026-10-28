@@ -43,24 +43,27 @@ function escapeHtml(s: string): string {
 // passes cover 1-2) left a visible dead gap before the venue/QR section.
 // Computed instead from the actual match count + whether a venue is set, so
 // the page is exactly as tall as its content needs, no shorter, no taller.
-const MATCH_ROW_H = 13; // mm — fits the 16pt team-name text
-const MATCH_GAP = 2;
-const QR_H = 66;
-const FOOTER_H = 13;
+//
+// All these were trimmed down hard (header, QR, gaps, footer) on top of
+// that — the ticket was reported as much too long/wasteful on thermal paper
+// even for the common 1-match case (~205mm). The QR's physical size was the
+// single biggest contributor (66mm box); 36mm here is still noticeably
+// bigger than the standard ticket's 38mm *display* size relative to this
+// page's 145mm width, so scanning legibility isn't the constraint.
+const MATCH_ROW_H = 10; // mm — fits the 16pt team-name text
+const MATCH_GAP = 1.5;
+const QR_H = 36; // box
+const FOOTER_H = 8;
+const HEADER_H = 16; // mm — logo row height (organizer + extra logos)
 
-// The title has no fixed word-split anymore (see renderFinalesTicket) — it
-// wraps naturally like normal text, so a long pass name can grow to 2-3
-// lines. There's no DOM here to measure real wrap width, so this estimates
-// line count from character count (title-main is ~20 chars/line at its
-// font-size) to push what follows down enough to avoid an overlap.
 const TITLE_CHARS_PER_LINE = 20;
-const TITLE_TOP = 30; // mm — matches .fin-title-block's fixed top offset
-const TITLE_LINE_H = 10.5; // mm per title line (incl. the first)
-const NOTE_H = 6; // mm — note line + its margin, only when a note is set
-const DATE_H = 4.5; // mm — date line + its margin, only when a date is set
-const PRICE_H = 12; // mm — price pill + its margin
-const GAP_BEFORE_MATCHES = 6; // mm between the title block and the first match row
-const GAP_AFTER_CONTENT = 4; // mm between the title block (or matches) and venue/QR
+const TITLE_TOP = 16; // mm — matches .fin-title-block's fixed top offset
+const TITLE_LINE_H = 8.5; // mm per title line (incl. the first)
+const NOTE_H = 4.5; // mm — note line + its margin, only when a note is set
+const DATE_H = 3.5; // mm — date line + its margin, only when a date is set
+const PRICE_H = 9; // mm — price pill + its margin
+const GAP_BEFORE_MATCHES = 3; // mm between the title block and the first match row
+const GAP_AFTER_CONTENT = 2.5; // mm between the title block (or matches) and venue/QR
 
 function estimateTitleExtraLines(title: string): number {
   const lines = Math.ceil(title.trim().length / TITLE_CHARS_PER_LINE) || 1;
@@ -82,14 +85,14 @@ function computeFinalesLayout(matchCount: number, hasVenue: boolean, title: stri
     ? matchesTop + matchCount * MATCH_ROW_H + Math.max(0, matchCount - 1) * MATCH_GAP
     : titleBlockBottom;
   const venueTop = contentBottom + GAP_AFTER_CONTENT;
-  const afterContent = hasVenue ? venueTop + 8 : contentBottom + GAP_AFTER_CONTENT;
-  const qrTop = afterContent + 4;
-  const issuerTop = qrTop + QR_H + 6;
-  const sep2Top = issuerTop + 17 + 4;
-  const norefundTop = sep2Top + 3;
-  const footerTop = norefundTop + 4 + 2;
-  const pageHeight = footerTop + FOOTER_H + 3;
-  const bgTop = (hasVenue ? venueTop : qrTop) - 6;
+  const afterContent = hasVenue ? venueTop + 6 : contentBottom + GAP_AFTER_CONTENT;
+  const qrTop = afterContent + 2.5;
+  const issuerTop = qrTop + QR_H + 2;
+  const sep2Top = issuerTop + 11 + 1;
+  const norefundTop = sep2Top + 1.5;
+  const footerTop = norefundTop + 2 + 1;
+  const pageHeight = footerTop + FOOTER_H + 2;
+  const bgTop = (hasVenue ? venueTop : qrTop) - 4;
   return { matchesTop, venueTop, qrTop, issuerTop, sep2Top, norefundTop, footerTop, pageHeight, bgTop };
 }
 
@@ -103,7 +106,8 @@ function renderFinalesTicket(
   venue: string | null,
   qrDataUrl: string,
   organizerLogoUrl: string,
-  backgroundImageUrl: string
+  backgroundImageUrl: string,
+  extraLogoUrls: string[]
 ): string {
   const titleEsc = escapeHtml(title);
   const createdAtFmt = format(new Date(ticket.created_at), "dd/MM/yyyy HH:mm", { locale: fr });
@@ -127,16 +131,19 @@ function renderFinalesTicket(
 
   const bgUrl = backgroundImageUrl || "/billet-finales/stade-default.jpg";
 
+  const logoUrls = [organizerLogoUrl, ...extraLogoUrls].filter(Boolean);
+  const logosHtml = logoUrls
+    .map((url) => `<img src="${escapeHtml(url)}" alt="Logo" class="fin-logo">`)
+    .join("");
+
   return `
 <div class="fin-page">
   <div class="fin-ticket">
     <div class="fin-bg" style="background-image:url('${escapeHtml(bgUrl)}'); top:${L.bgTop}mm; bottom:${FOOTER_H}mm;"></div>
     <div class="fin-bg-fade" style="top:${L.bgTop}mm; bottom:${FOOTER_H}mm;"></div>
 
-    <div class="fin-header">
-      ${organizerLogoUrl ? `<img src="${escapeHtml(organizerLogoUrl)}" alt="Organisateur" class="fin-org-logo">` : ""}
-    </div>
-    <div class="fin-sep" style="top:27mm;"></div>
+    <div class="fin-header">${logosHtml}</div>
+    <div class="fin-sep" style="top:${HEADER_H - 1}mm;"></div>
 
     <div class="fin-title-block">
       <div class="fin-title-main">${titleEsc}</div>
@@ -203,15 +210,15 @@ body { background:#fff; }
   position:absolute; left:0; right:0;
   background: linear-gradient(180deg,#fff 0%,rgba(255,255,255,.55) 18%,rgba(255,255,255,.15) 45%,rgba(255,255,255,.1) 80%,#fff 100%);
 }
-.fin-header { position:absolute; left:0; right:0; top:0; height:26mm; display:flex; align-items:center; justify-content:center; }
-.fin-org-logo { max-width:${mm(380)}; max-height:20mm; object-fit:contain; }
+.fin-header { position:absolute; left:0; right:0; top:0; height:${HEADER_H}mm; display:flex; align-items:center; justify-content:center; gap:${mm(14)}; flex-wrap:wrap; padding:0 ${mm(20)}; }
+.fin-logo { max-width:26mm; max-height:12mm; object-fit:contain; }
 .fin-sep { position:absolute; left:${mm(20)}; right:${mm(20)}; border-top:${mm(3)} dashed #111; }
 
 .fin-title-block { position:absolute; left:0; right:0; top:${TITLE_TOP}mm; display:flex; flex-direction:column; align-items:center; }
-.fin-title-main { max-width:125mm; text-align:center; font-family:'Anton',sans-serif; font-size:9.5mm; line-height:1.08; letter-spacing:${mm(1)}; }
-.fin-note { max-width:125mm; text-align:center; font-family:'Archivo',sans-serif; font-weight:800; font-size:4.2mm; letter-spacing:${mm(0.5)}; margin-top:1.5mm; color:#b91c1c; }
-.fin-date { font-family:'Archivo',sans-serif; font-weight:600; font-size:3mm; letter-spacing:${mm(1)}; margin-top:1mm; color:#333; }
-.fin-price { margin-top:1.5mm; min-width:${mm(510)}; padding:0 ${mm(30)}; height:10.5mm; border-radius:${mm(12)}; background:#111; color:#fff; display:flex; align-items:center; justify-content:center; font-family:'Archivo',sans-serif; font-weight:900; font-size:8mm; letter-spacing:${mm(1)}; white-space:nowrap; }
+.fin-title-main { max-width:125mm; text-align:center; font-family:'Anton',sans-serif; font-size:7.5mm; line-height:1.08; letter-spacing:${mm(1)}; }
+.fin-note { max-width:125mm; text-align:center; font-family:'Archivo',sans-serif; font-weight:800; font-size:3.5mm; letter-spacing:${mm(0.5)}; margin-top:1mm; color:#b91c1c; }
+.fin-date { font-family:'Archivo',sans-serif; font-weight:600; font-size:2.8mm; letter-spacing:${mm(1)}; margin-top:0.7mm; color:#333; }
+.fin-price { margin-top:1mm; min-width:${mm(510)}; padding:0 ${mm(30)}; height:7mm; border-radius:${mm(12)}; background:#111; color:#fff; display:flex; align-items:center; justify-content:center; font-family:'Archivo',sans-serif; font-weight:900; font-size:6mm; letter-spacing:${mm(1)}; white-space:nowrap; }
 
 .fin-matches { position:absolute; left:${mm(48)}; right:${mm(44)}; display:flex; flex-direction:column; gap:${MATCH_GAP}mm; }
 .fin-match-row { position:relative; height:${MATCH_ROW_H}mm; border-radius:${mm(12)}; background:rgba(255,255,255,.93); box-shadow:0 1px 3px rgba(0,0,0,.25); display:grid; grid-template-columns:${mm(60)} minmax(0,1fr) ${mm(92)} minmax(0,1fr) ${mm(60)}; align-items:center; }
@@ -225,19 +232,19 @@ body { background:#fff; }
 .fin-venue { position:absolute; left:${mm(228)}; width:${mm(568)}; height:8mm; border-radius:${mm(12)}; background:#111; color:#fff; display:flex; align-items:center; justify-content:center; gap:${mm(22)}; }
 .fin-venue span { font-weight:600; font-size:4mm; letter-spacing:${mm(0.5)}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 
-.fin-qr-box { position:absolute; left:calc(50% - 33mm); width:66mm; height:66mm; border-radius:${mm(12)}; background:#fff; display:flex; align-items:center; justify-content:center; }
-.fin-qr-box img { width:60mm; height:60mm; image-rendering:pixelated; }
+.fin-qr-box { position:absolute; left:calc(50% - 18mm); width:${QR_H}mm; height:${QR_H}mm; border-radius:${mm(12)}; background:#fff; display:flex; align-items:center; justify-content:center; }
+.fin-qr-box img { width:30mm; height:30mm; image-rendering:pixelated; }
 
 .fin-issuer { position:absolute; left:0; right:0; display:flex; justify-content:center; }
-.fin-issuer-box { background:#fff; border-radius:${mm(10)}; padding:2mm ${mm(28)}; text-align:center; font-family:'Archivo',sans-serif; box-shadow:0 1px 3px rgba(0,0,0,.2); }
-.fin-ticket-id { font-weight:900; font-size:5.5mm; letter-spacing:${mm(0.5)}; }
-.fin-issuer-line { font-weight:700; font-size:4mm; margin-top:1mm; color:#222; }
+.fin-issuer-box { background:#fff; border-radius:${mm(10)}; padding:1.2mm ${mm(28)}; text-align:center; font-family:'Archivo',sans-serif; box-shadow:0 1px 3px rgba(0,0,0,.2); }
+.fin-ticket-id { font-weight:900; font-size:4.5mm; letter-spacing:${mm(0.5)}; }
+.fin-issuer-line { font-weight:700; font-size:3.2mm; margin-top:0.6mm; color:#222; }
 
-.fin-norefund { position:absolute; left:0; right:0; text-align:center; font-family:'Archivo',sans-serif; font-weight:600; font-size:3mm; }
-.fin-footer { position:absolute; left:0; right:0; height:${FOOTER_H}mm; display:flex; align-items:center; justify-content:center; gap:${mm(16)}; }
+.fin-norefund { position:absolute; left:0; right:0; text-align:center; font-family:'Archivo',sans-serif; font-weight:600; font-size:2.6mm; }
+.fin-footer { position:absolute; left:0; right:0; height:${FOOTER_H}mm; display:flex; align-items:center; justify-content:center; gap:${mm(12)}; }
 .fin-footer-line { width:${mm(84)}; border-top:${mm(2)} solid #111; }
-.fin-ball-lg { width:10mm; height:10mm; border-radius:50%; background:#fff url('/billet-finales/ballon.jpg') -4.3mm -9.1mm/26.3mm 26.3mm no-repeat; }
-.fin-bonmatch { font-family:'Anton',sans-serif; font-size:9mm; line-height:1; margin:0 ${mm(40)}; }
+.fin-ball-lg { width:7mm; height:7mm; border-radius:50%; background:#fff url('/billet-finales/ballon.jpg') -3mm -6.4mm/18.4mm 18.4mm no-repeat; }
+.fin-bonmatch { font-family:'Anton',sans-serif; font-size:6.5mm; line-height:1; margin:0 ${mm(40)}; }
 `;
 }
 
@@ -353,7 +360,7 @@ export async function GET(request: Request) {
   const billeterieId = tickets[0].billeterie_id;
   const { data: bil } = await adminClient
     .from("billeterie")
-    .select("name, price, match_ids, categories, show_matches_on_ticket, custom_design, organizer_logo_url, background_image_url, custom_date, custom_venue, note_text")
+    .select("name, price, match_ids, categories, show_matches_on_ticket, custom_design, organizer_logo_url, background_image_url, extra_logo_urls, custom_date, custom_venue, note_text")
     .eq("id", billeterieId)
     .single();
 
@@ -399,6 +406,7 @@ export async function GET(request: Request) {
       : null;
     const organizerLogoUrl = (bil as any).organizer_logo_url || "";
     const backgroundImageUrl = (bil as any).background_image_url || "";
+    const extraLogoUrls: string[] = (bil as any).extra_logo_urls || [];
     const bgUrl = backgroundImageUrl || "/billet-finales/stade-default.jpg";
     const L = computeFinalesLayout(matchList.length, !!venue, bil.name as string, !!noteText, !!dateLabel);
 
@@ -408,7 +416,7 @@ export async function GET(request: Request) {
           width: 350, margin: 1, errorCorrectionLevel: "M",
           color: { dark: "#000000", light: "#FFFFFF" },
         });
-        return renderFinalesTicket(ticket, bil.name as string, dateLabel, priceLabel, noteText, matchList, venue, qrDataUrl, organizerLogoUrl, backgroundImageUrl);
+        return renderFinalesTicket(ticket, bil.name as string, dateLabel, priceLabel, noteText, matchList, venue, qrDataUrl, organizerLogoUrl, backgroundImageUrl, extraLogoUrls);
       })
     );
 
@@ -423,7 +431,7 @@ export async function GET(request: Request) {
     // uploaded background while the default one (always fast) printed fine.
     // Waiting for the actual images to finish loading removes that race
     // instead of guessing a longer fixed delay.
-    const preloadUrls = JSON.stringify([organizerLogoUrl, bgUrl].filter(Boolean)).replace(/</g, "\\u003c");
+    const preloadUrls = JSON.stringify([organizerLogoUrl, ...extraLogoUrls, bgUrl].filter(Boolean)).replace(/</g, "\\u003c");
 
     const html = `<!DOCTYPE html>
 <html lang="fr">

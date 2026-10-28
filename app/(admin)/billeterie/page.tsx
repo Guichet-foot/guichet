@@ -96,6 +96,7 @@ export default async function BilletteriePage() {
                     blockOrderDate: item.blockOrderDate,
                     customDesign: item.customDesign,
                     organizerLogoUrl: item.organizerLogoUrl,
+                    extraLogoUrls: item.extraLogoUrls,
                     backgroundImageUrl: item.backgroundImageUrl,
                     customDate: item.customDate,
                     customVenue: item.customVenue,
