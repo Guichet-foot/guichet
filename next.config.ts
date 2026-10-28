@@ -15,9 +15,6 @@ const nextConfig: NextConfig = {
       // lib/pdf/fondateur-report.tsx reads this via fs.readFileSync(path.join(process.cwd(), ...))
       // at runtime — a dynamically-built path the file tracer can't follow statically.
       "public/logoodcavdes.png",
-      // app/api/billeterie/print-batch/route.ts reads this the same way, to inline it as a
-      // data: URI in the finales-ticket print CSS instead of a per-page url() fetch.
-      "public/billet-finales/stade-default.jpg",
     ],
   },
   experimental: {

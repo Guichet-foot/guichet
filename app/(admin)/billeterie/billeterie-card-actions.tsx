@@ -45,7 +45,6 @@ interface Props {
     blockOrderDate?: string | null;
     customDesign?: boolean;
     organizerLogoUrl?: string | null;
-    backgroundImageUrl?: string | null;
     customDate?: string | null;
     customVenue?: string | null;
     noteText?: string | null;
@@ -75,14 +74,12 @@ export function BilleterieCardActions({ item }: Props) {
   );
   const [noteText, setNoteText] = useState(item.noteText || "");
 
-  // Billet personnalisé (design finales) : logo organisateur + image d'arrière-plan
+  // Billet personnalisé : logo organisateur + stade/date sur le billet thermique
   const [customDesign, setCustomDesign] = useState(!!item.customDesign);
   const [organizerLogoUrl, setOrganizerLogoUrl] = useState<string | null>(item.organizerLogoUrl || null);
-  const [backgroundImageUrl, setBackgroundImageUrl] = useState<string | null>(item.backgroundImageUrl || null);
   const [customDate, setCustomDate] = useState(item.customDate || "");
   const [customVenue, setCustomVenue] = useState(item.customVenue || "");
   const [uploadingLogo, setUploadingLogo] = useState(false);
-  const [uploadingBg, setUploadingBg] = useState(false);
 
   // Available matches (loaded on open)
   const [matches, setMatches] = useState<MatchOption[]>([]);
@@ -114,16 +111,15 @@ export function BilleterieCardActions({ item }: Props) {
     setNoteText(item.noteText || "");
     setCustomDesign(!!item.customDesign);
     setOrganizerLogoUrl(item.organizerLogoUrl || null);
-    setBackgroundImageUrl(item.backgroundImageUrl || null);
     setCustomDate(item.customDate || "");
     setCustomVenue(item.customVenue || "");
     setEditOpen(true);
   }
 
-  async function uploadCustomAsset(file: File, kind: "logo" | "background"): Promise<string | null> {
+  async function uploadCustomAsset(file: File): Promise<string | null> {
     const fd = new FormData();
     fd.append("file", file);
-    fd.append("kind", kind);
+    fd.append("kind", "logo");
     const res = await fetch("/api/billeterie/custom-assets", { method: "POST", body: fd });
     const data = await res.json();
     if (!res.ok) { toast.error(data.error || "Erreur d'upload"); return null; }
@@ -134,18 +130,9 @@ export function BilleterieCardActions({ item }: Props) {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploadingLogo(true);
-    const url = await uploadCustomAsset(file, "logo");
+    const url = await uploadCustomAsset(file);
     if (url) setOrganizerLogoUrl(url);
     setUploadingLogo(false);
-  }
-
-  async function handleBgChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploadingBg(true);
-    const url = await uploadCustomAsset(file, "background");
-    if (url) setBackgroundImageUrl(url);
-    setUploadingBg(false);
   }
 
   function toggleMatch(id: string) {
@@ -193,7 +180,7 @@ export function BilleterieCardActions({ item }: Props) {
       return;
     }
 
-    if (uploadingLogo || uploadingBg) {
+    if (uploadingLogo) {
       toast.error("Patientez la fin du téléversement de l'image");
       return;
     }
@@ -208,7 +195,6 @@ export function BilleterieCardActions({ item }: Props) {
       blockOrderDate: blocksOrdered ? blockOrderDate : null,
       customDesign,
       organizerLogoUrl,
-      backgroundImageUrl,
       customDate: customDate || null,
       customVenue: customVenue || null,
       noteText: noteText || null,
@@ -451,7 +437,7 @@ export function BilleterieCardActions({ item }: Props) {
                       Billet personnalisé
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      Design affiche (logo organisateur + image de fond), pour les finales — remplace le billet thermique standard
+                      Ajoute le logo de l&apos;organisateur et le stade/date sur le billet thermique, pour les finales
                     </p>
                   </div>
                 </div>
@@ -497,27 +483,6 @@ export function BilleterieCardActions({ item }: Props) {
                       {organizerLogoUrl && !uploadingLogo && (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={organizerLogoUrl} alt="Logo organisateur" className="h-14 w-14 object-contain rounded border bg-white p-1" />
-                      )}
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">Image d&apos;arrière-plan (stade)</Label>
-                      <p className="text-xs text-muted-foreground">Optionnel — à défaut, l&apos;image de stade par défaut sera utilisée</p>
-                      <input
-                        type="file"
-                        accept="image/jpeg,image/png"
-                        onChange={handleBgChange}
-                        disabled={uploadingBg}
-                        className="block w-full text-xs text-muted-foreground file:mr-3 file:rounded-md file:border-0 file:bg-brand file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-white"
-                      />
-                      {uploadingBg && (
-                        <p className="text-xs text-muted-foreground flex items-center gap-1">
-                          <Loader2 className="h-3 w-3 animate-spin" />Téléversement…
-                        </p>
-                      )}
-                      {backgroundImageUrl && !uploadingBg && (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={backgroundImageUrl} alt="Arrière-plan" className="h-20 w-full object-cover rounded border" />
                       )}
                     </div>
                   </div>
@@ -627,7 +592,7 @@ export function BilleterieCardActions({ item }: Props) {
               <Button
                 type="submit"
                 className="flex-1 bg-brand hover:bg-brand/90"
-                disabled={saving || uploadingLogo || uploadingBg}
+                disabled={saving || uploadingLogo}
               >
                 {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Enregistrer"}
               </Button>

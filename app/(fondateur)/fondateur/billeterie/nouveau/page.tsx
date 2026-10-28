@@ -48,14 +48,12 @@ export default function FondateurNouveauBilletteriePage() {
   const [blockOrderDate, setBlockOrderDate] = useState(() => format(new Date(), "yyyy-MM-dd"));
   const [noteText, setNoteText] = useState("");
 
-  // Billet personnalisé (design finales) : logo organisateur + image d'arrière-plan
+  // Billet personnalisé : logo organisateur + stade/date sur le billet thermique
   const [customDesign, setCustomDesign] = useState(false);
   const [organizerLogoUrl, setOrganizerLogoUrl] = useState<string | null>(null);
-  const [backgroundImageUrl, setBackgroundImageUrl] = useState<string | null>(null);
   const [customDate, setCustomDate] = useState("");
   const [customVenue, setCustomVenue] = useState("");
   const [uploadingLogo, setUploadingLogo] = useState(false);
-  const [uploadingBg, setUploadingBg] = useState(false);
 
   // Mode : "matches" (sélection manuelle) | "zone" (par zone ou compte)
   const [scopeMode, setScopeMode] = useState<"matches" | "zone">("matches");
@@ -146,10 +144,10 @@ export default function FondateurNouveauBilletteriePage() {
     );
   }
 
-  async function uploadCustomAsset(file: File, kind: "logo" | "background"): Promise<string | null> {
+  async function uploadCustomAsset(file: File): Promise<string | null> {
     const fd = new FormData();
     fd.append("file", file);
-    fd.append("kind", kind);
+    fd.append("kind", "logo");
     const res = await fetch("/api/billeterie/custom-assets", { method: "POST", body: fd });
     const data = await res.json();
     if (!res.ok) { toast.error(data.error || "Erreur d'upload"); return null; }
@@ -160,18 +158,9 @@ export default function FondateurNouveauBilletteriePage() {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploadingLogo(true);
-    const url = await uploadCustomAsset(file, "logo");
+    const url = await uploadCustomAsset(file);
     if (url) setOrganizerLogoUrl(url);
     setUploadingLogo(false);
-  }
-
-  async function handleBgChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploadingBg(true);
-    const url = await uploadCustomAsset(file, "background");
-    if (url) setBackgroundImageUrl(url);
-    setUploadingBg(false);
   }
 
   async function handleSubmit(e: { preventDefault(): void }) {
@@ -191,7 +180,7 @@ export default function FondateurNouveauBilletteriePage() {
       return;
     }
 
-    if (uploadingLogo || uploadingBg) {
+    if (uploadingLogo) {
       toast.error("Patientez la fin du téléversement de l'image");
       return;
     }
@@ -233,7 +222,6 @@ export default function FondateurNouveauBilletteriePage() {
       blockOrderDate: blocksOrdered ? blockOrderDate : null,
       customDesign,
       organizerLogoUrl,
-      backgroundImageUrl,
       customDate: customDate || null,
       customVenue: customVenue || null,
       noteText: noteText || null,
@@ -459,7 +447,7 @@ export default function FondateurNouveauBilletteriePage() {
                     Billet personnalisé
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    Design affiche (logo organisateur + image de fond), pour les finales — remplace le billet thermique standard
+                    Ajoute le logo de l&apos;organisateur et le stade/date sur le billet thermique, pour les finales
                   </p>
                 </div>
               </div>
@@ -505,27 +493,6 @@ export default function FondateurNouveauBilletteriePage() {
                     {organizerLogoUrl && !uploadingLogo && (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={organizerLogoUrl} alt="Logo organisateur" className="h-14 w-14 object-contain rounded border bg-white p-1" />
-                    )}
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">Image d&apos;arrière-plan (stade)</Label>
-                    <p className="text-xs text-muted-foreground">Optionnel — à défaut, l&apos;image de stade par défaut sera utilisée</p>
-                    <input
-                      type="file"
-                      accept="image/jpeg,image/png"
-                      onChange={handleBgChange}
-                      disabled={uploadingBg}
-                      className="block w-full text-xs text-muted-foreground file:mr-3 file:rounded-md file:border-0 file:bg-brand file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-white"
-                    />
-                    {uploadingBg && (
-                      <p className="text-xs text-muted-foreground flex items-center gap-1">
-                        <Loader2 className="h-3 w-3 animate-spin" />Téléversement…
-                      </p>
-                    )}
-                    {backgroundImageUrl && !uploadingBg && (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={backgroundImageUrl} alt="Arrière-plan" className="h-20 w-full object-cover rounded border" />
                     )}
                   </div>
                 </div>
@@ -742,7 +709,7 @@ export default function FondateurNouveauBilletteriePage() {
         <Button
           type="submit"
           className="w-full bg-brand hover:bg-brand/90"
-          disabled={loading || !canSubmit || uploadingLogo || uploadingBg}
+          disabled={loading || !canSubmit || uploadingLogo}
         >
           {loading ? (
             <Loader2 className="h-4 w-4 animate-spin" />
