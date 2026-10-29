@@ -44,7 +44,8 @@ function renderBilleterieTicket(
   organizerLogoUrl: string | null,
   extraLogoUrls: string[],
   venue: string | null,
-  dateLabel: string | null
+  dateLabel: string | null,
+  isCustomDesign: boolean
 ): string {
   const is58 = fmt === "58";
   const priceFmt = new Intl.NumberFormat("fr-FR").format(price);
@@ -68,16 +69,21 @@ function renderBilleterieTicket(
   const venueDateHtml = venueDateParts.length > 0
     ? `<div class="c tiny" style="font-weight:700;margin-top:0.5mm;">${escapeHtml(venueDateParts.join(" · "))}</div>`
     : "";
+  // The "PASS MULTI-MATCHS · date" line is the only date indicator on a
+  // standard ticket, but it's redundant once the venue/date line above is
+  // already showing the same date on a custom ticket.
+  const showPassLine = venueDateParts.length === 0;
+  const ticketClass = isCustomDesign ? "print-ticket custom-ticket" : "print-ticket";
 
   if (!showMatches) {
     return `
-<div class="print-ticket">
+<div class="${ticketClass}">
 ${headerHtml}
 <div class="sep"></div>
 <div class="c" style="font-size:${namePt}pt;font-weight:900;line-height:1.3;letter-spacing:0.5px;">${bilName}</div>
 ${noteHtml}
 ${venueDateHtml}
-<div class="c tiny" style="font-style:italic;margin-top:0;">PASS MULTI-MATCHS</div>
+${showPassLine ? `<div class="c tiny" style="font-style:italic;margin-top:0;">PASS MULTI-MATCHS</div>` : ""}
 <div class="c" style="${prixStyle}">${priceFmt}&nbsp;FCFA</div>
 <div class="sep"></div>
 <div class="c qr"><img src="${qrDataUrl}" alt="QR Code" /></div>
@@ -107,13 +113,13 @@ ${venueDateHtml}
     : "PASS MULTI-MATCHS";
 
   return `
-<div class="print-ticket">
+<div class="${ticketClass}">
 ${headerHtml}
 <div class="sep"></div>
 <div class="c" style="font-size:${namePt}pt;font-weight:900;line-height:1.3;letter-spacing:0.5px;">${bilName}</div>
 ${noteHtml}
 ${venueDateHtml}
-<div class="c tiny" style="font-style:italic;margin-top:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${passLine}</div>
+${showPassLine ? `<div class="c tiny" style="font-style:italic;margin-top:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${passLine}</div>` : ""}
 <div class="c" style="${prixStyle}">${priceFmt}&nbsp;FCFA</div>
 <div class="sep"></div>
 <div class="c" style="font-size:${matchPt}pt;font-weight:600;line-height:1.3;">${matchLines}</div>
@@ -201,7 +207,7 @@ export async function GET(request: Request) {
         errorCorrectionLevel: "M",
         color: { dark: "#000000", light: "#FFFFFF" },
       });
-      return renderBilleterieTicket(ticket, displayName, effectivePrice, matches || [], sellerName, qrDataUrl, fmt, bil.show_matches_on_ticket !== false, noteText, organizerLogoUrl, extraLogoUrls, venue, dateLabel);
+      return renderBilleterieTicket(ticket, displayName, effectivePrice, matches || [], sellerName, qrDataUrl, fmt, bil.show_matches_on_ticket !== false, noteText, organizerLogoUrl, extraLogoUrls, venue, dateLabel, isCustom);
     })
   );
 
@@ -220,6 +226,20 @@ export async function GET(request: Request) {
   .logo-wrap { height: ${is58bck ? "10mm" : "13mm"} !important; }
   .logo-img  { height: ${is58bck ? "17mm" : "22mm"} !important; }
   .org-logo  { max-height: ${is58bck ? "10mm" : "13mm"}; max-width: ${is58bck ? "16mm" : "20mm"}; object-fit: contain; }
+  /* Visual differentiation for "billet personnalisé" vs the plain standard
+     ticket — a CSS-only diagonal hairline pattern + border, not an image.
+     An external photo was tried 3 times on this exact printer and corrupted
+     every time (see route.ts comment above); a pattern drawn by the browser
+     itself at print time can't suffer the same fetch/decode failure, and
+     thermal heads reproduce sparse hairlines far more reliably than a
+     continuous-tone photo. print-color-adjust is required or Chrome drops
+     background graphics by default when printing.
+  */
+  .custom-ticket {
+    border: 0.5mm solid #111 !important;
+    background-image: repeating-linear-gradient(45deg, rgba(0,0,0,0.12) 0, rgba(0,0,0,0.12) 0.3mm, transparent 0.3mm, transparent 3mm);
+    -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact;
+  }
   @page { size: ${is58bck ? "58mm 112mm" : "72mm 108mm"}; }
   @media print {
     .print-ticket {
