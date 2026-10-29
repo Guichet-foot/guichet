@@ -107,13 +107,15 @@ function renderBilleterieTicket(
   // matching the requested look, reusing that space is what keeps the whole
   // ticket inside the fixed print height instead of overflowing onto a
   // second page.
+  const bottomSerialPt = is58 ? "9" : "10";
+  const bottomTextPt = is58 ? "7" : "8";
   const bottomBlock = (validityText: string): string => isCustomDesign
     ? `
 <div class="c qr-float"><div class="qr-card"><div class="qr"><img src="${qrDataUrl}" alt="QR Code" /></div></div></div>
 <div class="bottom-dark">
-<div class="c small" style="color:#fff;">${ticket.serial_number}</div>
-<div class="c tiny" style="color:#fff;">${sellerName} &middot; ${createdAtFmt}</div>
-<div class="c tiny" style="color:#fff;margin-top:1mm;">${validityText}</div>
+<div class="c" style="color:#fff;font-family:'Courier New',monospace;font-weight:bold;font-size:${bottomSerialPt}pt;">${ticket.serial_number}</div>
+<div class="c" style="color:#fff;font-weight:700;font-size:${bottomTextPt}pt;margin-top:0.5mm;">GUICHET FOOT &middot; ${createdAtFmt}</div>
+<div class="c" style="color:#fff;font-weight:700;font-size:${bottomTextPt}pt;margin-top:1mm;">${validityText}</div>
 <div class="c" style="margin-top:1.5mm;"><span class="bon-match-badge">BON MATCH !</span></div>
 </div>`
     : `
