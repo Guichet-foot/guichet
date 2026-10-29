@@ -45,7 +45,6 @@ interface Props {
     blockOrderDate?: string | null;
     customDesign?: boolean;
     organizerLogoUrl?: string | null;
-    backgroundImageUrl?: string | null;
     extraLogoUrls?: string[] | null;
     customDate?: string | null;
     customVenue?: string | null;
@@ -76,16 +75,14 @@ export function BilleterieCardActions({ item }: Props) {
   );
   const [noteText, setNoteText] = useState(item.noteText || "");
 
-  // Billet personnalisé (design finales) : logo(s) + image d'arrière-plan
+  // Billet personnalisé : logo(s) + stade/date sur le billet thermique
   const [customDesign, setCustomDesign] = useState(!!item.customDesign);
   const [organizerLogoUrl, setOrganizerLogoUrl] = useState<string | null>(item.organizerLogoUrl || null);
   const [extraLogoUrls, setExtraLogoUrls] = useState<string[]>(item.extraLogoUrls || []);
-  const [backgroundImageUrl, setBackgroundImageUrl] = useState<string | null>(item.backgroundImageUrl || null);
   const [customDate, setCustomDate] = useState(item.customDate || "");
   const [customVenue, setCustomVenue] = useState(item.customVenue || "");
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [uploadingExtraLogo, setUploadingExtraLogo] = useState(false);
-  const [uploadingBg, setUploadingBg] = useState(false);
 
   // Available matches (loaded on open)
   const [matches, setMatches] = useState<MatchOption[]>([]);
@@ -118,16 +115,15 @@ export function BilleterieCardActions({ item }: Props) {
     setCustomDesign(!!item.customDesign);
     setOrganizerLogoUrl(item.organizerLogoUrl || null);
     setExtraLogoUrls(item.extraLogoUrls || []);
-    setBackgroundImageUrl(item.backgroundImageUrl || null);
     setCustomDate(item.customDate || "");
     setCustomVenue(item.customVenue || "");
     setEditOpen(true);
   }
 
-  async function uploadCustomAsset(file: File, kind: "logo" | "background"): Promise<string | null> {
+  async function uploadCustomAsset(file: File): Promise<string | null> {
     const fd = new FormData();
     fd.append("file", file);
-    fd.append("kind", kind);
+    fd.append("kind", "logo");
     const res = await fetch("/api/billeterie/custom-assets", { method: "POST", body: fd });
     const data = await res.json();
     if (!res.ok) { toast.error(data.error || "Erreur d'upload"); return null; }
@@ -138,7 +134,7 @@ export function BilleterieCardActions({ item }: Props) {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploadingLogo(true);
-    const url = await uploadCustomAsset(file, "logo");
+    const url = await uploadCustomAsset(file);
     if (url) setOrganizerLogoUrl(url);
     setUploadingLogo(false);
   }
@@ -147,7 +143,7 @@ export function BilleterieCardActions({ item }: Props) {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploadingExtraLogo(true);
-    const url = await uploadCustomAsset(file, "logo");
+    const url = await uploadCustomAsset(file);
     if (url) setExtraLogoUrls((prev) => [...prev, url]);
     setUploadingExtraLogo(false);
     e.target.value = "";
@@ -155,16 +151,6 @@ export function BilleterieCardActions({ item }: Props) {
 
   function removeExtraLogo(idx: number) {
     setExtraLogoUrls((prev) => prev.filter((_, i) => i !== idx));
-  }
-
-  async function handleBgChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploadingBg(true);
-    const url = await uploadCustomAsset(file, "background");
-    if (url) setBackgroundImageUrl(url);
-    setUploadingBg(false);
-    e.target.value = "";
   }
 
   function toggleMatch(id: string) {
@@ -212,7 +198,7 @@ export function BilleterieCardActions({ item }: Props) {
       return;
     }
 
-    if (uploadingLogo || uploadingExtraLogo || uploadingBg) {
+    if (uploadingLogo || uploadingExtraLogo) {
       toast.error("Patientez la fin du téléversement de l'image");
       return;
     }
@@ -228,7 +214,6 @@ export function BilleterieCardActions({ item }: Props) {
       customDesign,
       organizerLogoUrl,
       extraLogoUrls,
-      backgroundImageUrl,
       customDate: customDate || null,
       customVenue: customVenue || null,
       noteText: noteText || null,
@@ -471,7 +456,7 @@ export function BilleterieCardActions({ item }: Props) {
                       Billet personnalisé
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      Design affiche (logo organisateur + image de fond), pour les finales — remplace le billet thermique standard
+                      Ajoute le(s) logo(s) et le stade/date sur le billet thermique, pour les finales
                     </p>
                   </div>
                 </div>
@@ -553,36 +538,6 @@ export function BilleterieCardActions({ item }: Props) {
                         <p className="text-xs text-muted-foreground flex items-center gap-1">
                           <Loader2 className="h-3 w-3 animate-spin" />Téléversement…
                         </p>
-                      )}
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">Image d&apos;arrière-plan (stade)</Label>
-                      <p className="text-xs text-muted-foreground">Optionnel — à défaut, l&apos;image de stade par défaut sera utilisée</p>
-                      <input
-                        type="file"
-                        accept="image/jpeg,image/png"
-                        onChange={handleBgChange}
-                        disabled={uploadingBg}
-                        className="block w-full text-xs text-muted-foreground file:mr-3 file:rounded-md file:border-0 file:bg-brand file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-white"
-                      />
-                      {uploadingBg && (
-                        <p className="text-xs text-muted-foreground flex items-center gap-1">
-                          <Loader2 className="h-3 w-3 animate-spin" />Téléversement…
-                        </p>
-                      )}
-                      {backgroundImageUrl && !uploadingBg && (
-                        <div className="relative inline-block w-full">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={backgroundImageUrl} alt="Arrière-plan" className="h-20 w-full object-cover rounded border" />
-                          <button
-                            type="button"
-                            onClick={() => setBackgroundImageUrl(null)}
-                            className="absolute top-1 right-1 flex items-center gap-1 rounded-md bg-black/70 text-white text-xs px-2 py-1 hover:bg-black"
-                          >
-                            <Trash2 className="h-3 w-3" />Retirer
-                          </button>
-                        </div>
                       )}
                     </div>
                   </div>
@@ -692,7 +647,7 @@ export function BilleterieCardActions({ item }: Props) {
               <Button
                 type="submit"
                 className="flex-1 bg-brand hover:bg-brand/90"
-                disabled={saving || uploadingLogo || uploadingExtraLogo || uploadingBg}
+                disabled={saving || uploadingLogo || uploadingExtraLogo}
               >
                 {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Enregistrer"}
               </Button>

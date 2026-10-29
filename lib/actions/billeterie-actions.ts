@@ -34,7 +34,6 @@ export interface BilleterieItem {
   blockOrderDate: string | null;
   customDesign: boolean;
   organizerLogoUrl: string | null;
-  backgroundImageUrl: string | null;
   extraLogoUrls: string[] | null;
   customDate: string | null;
   customVenue: string | null;
@@ -192,7 +191,6 @@ export async function createBilleterie(formData: {
   blockOrderDate?: string | null;
   customDesign?: boolean;
   organizerLogoUrl?: string | null;
-  backgroundImageUrl?: string | null;
   extraLogoUrls?: string[] | null;
   customDate?: string | null;
   customVenue?: string | null;
@@ -242,7 +240,6 @@ export async function createBilleterie(formData: {
     block_order_date: formData.blockOrderDate ?? null,
     custom_design: formData.customDesign === true,
     organizer_logo_url: formData.customDesign ? (formData.organizerLogoUrl || null) : null,
-    background_image_url: formData.customDesign ? (formData.backgroundImageUrl || null) : null,
     extra_logo_urls: formData.customDesign && formData.extraLogoUrls?.length ? formData.extraLogoUrls : null,
     custom_date: formData.customDesign ? (formData.customDate || null) : null,
     custom_venue: formData.customDesign ? (formData.customVenue || null) : null,
@@ -364,7 +361,7 @@ export async function getBilleterieList(): Promise<BilleterieItem[]> {
     creatorIds = [ownerId, ...(subAdmins || []).map((p: any) => p.id as string)];
   }
 
-  let query = adminClient.from("billeterie").select("id, name, match_ids, price, categories, created_at, is_done, blocks_ordered, block_order_date, custom_design, organizer_logo_url, background_image_url, extra_logo_urls, custom_date, custom_venue, note_text");
+  let query = adminClient.from("billeterie").select("id, name, match_ids, price, categories, created_at, is_done, blocks_ordered, block_order_date, custom_design, organizer_logo_url, extra_logo_urls, custom_date, custom_venue, note_text");
   if (profile.role !== "fondateur") {
     query = query.in("created_by", creatorIds);
   }
@@ -394,7 +391,6 @@ export async function getBilleterieList(): Promise<BilleterieItem[]> {
     blockOrderDate: (b.block_order_date as string | null) ?? null,
     customDesign: (b.custom_design as boolean) ?? false,
     organizerLogoUrl: (b.organizer_logo_url as string | null) ?? null,
-    backgroundImageUrl: (b.background_image_url as string | null) ?? null,
     extraLogoUrls: (b.extra_logo_urls as string[] | null) ?? null,
     customDate: (b.custom_date as string | null) ?? null,
     customVenue: (b.custom_venue as string | null) ?? null,
@@ -937,7 +933,6 @@ export async function updateBilleterie(
     blockOrderDate?: string | null;
     customDesign?: boolean;
     organizerLogoUrl?: string | null;
-    backgroundImageUrl?: string | null;
     extraLogoUrls?: string[] | null;
     customDate?: string | null;
     customVenue?: string | null;
@@ -963,7 +958,6 @@ export async function updateBilleterie(
   if (formData.customDesign !== undefined) {
     update.custom_design = formData.customDesign;
     update.organizer_logo_url = formData.customDesign ? (formData.organizerLogoUrl || null) : null;
-    update.background_image_url = formData.customDesign ? (formData.backgroundImageUrl || null) : null;
     update.extra_logo_urls = formData.customDesign && formData.extraLogoUrls?.length ? formData.extraLogoUrls : null;
     update.custom_date = formData.customDesign ? (formData.customDate || null) : null;
     update.custom_venue = formData.customDesign ? (formData.customVenue || null) : null;

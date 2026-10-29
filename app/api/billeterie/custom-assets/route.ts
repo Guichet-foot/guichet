@@ -22,8 +22,12 @@ export async function POST(request: Request) {
   const file = formData.get("file") as File | null;
   const kind = formData.get("kind") as string | null;
 
-  if (!file || (kind !== "logo" && kind !== "background")) {
-    return NextResponse.json({ error: "Fichier et type (logo/background) requis" }, { status: 400 });
+  // "background" (full-page photo) was dropped: the custom ticket uses the
+  // same 58-80mm thermal gabarit as the standard ticket now, which has no
+  // room for — and no printer support for — a full background photo. Only
+  // small logos (organizer + extra) are still uploaded here.
+  if (!file || kind !== "logo") {
+    return NextResponse.json({ error: "Fichier et logo requis" }, { status: 400 });
   }
 
   if (file.size > 5_242_880) {
@@ -37,36 +41,25 @@ export async function POST(request: Request) {
   let contentType = file.type;
   let ext = file.type === "image/png" ? "png" : "jpg";
 
-  // Downscale + re-encode as JPEG — the ticket only ever displays these at a
+  // Downscale + re-encode as JPEG — the ticket only ever displays this at a
   // few hundred CSS px, so an untouched phone photo (often several MB) just
-  // bloats every printed ticket for no visible gain. Logos are flattened to
-  // white since they're always shown on the ticket's white header area.
-  // Backgrounds get the grayscale/brightness/contrast look baked into the
-  // pixels once here instead of a CSS filter the browser would otherwise
-  // have to recompute on every single printed page of a batch.
+  // bloats every printed ticket for no visible gain. Flattened to white
+  // since it's always shown on the ticket's white header area.
   try {
     const sharp = (await import("sharp")).default;
-    let pipeline = sharp(buffer).rotate();
-    if (kind === "logo") {
-      pipeline = pipeline
-        .resize({ width: 600, withoutEnlargement: true })
-        .flatten({ background: "#ffffff" });
-    } else {
-      pipeline = pipeline
-        .resize({ width: 1200, withoutEnlargement: true })
-        .flatten({ background: "#ffffff" })
-        .grayscale()
-        .modulate({ brightness: 1.75 })
-        .linear(0.85, 128 * (1 - 0.85));
-    }
-    buffer = await pipeline.jpeg({ quality: kind === "logo" ? 85 : 78, mozjpeg: true }).toBuffer();
+    buffer = await sharp(buffer)
+      .rotate()
+      .resize({ width: 600, withoutEnlargement: true })
+      .flatten({ background: "#ffffff" })
+      .jpeg({ quality: 85, mozjpeg: true })
+      .toBuffer();
     contentType = "image/jpeg";
     ext = "jpg";
   } catch {
     // sharp unavailable in this environment — store the original upload as-is.
   }
 
-  const path = `custom-tickets/${user.id}-${kind}-${Date.now()}.${ext}`;
+  const path = `custom-tickets/${user.id}-logo-${Date.now()}.${ext}`;
 
   const adminClient = await createAdminClient();
   const { error: uploadError } = await adminClient.storage

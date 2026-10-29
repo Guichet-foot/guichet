@@ -171,7 +171,6 @@ export function FondateurBilleterieList({ items }: { items: BilleterieItem[] }) 
                     customDesign: item.customDesign,
                     organizerLogoUrl: item.organizerLogoUrl,
                     extraLogoUrls: item.extraLogoUrls,
-                    backgroundImageUrl: item.backgroundImageUrl,
                     customDate: item.customDate,
                     customVenue: item.customVenue,
                     noteText: item.noteText,
