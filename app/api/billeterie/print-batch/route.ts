@@ -96,32 +96,17 @@ function renderBilleterieTicket(
   const showPassLine = venueDateParts.length === 0;
   const ticketClass = isCustomDesign ? "print-ticket custom-ticket" : "print-ticket";
 
-  // Custom ticket: QR + serial + validity text + "BON MATCH !" sit on a
-  // solid black panel (white QR card, white text, white badge) instead of
-  // plain black-on-white — a flat fill, not a pattern, so it doesn't hit the
-  // same low-resolution fallback a repeating hairline background did on
-  // this printer; a solid block is the same kind of shape the price/match
-  // pills already use safely. The panel's top edge sits at the QR's own
-  // vertical middle (negative margin pulling it up under the QR, QR kept on
-  // top via z-index) instead of starting a full QR-height below it — besides
-  // matching the requested look, reusing that space is what keeps the whole
-  // ticket inside the fixed print height instead of overflowing onto a
-  // second page.
-  const bottomSerialPt = is58 ? "9" : "10";
-  const bottomTextPt = is58 ? "7" : "8";
-  const bottomBlock = (validityText: string): string => isCustomDesign
-    ? `
-<div class="c qr-float"><div class="qr-card"><div class="qr"><img src="${qrDataUrl}" alt="QR Code" /></div></div></div>
-<div class="bottom-dark">
-<div class="c" style="color:#fff;font-family:'Courier New',monospace;font-weight:bold;font-size:${bottomSerialPt}pt;">${ticket.serial_number}</div>
-<div class="c" style="color:#fff;font-weight:700;font-size:${bottomTextPt}pt;margin-top:0.5mm;">GUICHET FOOT &middot; ${createdAtFmt}</div>
-<div class="c" style="color:#fff;font-weight:700;font-size:${bottomTextPt}pt;margin-top:1mm;">${validityText}</div>
-<div class="c" style="margin-top:1.5mm;"><span class="bon-match-badge">BON MATCH !</span></div>
-</div>`
-    : `
+  // The bottom "black panel" (solid fill across the full ticket width, several
+  // mm tall) was tried here and made the physical printer slow down and
+  // stall/error out — a large contiguous black area asks a thermal head for
+  // far more heat/energy per line than text or the small price/match pills,
+  // which stayed fine. Back to plain black-on-white for this section, same
+  // as the standard ticket; "GUICHET FOOT" in place of the seller name stays
+  // (unrelated to the panel, still wanted).
+  const bottomBlock = (validityText: string): string => `
 <div class="c qr"><img src="${qrDataUrl}" alt="QR Code" /></div>
 <div class="c small">${ticket.serial_number}</div>
-<div class="c tiny">${sellerName} &middot; ${createdAtFmt}</div>
+<div class="c tiny">${isCustomDesign ? "GUICHET FOOT" : sellerName} &middot; ${createdAtFmt}</div>
 <div class="sep"></div>
 <div class="c tiny">${validityText}</div>
 <div class="c bon-match">BON MATCH !</div>`;
@@ -309,29 +294,6 @@ export async function GET(request: Request) {
   }
   .match-team { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .match-ball { width: ${is58bck ? "2.6mm" : "3.2mm"}; height: ${is58bck ? "2.6mm" : "3.2mm"}; flex-shrink: 0; }
-  /* Bottom panel (custom ticket only): QR + serial + validity + "BON MATCH"
-     on a solid black fill bleeding to the ticket's own edges/border, white
-     QR card and white badge on top — a flat fill, same safe kind of shape
-     as the pills above, not a pattern. The panel's negative top margin
-     pulls it up to start at the QR card's own vertical middle (qr-float
-     stays on top via z-index) instead of a full QR-height below it — the
-     requested "QR half on white, half on the black band" look, and it's
-     what keeps the ticket inside the fixed print height.
-  */
-  .qr-float { position: relative; z-index: 2; }
-  .bottom-dark {
-    background: #111;
-    position: relative; z-index: 1;
-    margin: ${is58bck ? "-16.5mm -1.5mm -1mm" : "-20.5mm -2mm -1.5mm"};
-    padding: ${is58bck ? "18mm 1.5mm 1.5mm" : "22mm 2mm 1.5mm"};
-    -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact;
-  }
-  .qr-card { display: inline-block; background: #fff; padding: 1.5mm; border-radius: 2mm; }
-  .bon-match-badge {
-    display: inline-block; background: #fff; color: #111; font-weight: 900;
-    font-size: ${is58bck ? "8" : "9"}pt; letter-spacing: 1px;
-    padding: 1mm 4mm; border-radius: 6mm;
-  }
   @page { size: ${is58bck ? "58mm 112mm" : "72mm 108mm"}; }
   @media print {
     .print-ticket {
