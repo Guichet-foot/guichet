@@ -101,11 +101,16 @@ function renderBilleterieTicket(
   // plain black-on-white — a flat fill, not a pattern, so it doesn't hit the
   // same low-resolution fallback a repeating hairline background did on
   // this printer; a solid block is the same kind of shape the price/match
-  // pills already use safely.
+  // pills already use safely. The panel's top edge sits at the QR's own
+  // vertical middle (negative margin pulling it up under the QR, QR kept on
+  // top via z-index) instead of starting a full QR-height below it — besides
+  // matching the requested look, reusing that space is what keeps the whole
+  // ticket inside the fixed print height instead of overflowing onto a
+  // second page.
   const bottomBlock = (validityText: string): string => isCustomDesign
     ? `
+<div class="c qr-float"><div class="qr-card"><div class="qr"><img src="${qrDataUrl}" alt="QR Code" /></div></div></div>
 <div class="bottom-dark">
-<div class="c"><div class="qr-card"><div class="qr"><img src="${qrDataUrl}" alt="QR Code" /></div></div></div>
 <div class="c small" style="color:#fff;">${ticket.serial_number}</div>
 <div class="c tiny" style="color:#fff;">${sellerName} &middot; ${createdAtFmt}</div>
 <div class="c tiny" style="color:#fff;margin-top:1mm;">${validityText}</div>
@@ -305,11 +310,18 @@ export async function GET(request: Request) {
   /* Bottom panel (custom ticket only): QR + serial + validity + "BON MATCH"
      on a solid black fill bleeding to the ticket's own edges/border, white
      QR card and white badge on top — a flat fill, same safe kind of shape
-     as the pills above, not a pattern. */
+     as the pills above, not a pattern. The panel's negative top margin
+     pulls it up to start at the QR card's own vertical middle (qr-float
+     stays on top via z-index) instead of a full QR-height below it — the
+     requested "QR half on white, half on the black band" look, and it's
+     what keeps the ticket inside the fixed print height.
+  */
+  .qr-float { position: relative; z-index: 2; }
   .bottom-dark {
     background: #111;
-    margin: 1.5mm ${is58bck ? "-1.5mm" : "-2mm"} ${is58bck ? "-1mm" : "-1.5mm"};
-    padding: 2mm ${is58bck ? "1.5mm" : "2mm"} ${is58bck ? "1.5mm" : "2mm"};
+    position: relative; z-index: 1;
+    margin: ${is58bck ? "-16.5mm -1.5mm -1mm" : "-20.5mm -2mm -1.5mm"};
+    padding: ${is58bck ? "18mm 1.5mm 1.5mm" : "22mm 2mm 1.5mm"};
     -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact;
   }
   .qr-card { display: inline-block; background: #fff; padding: 1.5mm; border-radius: 2mm; }
