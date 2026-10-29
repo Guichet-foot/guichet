@@ -19,6 +19,12 @@ function trunc(s: string, max: number): string {
   return s.length <= max ? s : s.slice(0, max - 1) + "…";
 }
 
+// Inline vector ball icon for the custom-ticket match pill — not an <img>
+// fetching a file, so it can't suffer the same load/decode failure that
+// broke a real background photo on this printer 3 times. Drawn in black on
+// a white disc so it stays legible against the pill's black background.
+const BALL_SVG = `<svg viewBox="0 0 100 100" class="match-ball"><circle cx="50" cy="50" r="46" fill="#fff" stroke="#111" stroke-width="6"/><polygon points="50,28 68,41 61,62 39,62 32,41" fill="#111"/><path d="M50,28 L50,8 M68,41 L88,33 M61,62 L74,80 M39,62 L26,80 M32,41 L12,33" stroke="#111" stroke-width="6" fill="none" stroke-linecap="round"/></svg>`;
+
 // Billets billeterie (standard ET "personnalisé") — un seul gabarit thermique
 // 58/72-80mm, le même pour les deux. Le "Billet personnalisé" a eu plusieurs
 // gabarits "affiche" séparés (145mm, avec photo plein cadre et/ou logos) —
@@ -34,6 +40,7 @@ function trunc(s: string, max: number): string {
 function renderBilleterieTicket(
   ticket: { serial_number: string; qr_token: string; created_at: string },
   bilName: string,
+  categoryName: string | null,
   price: number,
   matches: Array<{ home_team: string; away_team: string; match_date: string; home_team_zone?: string | null; away_team_zone?: string | null }>,
   sellerName: string,
@@ -60,6 +67,17 @@ function renderBilleterieTicket(
     ? `<div class="c" style="font-weight:800;font-size:${notePt}pt;color:#b91c1c;margin-top:0.5mm;">${escapeHtml(noteText)}</div>`
     : "";
 
+  // Standard ticket: category stays in the title (unchanged). Custom ticket:
+  // category moves to the price line instead ("Entrée 500 FCFA") so the
+  // title stays just the pass name, as requested.
+  const titleText = !isCustomDesign && categoryName ? `${bilName} — ${categoryName}` : bilName;
+  const priceLabel = isCustomDesign && categoryName
+    ? `${escapeHtml(categoryName)} ${priceFmt}&nbsp;FCFA`
+    : `${priceFmt}&nbsp;FCFA`;
+  const priceHtml = isCustomDesign
+    ? `<div class="c"><span class="price-pill">${priceLabel}</span></div>`
+    : `<div class="c" style="${prixStyle}">${priceLabel}</div>`;
+
   const logoUrls = [organizerLogoUrl, ...extraLogoUrls].filter((u): u is string => !!u);
   const headerHtml = logoUrls.length > 0
     ? `<div class="c" style="padding:1mm 0;display:flex;align-items:center;justify-content:center;gap:1.5mm;flex-wrap:wrap;">${logoUrls.map((u) => `<img src="${escapeHtml(u)}" alt="Logo" class="org-logo">`).join("")}</div>`
@@ -80,11 +98,11 @@ function renderBilleterieTicket(
 <div class="${ticketClass}">
 ${headerHtml}
 <div class="sep"></div>
-<div class="c" style="font-size:${namePt}pt;font-weight:900;line-height:1.3;letter-spacing:0.5px;">${bilName}</div>
+<div class="c" style="font-size:${namePt}pt;font-weight:900;line-height:1.3;letter-spacing:0.5px;">${titleText}</div>
 ${noteHtml}
 ${venueDateHtml}
 ${showPassLine ? `<div class="c tiny" style="font-style:italic;margin-top:0;">PASS MULTI-MATCHS</div>` : ""}
-<div class="c" style="${prixStyle}">${priceFmt}&nbsp;FCFA</div>
+${priceHtml}
 <div class="sep"></div>
 <div class="c qr"><img src="${qrDataUrl}" alt="QR Code" /></div>
 <div class="c small">${ticket.serial_number}</div>
@@ -108,6 +126,18 @@ ${showPassLine ? `<div class="c tiny" style="font-style:italic;margin-top:0;">PA
     })
     .join("<br>");
 
+  // Custom ticket: each match gets its own black pill with a ball icon
+  // between the two teams, instead of a plain "home vs away" text line.
+  const matchesHtml = isCustomDesign
+    ? matches
+        .map((m) => {
+          const home = m.home_team_zone ? `${trunc(m.home_team, 10)} (${fmtZone(m.home_team_zone)})` : trunc(m.home_team, 12);
+          const away = m.away_team_zone ? `${trunc(m.away_team, 10)} (${fmtZone(m.away_team_zone)})` : trunc(m.away_team, 12);
+          return `<div class="c"><div class="match-pill"><span class="match-team">${home}</span>${BALL_SVG}<span class="match-team">${away}</span></div></div>`;
+        })
+        .join("")
+    : `<div class="c" style="font-size:${matchPt}pt;font-weight:600;line-height:1.3;">${matchLines}</div>`;
+
   const passLine = matchDateFmt
     ? `PASS MULTI-MATCHS &middot; ${matchDateFmt}`
     : "PASS MULTI-MATCHS";
@@ -116,13 +146,13 @@ ${showPassLine ? `<div class="c tiny" style="font-style:italic;margin-top:0;">PA
 <div class="${ticketClass}">
 ${headerHtml}
 <div class="sep"></div>
-<div class="c" style="font-size:${namePt}pt;font-weight:900;line-height:1.3;letter-spacing:0.5px;">${bilName}</div>
+<div class="c" style="font-size:${namePt}pt;font-weight:900;line-height:1.3;letter-spacing:0.5px;">${titleText}</div>
 ${noteHtml}
 ${venueDateHtml}
 ${showPassLine ? `<div class="c tiny" style="font-style:italic;margin-top:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${passLine}</div>` : ""}
-<div class="c" style="${prixStyle}">${priceFmt}&nbsp;FCFA</div>
+${priceHtml}
 <div class="sep"></div>
-<div class="c" style="font-size:${matchPt}pt;font-weight:600;line-height:1.3;">${matchLines}</div>
+${matchesHtml}
 <div class="sep"></div>
 <div class="c qr"><img src="${qrDataUrl}" alt="QR Code" /></div>
 <div class="c small">${ticket.serial_number}</div>
@@ -185,8 +215,6 @@ export async function GET(request: Request) {
 
   const sellerName = (tickets[0] as any).seller?.full_name || "—";
 
-  // Displayed name: append category if multi-cat
-  const displayName = categoryName ? `${bil.name} — ${categoryName}` : (bil.name as string);
   const noteText: string | null = (bil as any).note_text || null;
   const isCustom = (bil as any).custom_design === true;
   const organizerLogoUrl = isCustom ? ((bil as any).organizer_logo_url || null) : null;
@@ -207,7 +235,7 @@ export async function GET(request: Request) {
         errorCorrectionLevel: "M",
         color: { dark: "#000000", light: "#FFFFFF" },
       });
-      return renderBilleterieTicket(ticket, displayName, effectivePrice, matches || [], sellerName, qrDataUrl, fmt, bil.show_matches_on_ticket !== false, noteText, organizerLogoUrl, extraLogoUrls, venue, dateLabel, isCustom);
+      return renderBilleterieTicket(ticket, bil.name as string, categoryName, effectivePrice, matches || [], sellerName, qrDataUrl, fmt, bil.show_matches_on_ticket !== false, noteText, organizerLogoUrl, extraLogoUrls, venue, dateLabel, isCustom);
     })
   );
 
@@ -240,6 +268,25 @@ export async function GET(request: Request) {
     background-image: repeating-linear-gradient(45deg, rgba(0,0,0,0.12) 0, rgba(0,0,0,0.12) 0.3mm, transparent 0.3mm, transparent 3mm);
     -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact;
   }
+  /* Price badge and per-match pill (custom ticket only) — same solid-black
+     pill language as the logo row's card look, all plain CSS shapes/fills
+     so they print exactly like any other filled rectangle/border already
+     used on the standard ticket, nothing photographic. */
+  .price-pill {
+    display: inline-block; background: #111; color: #fff; font-weight: 900;
+    font-size: ${is58bck ? "9" : "10"}pt; letter-spacing: 0.5px;
+    padding: 0.8mm 4mm; border-radius: 4mm; margin: 0.5mm 0;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact;
+  }
+  .match-pill {
+    display: flex; align-items: center; justify-content: center; gap: 1.5mm;
+    background: #111; color: #fff; font-weight: 800;
+    font-size: ${is58bck ? "7" : "8"}pt; letter-spacing: 0.3px;
+    padding: 1mm 2.5mm; border-radius: 5mm; margin: 0.6mm auto; max-width: 96%;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact;
+  }
+  .match-team { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .match-ball { width: ${is58bck ? "2.6mm" : "3.2mm"}; height: ${is58bck ? "2.6mm" : "3.2mm"}; flex-shrink: 0; }
   @page { size: ${is58bck ? "58mm 112mm" : "72mm 108mm"}; }
   @media print {
     .print-ticket {
