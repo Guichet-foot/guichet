@@ -21,9 +21,12 @@ function trunc(s: string, max: number): string {
 
 // Inline vector ball icon for the custom-ticket match pill — not an <img>
 // fetching a file, so it can't suffer the same load/decode failure that
-// broke a real background photo on this printer 3 times. Drawn in black on
-// a white disc so it stays legible against the pill's black background.
-const BALL_SVG = `<svg viewBox="0 0 100 100" class="match-ball"><circle cx="50" cy="50" r="46" fill="#fff" stroke="#111" stroke-width="6"/><polygon points="50,28 68,41 61,62 39,62 32,41" fill="#111"/><path d="M50,28 L50,8 M68,41 L88,33 M61,62 L74,80 M39,62 L26,80 M32,41 L12,33" stroke="#111" stroke-width="6" fill="none" stroke-linecap="round"/></svg>`;
+// broke a real background photo on this printer 3 times. A plain ring +
+// center dot, not the usual pentagon-and-lines ball pattern: at the ~3mm
+// print size here, thin radiating lines don't resolve on this thermal head
+// and printed as an illegible star-shaped smudge — a bold, simple shape
+// reproduces cleanly instead.
+const BALL_SVG = `<svg viewBox="0 0 100 100" class="match-ball"><circle cx="50" cy="50" r="44" fill="#fff" stroke="#111" stroke-width="12"/><circle cx="50" cy="50" r="18" fill="#111"/></svg>`;
 
 // Billets billeterie (standard ET "personnalisé") — un seul gabarit thermique
 // 58/72-80mm, le même pour les deux. Le "Billet personnalisé" a eu plusieurs
@@ -93,6 +96,29 @@ function renderBilleterieTicket(
   const showPassLine = venueDateParts.length === 0;
   const ticketClass = isCustomDesign ? "print-ticket custom-ticket" : "print-ticket";
 
+  // Custom ticket: QR + serial + validity text + "BON MATCH !" sit on a
+  // solid black panel (white QR card, white text, white badge) instead of
+  // plain black-on-white — a flat fill, not a pattern, so it doesn't hit the
+  // same low-resolution fallback a repeating hairline background did on
+  // this printer; a solid block is the same kind of shape the price/match
+  // pills already use safely.
+  const bottomBlock = (validityText: string): string => isCustomDesign
+    ? `
+<div class="bottom-dark">
+<div class="c"><div class="qr-card"><div class="qr"><img src="${qrDataUrl}" alt="QR Code" /></div></div></div>
+<div class="c small" style="color:#fff;">${ticket.serial_number}</div>
+<div class="c tiny" style="color:#fff;">${sellerName} &middot; ${createdAtFmt}</div>
+<div class="c tiny" style="color:#fff;margin-top:1mm;">${validityText}</div>
+<div class="c" style="margin-top:1.5mm;"><span class="bon-match-badge">BON MATCH !</span></div>
+</div>`
+    : `
+<div class="c qr"><img src="${qrDataUrl}" alt="QR Code" /></div>
+<div class="c small">${ticket.serial_number}</div>
+<div class="c tiny">${sellerName} &middot; ${createdAtFmt}</div>
+<div class="sep"></div>
+<div class="c tiny">${validityText}</div>
+<div class="c bon-match">BON MATCH !</div>`;
+
   if (!showMatches) {
     return `
 <div class="${ticketClass}">
@@ -104,12 +130,7 @@ ${venueDateHtml}
 ${showPassLine ? `<div class="c tiny" style="font-style:italic;margin-top:0;">PASS MULTI-MATCHS</div>` : ""}
 ${priceHtml}
 <div class="sep"></div>
-<div class="c qr"><img src="${qrDataUrl}" alt="QR Code" /></div>
-<div class="c small">${ticket.serial_number}</div>
-<div class="c tiny">${sellerName} &middot; ${createdAtFmt}</div>
-<div class="sep"></div>
-<div class="c tiny">Non remboursable</div>
-<div class="c bon-match">BON MATCH !</div>
+${bottomBlock("Non remboursable")}
 </div>`;
   }
 
@@ -154,12 +175,7 @@ ${priceHtml}
 <div class="sep"></div>
 ${matchesHtml}
 <div class="sep"></div>
-<div class="c qr"><img src="${qrDataUrl}" alt="QR Code" /></div>
-<div class="c small">${ticket.serial_number}</div>
-<div class="c tiny">${sellerName} &middot; ${createdAtFmt}</div>
-<div class="sep"></div>
-<div class="c tiny">Valable pour les matchs indiqués &middot; Non remboursable</div>
-<div class="c bon-match">BON MATCH !</div>
+${bottomBlock("Valable pour les matchs indiqués &middot; Non remboursable")}
 </div>`;
 }
 
@@ -255,18 +271,17 @@ export async function GET(request: Request) {
   .logo-img  { height: ${is58bck ? "17mm" : "22mm"} !important; }
   .org-logo  { max-height: ${is58bck ? "10mm" : "13mm"}; max-width: ${is58bck ? "16mm" : "20mm"}; object-fit: contain; }
   /* Visual differentiation for "billet personnalisé" vs the plain standard
-     ticket — a CSS-only diagonal hairline pattern + border, not an image.
-     An external photo was tried 3 times on this exact printer and corrupted
-     every time (see route.ts comment above); a pattern drawn by the browser
-     itself at print time can't suffer the same fetch/decode failure, and
-     thermal heads reproduce sparse hairlines far more reliably than a
-     continuous-tone photo. print-color-adjust is required or Chrome drops
-     background graphics by default when printing.
+     ticket — just a border, no full-page background graphic. A diagonal
+     hairline pattern covering the whole ticket was tried here and made
+     EVERYTHING blurry on the actual printer — text, logos and the QR code
+     all lost sharpness together, not just the patterned area. That matches
+     a thermal printer falling back to a lower-resolution "graphics" print
+     path for the whole page once any full-area background graphic is
+     present, instead of the sharp path used for plain text — so the custom
+     ticket's background stays plain white, same as the standard ticket's.
   */
   .custom-ticket {
     border: 0.5mm solid #111 !important;
-    background-image: repeating-linear-gradient(45deg, rgba(0,0,0,0.12) 0, rgba(0,0,0,0.12) 0.3mm, transparent 0.3mm, transparent 3mm);
-    -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact;
   }
   /* Price badge and per-match pill (custom ticket only) — same solid-black
      pill language as the logo row's card look, all plain CSS shapes/fills
@@ -287,6 +302,22 @@ export async function GET(request: Request) {
   }
   .match-team { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .match-ball { width: ${is58bck ? "2.6mm" : "3.2mm"}; height: ${is58bck ? "2.6mm" : "3.2mm"}; flex-shrink: 0; }
+  /* Bottom panel (custom ticket only): QR + serial + validity + "BON MATCH"
+     on a solid black fill bleeding to the ticket's own edges/border, white
+     QR card and white badge on top — a flat fill, same safe kind of shape
+     as the pills above, not a pattern. */
+  .bottom-dark {
+    background: #111;
+    margin: 1.5mm ${is58bck ? "-1.5mm" : "-2mm"} ${is58bck ? "-1mm" : "-1.5mm"};
+    padding: 2mm ${is58bck ? "1.5mm" : "2mm"} ${is58bck ? "1.5mm" : "2mm"};
+    -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact;
+  }
+  .qr-card { display: inline-block; background: #fff; padding: 1.5mm; border-radius: 2mm; }
+  .bon-match-badge {
+    display: inline-block; background: #fff; color: #111; font-weight: 900;
+    font-size: ${is58bck ? "8" : "9"}pt; letter-spacing: 1px;
+    padding: 1mm 4mm; border-radius: 6mm;
+  }
   @page { size: ${is58bck ? "58mm 112mm" : "72mm 108mm"}; }
   @media print {
     .print-ticket {
